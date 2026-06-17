@@ -30,7 +30,10 @@
     "juno:live:worker": "tsx -r tsconfig-paths/register scripts/juno-live-worker.ts",
     "insights:movement": "tsx -r tsconfig-paths/register scripts/insights-movement.ts",
     "insights:trends": "tsx -r tsconfig-paths/register scripts/insights-trends.ts",
-    "insights:refresh": "tsx -r tsconfig-paths/register scripts/insights-refresh.ts"
+    "insights:refresh": "tsx -r tsconfig-paths/register scripts/insights-refresh.ts",
+    "notifications:queue": "tsx -r tsconfig-paths/register scripts/notifications-queue.ts",
+    "notifications:dispatch": "tsx -r tsconfig-paths/register scripts/notifications-dispatch.ts",
+    "notifications:refresh": "tsx -r tsconfig-paths/register scripts/notifications-refresh.ts"
   },
   "dependencies": {
     "@mantine/core": "^9.3.2",

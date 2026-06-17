@@ -161,6 +161,63 @@ export type WatchRuleDraft = {
   weight?: number | null;
 };
 
+export type NotificationChannelType = "in_app" | "webhook" | "logging";
+export type NotificationDeliveryStatus = "queued" | "sent" | "failed" | "skipped";
+
+export type NotificationChannel = {
+  id: string;
+  name: string;
+  type: NotificationChannelType;
+  enabled: boolean;
+  config: Record<string, unknown>;
+  secretRef: string | null;
+  configSummary: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationRule = {
+  id: string;
+  name: string;
+  channelId: string;
+  channelName: string;
+  channelType: NotificationChannelType;
+  channelEnabled: boolean;
+  enabled: boolean;
+  signalTypes: SignalEventType[];
+  severities: SignalSeverity[];
+  minScore: number;
+  includeWatchHits: boolean;
+  includeDigest: boolean;
+  cooldownMinutes: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type NotificationDelivery = {
+  id: string;
+  ruleId: string | null;
+  ruleName: string | null;
+  channelId: string | null;
+  channelName: string | null;
+  channelType: NotificationChannelType | null;
+  signalEventId: string | null;
+  digestKey: string | null;
+  status: NotificationDeliveryStatus;
+  deliveryKey: string;
+  subject: string;
+  body: string;
+  payload: Record<string, unknown>;
+  attempts: number;
+  lastError: string | null;
+  queuedAt: string;
+  sentAt: string | null;
+  updatedAt: string;
+  signalType: SignalEventType | null;
+  severity: SignalSeverity | null;
+  score: number | null;
+};
+
 export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
 
 export type SetupSettingSource = "database" | "runtime" | "unset";

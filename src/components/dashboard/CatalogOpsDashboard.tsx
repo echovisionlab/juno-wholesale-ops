@@ -28,6 +28,7 @@ import {
   AlertTriangle,
   Activity,
   BarChart3,
+  Bell,
   Boxes,
   CheckCircle2,
   Clock3,
@@ -38,10 +39,12 @@ import {
   Play,
   Plus,
   RotateCw,
+  Send,
   Signal,
   SlidersHorizontal,
   Square,
   Trash2,
+  Webhook,
 } from "lucide-react";
 import { CommandPanel } from "./CommandPanel";
 import { PipelineCard } from "./PipelineCard";
@@ -56,6 +59,9 @@ import type {
   LiveWorkerAction,
   LiveWorkerStatus,
   MovementSignal,
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationRule,
   PipelineItem,
   SetupGuardrail,
   SetupSetting,
@@ -81,6 +87,9 @@ export type CatalogOpsDashboardProps = {
   catalogTrends?: CatalogTrendSummary | null;
   operatorDigest?: InsightDigest | null;
   watchRules?: WatchRule[] | null;
+  notificationDeliveries?: NotificationDelivery[] | null;
+  notificationRules?: NotificationRule[] | null;
+  notificationChannels?: NotificationChannel[] | null;
   workerActionPending?: boolean;
   watchRuleActionPending?: boolean;
   onWorkerAction?: (action: LiveWorkerAction) => void;
@@ -102,6 +111,9 @@ export function CatalogOpsDashboard({
   catalogTrends,
   operatorDigest,
   watchRules,
+  notificationDeliveries,
+  notificationRules,
+  notificationChannels,
   workerActionPending = false,
   watchRuleActionPending = false,
   onWorkerAction,
@@ -196,6 +208,21 @@ export function CatalogOpsDashboard({
           <Grid.Col span={12}>
             <SectionHeader icon={BarChart3}>Catalog Trends</SectionHeader>
             <CatalogTrendsPanel trends={catalogTrends} />
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 7 }}>
+            <SectionHeader icon={Bell}>Notification Center</SectionHeader>
+            <NotificationCenterPanel deliveries={notificationDeliveries} />
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 5 }}>
+            <SectionHeader icon={Send}>Notification Rules</SectionHeader>
+            <NotificationRulesPanel rules={notificationRules} />
+          </Grid.Col>
+
+          <Grid.Col span={12}>
+            <SectionHeader icon={Webhook}>Notification Channels</SectionHeader>
+            <NotificationChannelsPanel channels={notificationChannels} />
           </Grid.Col>
 
           <Grid.Col span={12}>
@@ -408,6 +435,208 @@ function CatalogTrendsPanel({ trends }: { trends?: CatalogTrendSummary | null })
           <TrendBucketTable title="Watch Overlap" buckets={trends.watchOverlap} />
         </SimpleGrid>
       </Stack>
+    </Card>
+  );
+}
+
+function NotificationCenterPanel({ deliveries }: { deliveries?: NotificationDelivery[] | null }) {
+  if (!deliveries) {
+    return (
+      <Card>
+        <Text fw={700}>Notification center unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable read-only alert delivery data.
+        </Text>
+      </Card>
+    );
+  }
+
+  if (deliveries.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>No read-only alerts queued</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          Queued signal and operator digest alerts will appear here after notification refresh runs.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Table.ScrollContainer minWidth={820}>
+        <Table verticalSpacing="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Status</Table.Th>
+              <Table.Th>Subject</Table.Th>
+              <Table.Th>Signal</Table.Th>
+              <Table.Th>Score</Table.Th>
+              <Table.Th>Channel</Table.Th>
+              <Table.Th>Queued</Table.Th>
+              <Table.Th>Sent</Table.Th>
+              <Table.Th>Last error</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {deliveries.map((delivery) => (
+              <Table.Tr key={delivery.id}>
+                <Table.Td>
+                  <Badge color={deliveryStatusColor(delivery.status)} variant="light">
+                    {formatDeliveryStatus(delivery.status)}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>
+                  <Text fw={700}>{delivery.subject}</Text>
+                  <Text size="xs" c="dimmed">
+                    {delivery.ruleName ?? "direct delivery"}
+                  </Text>
+                </Table.Td>
+                <Table.Td>{delivery.signalType ? formatSignalType(delivery.signalType) : "Operator digest"}</Table.Td>
+                <Table.Td>{delivery.score ?? "N/A"}</Table.Td>
+                <Table.Td>{delivery.channelName ?? "N/A"}</Table.Td>
+                <Table.Td>{formatOptionalDate(delivery.queuedAt)}</Table.Td>
+                <Table.Td>{formatOptionalDate(delivery.sentAt)}</Table.Td>
+                <Table.Td>{delivery.lastError ?? "N/A"}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Card>
+  );
+}
+
+function NotificationRulesPanel({ rules }: { rules?: NotificationRule[] | null }) {
+  if (!rules) {
+    return (
+      <Card>
+        <Text fw={700}>Notification rules unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable notification rule data.
+        </Text>
+      </Card>
+    );
+  }
+
+  if (rules.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>No notification rules configured</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          Add rules through the admin API to queue read-only alerts for observed signals and operator digests.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Table.ScrollContainer minWidth={720}>
+        <Table verticalSpacing="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Rule</Table.Th>
+              <Table.Th>Channel</Table.Th>
+              <Table.Th>Signal types</Table.Th>
+              <Table.Th>Severities</Table.Th>
+              <Table.Th>Min score</Table.Th>
+              <Table.Th>Cooldown</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {rules.map((rule) => (
+              <Table.Tr key={rule.id}>
+                <Table.Td>
+                  <Group gap={6}>
+                    <Badge color={rule.enabled ? "green" : "gray"} variant="light">
+                      {rule.enabled ? "Enabled" : "Disabled"}
+                    </Badge>
+                    {rule.includeDigest ? (
+                      <Badge color="blue" variant="outline">
+                        Digest
+                      </Badge>
+                    ) : null}
+                  </Group>
+                  <Text fw={700} mt={4}>
+                    {rule.name}
+                  </Text>
+                </Table.Td>
+                <Table.Td>
+                  <Text>{rule.channelName}</Text>
+                  <Text size="xs" c="dimmed">
+                    {formatNotificationChannelType(rule.channelType)}
+                  </Text>
+                </Table.Td>
+                <Table.Td>{rule.signalTypes.length > 0 ? rule.signalTypes.map(formatSignalType).join(", ") : "All"}</Table.Td>
+                <Table.Td>{rule.severities.length > 0 ? rule.severities.join(", ") : "All"}</Table.Td>
+                <Table.Td>{rule.minScore}</Table.Td>
+                <Table.Td>{rule.cooldownMinutes} min</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
+    </Card>
+  );
+}
+
+function NotificationChannelsPanel({ channels }: { channels?: NotificationChannel[] | null }) {
+  if (!channels) {
+    return (
+      <Card>
+        <Text fw={700}>Notification channels unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable notification channel data.
+        </Text>
+      </Card>
+    );
+  }
+
+  if (channels.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>No notification channels configured</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The default in-app read-only alert channel is created by migration.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Table.ScrollContainer minWidth={640}>
+        <Table verticalSpacing="sm">
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Channel</Table.Th>
+              <Table.Th>Type</Table.Th>
+              <Table.Th>Status</Table.Th>
+              <Table.Th>Masked config summary</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {channels.map((channel) => (
+              <Table.Tr key={channel.id}>
+                <Table.Td>
+                  <Text fw={700}>{channel.name}</Text>
+                  <Text size="xs" c="dimmed">
+                    updated {formatOptionalDate(channel.updatedAt)}
+                  </Text>
+                </Table.Td>
+                <Table.Td>{formatNotificationChannelType(channel.type)}</Table.Td>
+                <Table.Td>
+                  <Badge color={channel.enabled ? "green" : "gray"} variant="light">
+                    {channel.enabled ? "Enabled" : "Disabled"}
+                  </Badge>
+                </Table.Td>
+                <Table.Td>{channel.configSummary}</Table.Td>
+              </Table.Tr>
+            ))}
+          </Table.Tbody>
+        </Table>
+      </Table.ScrollContainer>
     </Card>
   );
 }
@@ -785,6 +1014,42 @@ function formatSignalType(type: TodayInsight["type"]): string {
     return "Fast mover candidate";
   }
   return "Catalog trend spike";
+}
+
+function deliveryStatusColor(status: NotificationDelivery["status"]): string {
+  if (status === "sent") {
+    return "green";
+  }
+  if (status === "failed") {
+    return "red";
+  }
+  if (status === "skipped") {
+    return "gray";
+  }
+  return "blue";
+}
+
+function formatDeliveryStatus(status: NotificationDelivery["status"]): string {
+  if (status === "sent") {
+    return "Sent";
+  }
+  if (status === "failed") {
+    return "Failed";
+  }
+  if (status === "skipped") {
+    return "Skipped";
+  }
+  return "Queued";
+}
+
+function formatNotificationChannelType(type: NotificationChannel["type"]): string {
+  if (type === "in_app") {
+    return "In-app";
+  }
+  if (type === "webhook") {
+    return "Generic webhook";
+  }
+  return "Logging";
 }
 
 function formatArtistTitle(signal: TodayInsight): string {

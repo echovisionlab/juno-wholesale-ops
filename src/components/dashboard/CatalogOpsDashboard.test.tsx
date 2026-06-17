@@ -54,6 +54,9 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Catalog trends unavailable");
     expect(pageText()).toContain("Operator digest unavailable");
     expect(pageText()).toContain("Watch rules unavailable");
+    expect(pageText()).toContain("Notification center unavailable");
+    expect(pageText()).toContain("Notification rules unavailable");
+    expect(pageText()).toContain("Notification channels unavailable");
     expect(pageText()).toContain("Queued / Running");
     expect(pageText()).toContain("N/A");
     expect(pageText()).toContain("worker status unavailable");
@@ -80,6 +83,12 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Watch Overlap");
     expect(pageText()).toContain("Operator Digest");
     expect(pageText()).toContain("Restock observations");
+    expect(pageText()).toContain("Notification Center");
+    expect(pageText()).toContain("[Watch hit] Lara Voss - Signal Path");
+    expect(pageText()).toContain("Notification Rules");
+    expect(pageText()).toContain("Watch and movement alerts");
+    expect(pageText()).toContain("Notification Channels");
+    expect(pageText()).toContain("Webhook URL from JUNO_OPS_WEBHOOK_URL");
     expect(pageText()).toContain("Blue Note");
     expect(pageText()).toContain("Exclude keyword");
   });
@@ -105,6 +114,9 @@ describe("CatalogOpsDashboard", () => {
         watchOverlap: [],
       },
       watchRules: [],
+      notificationDeliveries: [],
+      notificationRules: [],
+      notificationChannels: [],
       onCreateWatchRule,
       onToggleWatchRule,
       onDeleteWatchRule,
@@ -114,6 +126,9 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("No movement signals recorded");
     expect(pageText()).toContain("No observed catalog trend rows in this window");
     expect(pageText()).toContain("No watch rules configured");
+    expect(pageText()).toContain("No read-only alerts queued");
+    expect(pageText()).toContain("No notification rules configured");
+    expect(pageText()).toContain("No notification channels configured");
     setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Impulse");
     clickButton("Add rule");
     expect(onCreateWatchRule).toHaveBeenCalledWith({ type: "artist", pattern: "Impulse", weight: null });
@@ -218,6 +233,46 @@ describe("CatalogOpsDashboard", () => {
           enabled: false,
         },
       ],
+      notificationDeliveries: [
+        {
+          ...dashboardFixture.notificationDeliveries![0],
+          id: "delivery-failed",
+          status: "failed",
+          signalType: "observed_price_change",
+          lastError: "webhook responded with status 500",
+        },
+        {
+          ...dashboardFixture.notificationDeliveries![0],
+          id: "delivery-skipped",
+          status: "skipped",
+          signalType: null,
+          score: null,
+          channelName: null,
+          ruleName: null,
+        },
+      ],
+      notificationRules: [
+        {
+          ...dashboardFixture.notificationRules![0],
+          id: "notification-disabled",
+          enabled: false,
+          channelType: "logging",
+          channelName: "Audit log",
+          signalTypes: [],
+          severities: [],
+          includeDigest: true,
+        },
+      ],
+      notificationChannels: [
+        {
+          ...dashboardFixture.notificationChannels![0],
+          id: "notification-logging",
+          type: "logging",
+          name: "Audit log",
+          enabled: false,
+          configSummary: "Console JSON read-only alert log",
+        },
+      ],
       watchRuleActionPending: true,
     });
     expect(pageText()).toContain("not reported");
@@ -230,6 +285,11 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Catalog trend spike");
     expect(pageText()).toContain("Warehouse Find");
     expect(pageText()).toContain("Disabled");
+    expect(pageText()).toContain("Failed");
+    expect(pageText()).toContain("Skipped");
+    expect(pageText()).toContain("Operator digest");
+    expect(pageText()).toContain("Logging");
+    expect(pageText()).toContain("Console JSON read-only alert log");
   });
 
   it("renders running, failed, and not-run ingest variants", () => {

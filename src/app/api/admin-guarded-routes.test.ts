@@ -12,6 +12,19 @@ import { getMovementSignals } from "@/lib/insights/movement-repository";
 import { getCatalogTrends, getInsightDigest } from "@/lib/insights/trend-repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { getJunoLiveWorkerProcessManager } from "@/lib/juno-live/worker-process";
+import { dispatchQueuedNotifications } from "@/lib/notifications/dispatcher";
+import {
+  createNotificationChannel,
+  createNotificationRule,
+  deleteNotificationChannel,
+  deleteNotificationRule,
+  listNotificationChannels,
+  listNotificationDeliveries,
+  listNotificationRules,
+  matchNotificationRulesForSignals,
+  updateNotificationChannel,
+  updateNotificationRule,
+} from "@/lib/notifications/repository";
 import { POST as enqueueLiveLookups } from "./live-lookups/enqueue/route";
 import { GET as getLiveLookupStatus } from "./live-lookups/status/route";
 import {
@@ -24,6 +37,22 @@ import { GET as getDigestInsights } from "./insights/digest/route";
 import { GET as getMovementInsights } from "./insights/movement/route";
 import { GET as getTrendInsights } from "./insights/trends/route";
 import { GET as getSettingsStatus } from "./settings/status/route";
+import {
+  DELETE as deleteNotificationChannels,
+  GET as getNotificationChannels,
+  PATCH as patchNotificationChannels,
+  POST as postNotificationChannels,
+} from "./notifications/channels/route";
+import { GET as getNotificationDeliveries } from "./notifications/deliveries/route";
+import { POST as dispatchNotifications } from "./notifications/dispatch/route";
+import { POST as queueNotifications } from "./notifications/queue/route";
+import { POST as refreshNotifications } from "./notifications/refresh/route";
+import {
+  DELETE as deleteNotificationRules,
+  GET as getNotificationRules,
+  PATCH as patchNotificationRules,
+  POST as postNotificationRules,
+} from "./notifications/rules/route";
 import {
   DELETE as deleteWatchRules,
   GET as getWatchRules,
@@ -65,6 +94,23 @@ vi.mock("@/lib/juno-live/worker-process", () => ({
   getJunoLiveWorkerProcessManager: vi.fn(),
 }));
 
+vi.mock("@/lib/notifications/dispatcher", () => ({
+  dispatchQueuedNotifications: vi.fn(),
+}));
+
+vi.mock("@/lib/notifications/repository", () => ({
+  createNotificationChannel: vi.fn(),
+  createNotificationRule: vi.fn(),
+  deleteNotificationChannel: vi.fn(),
+  deleteNotificationRule: vi.fn(),
+  listNotificationChannels: vi.fn(),
+  listNotificationDeliveries: vi.fn(),
+  listNotificationRules: vi.fn(),
+  matchNotificationRulesForSignals: vi.fn(),
+  updateNotificationChannel: vi.fn(),
+  updateNotificationRule: vi.fn(),
+}));
+
 const requireAdminMock = vi.mocked(requireAdmin);
 const getGmailIngestStateMock = vi.mocked(getGmailIngestState);
 const getTodaySignalsMock = vi.mocked(getTodaySignals);
@@ -78,6 +124,17 @@ const deleteWatchRuleMock = vi.mocked(deleteWatchRule);
 const enqueueLiveLookupJobsMock = vi.mocked(enqueueLiveLookupJobs);
 const withJunoLiveRepositoryMock = vi.mocked(withJunoLiveRepository);
 const getJunoLiveWorkerProcessManagerMock = vi.mocked(getJunoLiveWorkerProcessManager);
+const dispatchQueuedNotificationsMock = vi.mocked(dispatchQueuedNotifications);
+const createNotificationChannelMock = vi.mocked(createNotificationChannel);
+const createNotificationRuleMock = vi.mocked(createNotificationRule);
+const deleteNotificationChannelMock = vi.mocked(deleteNotificationChannel);
+const deleteNotificationRuleMock = vi.mocked(deleteNotificationRule);
+const listNotificationChannelsMock = vi.mocked(listNotificationChannels);
+const listNotificationDeliveriesMock = vi.mocked(listNotificationDeliveries);
+const listNotificationRulesMock = vi.mocked(listNotificationRules);
+const matchNotificationRulesForSignalsMock = vi.mocked(matchNotificationRulesForSignals);
+const updateNotificationChannelMock = vi.mocked(updateNotificationChannel);
+const updateNotificationRuleMock = vi.mocked(updateNotificationRule);
 
 describe("admin guarded API routes", () => {
   const repository = {
@@ -125,6 +182,18 @@ describe("admin guarded API routes", () => {
     await expectStatus(postWatchRules(jsonRequest({ type: "artist", pattern: "Lara Voss" })), 403);
     await expectStatus(patchWatchRules(jsonRequest({ id: "rule-1", enabled: false })), 403);
     await expectStatus(deleteWatchRules(jsonRequest({ id: "rule-1" })), 403);
+    await expectStatus(getNotificationDeliveries(request()), 403);
+    await expectStatus(getNotificationChannels(request()), 403);
+    await expectStatus(postNotificationChannels(jsonRequest({ name: "In-app", type: "in_app" })), 403);
+    await expectStatus(patchNotificationChannels(jsonRequest({ id: "channel-1", enabled: false })), 403);
+    await expectStatus(deleteNotificationChannels(jsonRequest({ id: "channel-1" })), 403);
+    await expectStatus(getNotificationRules(request()), 403);
+    await expectStatus(postNotificationRules(jsonRequest({ name: "Rule", channelId: "channel-1" })), 403);
+    await expectStatus(patchNotificationRules(jsonRequest({ id: "notification-rule-1", enabled: false })), 403);
+    await expectStatus(deleteNotificationRules(jsonRequest({ id: "notification-rule-1" })), 403);
+    await expectStatus(queueNotifications(jsonRequest({ limit: 10 })), 403);
+    await expectStatus(dispatchNotifications(jsonRequest({ mode: "send" })), 403);
+    await expectStatus(refreshNotifications(jsonRequest({ mode: "dry-run" })), 403);
 
     expect(getGmailIngestStateMock).not.toHaveBeenCalled();
     expect(getTodaySignalsMock).not.toHaveBeenCalled();
@@ -135,6 +204,17 @@ describe("admin guarded API routes", () => {
     expect(createWatchRuleMock).not.toHaveBeenCalled();
     expect(updateWatchRuleMock).not.toHaveBeenCalled();
     expect(deleteWatchRuleMock).not.toHaveBeenCalled();
+    expect(listNotificationDeliveriesMock).not.toHaveBeenCalled();
+    expect(listNotificationChannelsMock).not.toHaveBeenCalled();
+    expect(createNotificationChannelMock).not.toHaveBeenCalled();
+    expect(updateNotificationChannelMock).not.toHaveBeenCalled();
+    expect(deleteNotificationChannelMock).not.toHaveBeenCalled();
+    expect(listNotificationRulesMock).not.toHaveBeenCalled();
+    expect(createNotificationRuleMock).not.toHaveBeenCalled();
+    expect(updateNotificationRuleMock).not.toHaveBeenCalled();
+    expect(deleteNotificationRuleMock).not.toHaveBeenCalled();
+    expect(matchNotificationRulesForSignalsMock).not.toHaveBeenCalled();
+    expect(dispatchQueuedNotificationsMock).not.toHaveBeenCalled();
     expect(withJunoLiveRepositoryMock).not.toHaveBeenCalled();
     expect(getJunoLiveWorkerProcessManagerMock).not.toHaveBeenCalled();
     expect(enqueueLiveLookupJobsMock).not.toHaveBeenCalled();
@@ -332,6 +412,358 @@ describe("admin guarded API routes", () => {
     await expect(expectJson(deleteWatchRules(jsonRequest({ id: "" })))).resolves.toEqual({
       status: 400,
       body: { error: "Watch rule id is required" },
+    });
+  });
+
+  it("guards notification APIs and keeps action modes explicit", async () => {
+    await expect(expectJson(getNotificationDeliveries(request()))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(getNotificationChannels(request()))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(postNotificationChannels(jsonRequest({ name: "Ops", type: "logging" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(patchNotificationChannels(jsonRequest({ id: "channel-1", enabled: false })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(deleteNotificationChannels(jsonRequest({ id: "channel-1" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(getNotificationRules(request()))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(postNotificationRules(jsonRequest({ name: "Rule", channelId: "channel-1" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(patchNotificationRules(jsonRequest({ id: "rule-1", enabled: false })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(deleteNotificationRules(jsonRequest({ id: "rule-1" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(queueNotifications(jsonRequest({ limit: 10 })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(dispatchNotifications(jsonRequest({ mode: "send" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+    await expect(expectJson(refreshNotifications(jsonRequest({ mode: "dry-run" })))).resolves.toEqual({
+      status: 503,
+      body: { error: "DATABASE_URL is not configured" },
+    });
+
+    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
+    listNotificationDeliveriesMock.mockResolvedValue([{ id: "delivery-1" }] as never);
+    listNotificationChannelsMock.mockResolvedValue([{ id: "channel-1" }] as never);
+    createNotificationChannelMock.mockResolvedValue({ id: "channel-2" } as never);
+    updateNotificationChannelMock.mockResolvedValueOnce({ id: "channel-2", enabled: false } as never).mockResolvedValueOnce(null);
+    deleteNotificationChannelMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    listNotificationRulesMock.mockResolvedValue([{ id: "notification-rule-1" }] as never);
+    createNotificationRuleMock.mockResolvedValue({ id: "notification-rule-2" } as never);
+    updateNotificationRuleMock.mockResolvedValueOnce({ id: "notification-rule-2", enabled: false } as never).mockResolvedValueOnce(null);
+    deleteNotificationRuleMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    matchNotificationRulesForSignalsMock
+      .mockResolvedValueOnce({ queued: 2, skipped: 1 })
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 1, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 1, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 });
+    dispatchQueuedNotificationsMock
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 2, dryRun: true })
+      .mockResolvedValueOnce({ sent: 2, failed: 0, skipped: 0, dryRun: false })
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 1, dryRun: true })
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 1, dryRun: true })
+      .mockResolvedValueOnce({ sent: 1, failed: 0, skipped: 0, dryRun: false });
+
+    await expect(expectJson(getNotificationDeliveries(new Request("http://app.test/api/notifications/deliveries?limit=25")))).resolves.toEqual({
+      status: 200,
+      body: { deliveries: [{ id: "delivery-1" }] },
+    });
+    expect(listNotificationDeliveriesMock).toHaveBeenLastCalledWith("postgres://user:pass@localhost:5432/app", 25);
+    await expect(expectJson(getNotificationDeliveries(new Request("http://app.test/api/notifications/deliveries?limit=-1")))).resolves.toEqual({
+      status: 200,
+      body: { deliveries: [{ id: "delivery-1" }] },
+    });
+    expect(listNotificationDeliveriesMock).toHaveBeenLastCalledWith("postgres://user:pass@localhost:5432/app", 100);
+
+    await expect(expectJson(getNotificationChannels(request()))).resolves.toEqual({
+      status: 200,
+      body: { channels: [{ id: "channel-1" }] },
+    });
+    await expect(expectJson(postNotificationChannels(jsonRequest({ name: "Ops", type: "logging" })))).resolves.toEqual({
+      status: 201,
+      body: { channel: { id: "channel-2" } },
+    });
+    await expect(expectJson(patchNotificationChannels(jsonRequest({ id: "channel-2", enabled: false })))).resolves.toEqual({
+      status: 200,
+      body: { channel: { id: "channel-2", enabled: false } },
+    });
+    await expect(expectJson(patchNotificationChannels(jsonRequest({ id: "missing", enabled: true })))).resolves.toEqual({
+      status: 404,
+      body: { error: "notification_channel_not_found" },
+    });
+    await expect(expectJson(patchNotificationChannels(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(deleteNotificationChannels(jsonRequest({ id: "channel-2" })))).resolves.toEqual({
+      status: 200,
+      body: { deleted: true },
+    });
+    await expect(expectJson(deleteNotificationChannels(jsonRequest({ id: "missing" })))).resolves.toEqual({
+      status: 404,
+      body: { error: "notification_channel_not_found" },
+    });
+    await expect(expectJson(deleteNotificationChannels(jsonRequest({ id: "" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Notification channel id is required" },
+    });
+    await expect(expectJson(postNotificationChannels(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    createNotificationChannelMock.mockRejectedValueOnce("bad channel");
+    await expect(expectJson(postNotificationChannels(jsonRequest({ name: "Ops", type: "logging" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid notification channel request" },
+    });
+
+    await expect(expectJson(getNotificationRules(request()))).resolves.toEqual({
+      status: 200,
+      body: { rules: [{ id: "notification-rule-1" }] },
+    });
+    await expect(expectJson(postNotificationRules(jsonRequest({ name: "Rule", channelId: "channel-1" })))).resolves.toEqual({
+      status: 201,
+      body: { rule: { id: "notification-rule-2" } },
+    });
+    await expect(expectJson(patchNotificationRules(jsonRequest({ id: "notification-rule-2", enabled: false })))).resolves.toEqual({
+      status: 200,
+      body: { rule: { id: "notification-rule-2", enabled: false } },
+    });
+    await expect(expectJson(patchNotificationRules(jsonRequest({ id: "missing", enabled: true })))).resolves.toEqual({
+      status: 404,
+      body: { error: "notification_rule_not_found" },
+    });
+    await expect(expectJson(patchNotificationRules(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(deleteNotificationRules(jsonRequest({ id: "notification-rule-2" })))).resolves.toEqual({
+      status: 200,
+      body: { deleted: true },
+    });
+    await expect(expectJson(deleteNotificationRules(jsonRequest({ id: "missing" })))).resolves.toEqual({
+      status: 404,
+      body: { error: "notification_rule_not_found" },
+    });
+    await expect(expectJson(deleteNotificationRules(jsonRequest({ id: "" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Notification rule id is required" },
+    });
+    await expect(expectJson(postNotificationRules(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    createNotificationRuleMock.mockRejectedValueOnce("bad rule");
+    await expect(expectJson(postNotificationRules(jsonRequest({ name: "Rule", channelId: "channel-1" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid notification rule request" },
+    });
+
+    await expect(expectJson(queueNotifications(jsonRequest({ since: "2026-06-18T00:00:00.000Z", digestDate: "2026-06-18", limit: 25 })))).resolves.toEqual({
+      status: 200,
+      body: { queued: 2, skipped: 1 },
+    });
+    expect(matchNotificationRulesForSignalsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      since: "2026-06-18T00:00:00.000Z",
+      digestDate: "2026-06-18",
+      limit: 25,
+    });
+    await expect(expectJson(queueNotifications(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(queueNotifications(jsonRequest({})))).resolves.toEqual({
+      status: 200,
+      body: { queued: 0, skipped: 0 },
+    });
+    expect(matchNotificationRulesForSignalsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      since: undefined,
+      digestDate: undefined,
+      limit: 100,
+    });
+    await expect(expectJson(queueNotifications(jsonRequest({ limit: "25" })))).resolves.toEqual({
+      status: 200,
+      body: { queued: 1, skipped: 0 },
+    });
+    expect(matchNotificationRulesForSignalsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      since: undefined,
+      digestDate: undefined,
+      limit: 25,
+    });
+    await expect(expectJson(dispatchNotifications(jsonRequest({ limit: "bad" })))).resolves.toEqual({
+      status: 200,
+      body: { sent: 0, failed: 0, skipped: 2, dryRun: true },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 100,
+    });
+    await expect(expectJson(dispatchNotifications(jsonRequest({ mode: "send", limit: 5 })))).resolves.toEqual({
+      status: 200,
+      body: { sent: 2, failed: 0, skipped: 0, dryRun: false },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "send",
+      limit: 5,
+    });
+    await expect(expectJson(dispatchNotifications(jsonRequest(null)))).resolves.toEqual({
+      status: 200,
+      body: { sent: 0, failed: 0, skipped: 1, dryRun: true },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 100,
+    });
+    await expect(expectJson(dispatchNotifications(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(refreshNotifications(jsonRequest({
+      since: "2026-06-18T00:00:00.000Z",
+      digestDate: "2026-06-18",
+      limit: "bad",
+    })))).resolves.toEqual({
+      status: 200,
+      body: {
+        queued: { queued: 1, skipped: 0 },
+        dispatched: { sent: 0, failed: 0, skipped: 1, dryRun: true },
+      },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 100,
+    });
+    await expect(expectJson(refreshNotifications(jsonRequest({ mode: "send", limit: 10 })))).resolves.toEqual({
+      status: 200,
+      body: {
+        queued: { queued: 0, skipped: 0 },
+        dispatched: { sent: 1, failed: 0, skipped: 0, dryRun: false },
+      },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "send",
+      limit: 10,
+    });
+    await expect(expectJson(refreshNotifications(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+  });
+
+  it("parses notification action edge bodies conservatively", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
+    matchNotificationRulesForSignalsMock
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 1, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 })
+      .mockResolvedValueOnce({ queued: 0, skipped: 0 });
+    dispatchQueuedNotificationsMock
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 0, dryRun: true })
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 0, dryRun: true })
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 0, dryRun: true })
+      .mockResolvedValueOnce({ sent: 0, failed: 0, skipped: 0, dryRun: false });
+
+    await expect(expectJson(queueNotifications(jsonRequest({ limit: false })))).resolves.toEqual({
+      status: 200,
+      body: { queued: 0, skipped: 0 },
+    });
+    expect(matchNotificationRulesForSignalsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      since: undefined,
+      digestDate: undefined,
+      limit: 100,
+    });
+    await expect(expectJson(queueNotifications(jsonRequest({ since: "", digestDate: "", limit: "25" })))).resolves.toEqual({
+      status: 200,
+      body: { queued: 0, skipped: 0 },
+    });
+    expect(matchNotificationRulesForSignalsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      since: undefined,
+      digestDate: undefined,
+      limit: 25,
+    });
+
+    await expect(expectJson(dispatchNotifications(jsonRequest({ mode: "dry-run", limit: false })))).resolves.toEqual({
+      status: 200,
+      body: { sent: 0, failed: 0, skipped: 0, dryRun: true },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 100,
+    });
+
+    await expect(expectJson(refreshNotifications(jsonRequest({ mode: "dry-run", since: "", digestDate: "", limit: "25" })))).resolves.toEqual({
+      status: 200,
+      body: {
+        queued: { queued: 1, skipped: 0 },
+        dispatched: { sent: 0, failed: 0, skipped: 0, dryRun: true },
+      },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 25,
+    });
+
+    await expect(expectJson(refreshNotifications(jsonRequest({ limit: false })))).resolves.toEqual({
+      status: 200,
+      body: {
+        queued: { queued: 0, skipped: 0 },
+        dispatched: { sent: 0, failed: 0, skipped: 0, dryRun: true },
+      },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "dry-run",
+      limit: 100,
+    });
+
+    await expect(expectJson(refreshNotifications(jsonRequest({ mode: "send" })))).resolves.toEqual({
+      status: 200,
+      body: {
+        queued: { queued: 0, skipped: 0 },
+        dispatched: { sent: 0, failed: 0, skipped: 0, dryRun: false },
+      },
+    });
+    expect(dispatchQueuedNotificationsMock).toHaveBeenLastCalledWith({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      mode: "send",
+      limit: 100,
     });
   });
 

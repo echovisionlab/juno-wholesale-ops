@@ -32,6 +32,9 @@ export async function startMigratedPostgresTestDatabase(): Promise<StartedPostgr
 export async function resetApplicationTables(pool: Pool): Promise<void> {
   await pool.query(`
     TRUNCATE
+      notification_delivery,
+      notification_rule,
+      notification_channel,
       juno_live_observation,
       juno_live_lookup_job,
       juno_live_lookup_run,
@@ -51,4 +54,9 @@ export async function resetApplicationTables(pool: Pool): Promise<void> {
   await pool.query("DELETE FROM service_setting");
   await pool.query("INSERT INTO service_setting (id) VALUES (true)");
   await pool.query("INSERT INTO gmail_ingest_state (id) VALUES (true)");
+  await pool.query(`
+    INSERT INTO notification_channel (name, type, enabled, config)
+    VALUES ('In-app notifications', 'in_app', true, '{}')
+    ON CONFLICT (name) DO NOTHING
+  `);
 }

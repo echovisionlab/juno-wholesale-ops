@@ -334,6 +334,66 @@ GET /api/insights/trends?windowDays=7&previousWindowDays=7&limit=20
 GET /api/insights/digest
 ```
 
+## Notifications
+
+Notifications are read-only signal deliveries for operators. They never trigger
+cart, wishlist, checkout, ordering, or Juno account mutation actions. Treat
+notification subjects, bodies, and webhook payloads as informational read-only
+alerts over observed signals, catalog trends, low observed stock, watch hits,
+and operator digest data.
+
+Notification refresh is separate from insight refresh. Run them in order when a
+scheduler needs both:
+
+```bash
+pnpm insights:refresh
+pnpm notifications:refresh
+```
+
+Notification scripts:
+
+```bash
+pnpm notifications:queue
+pnpm notifications:dispatch
+pnpm notifications:dispatch -- --send
+pnpm notifications:refresh
+pnpm notifications:refresh -- --send
+```
+
+`notifications:queue` creates deterministic delivery records from existing
+`signal_event` rows and digest rules. `notifications:dispatch` and
+`notifications:refresh` default to dry-run mode. Actual webhook sending requires
+`--send`.
+
+Read-only admin APIs:
+
+```http
+GET    /api/notifications/channels
+POST   /api/notifications/channels
+PATCH  /api/notifications/channels
+DELETE /api/notifications/channels
+
+GET    /api/notifications/rules
+POST   /api/notifications/rules
+PATCH  /api/notifications/rules
+DELETE /api/notifications/rules
+
+GET  /api/notifications/deliveries?limit=100
+POST /api/notifications/queue
+POST /api/notifications/dispatch
+POST /api/notifications/refresh
+```
+
+Supported channel types are `in_app`, `logging`, and generic `webhook`.
+Provider-specific Slack, Discord, Telegram, and OAuth adapters are intentionally
+out of scope for this layer.
+
+Webhook URLs may contain secrets. Prefer `secret_ref` values that point to
+runtime environment variables in production. `config.url` is supported for local
+development convenience only and is not recommended for production. Dashboard
+and API responses mask webhook config, and logs must not include webhook URLs,
+auth headers, cookies, or secret values.
+
 ## Dedupe Contract
 
 The worker treats duplicates at multiple levels:
@@ -353,8 +413,8 @@ the same XLSX content being resent under a different email, filename, or date.
   production worker.
 - The first parser targets the observed Juno XLSX columns only.
 - The insight surface is limited to observed catalog, watch-rule, and live
-  stock movement signals. It does not include external adapters or any ordering
-  automation.
+  stock movement signals. Notifications are informational read-only deliveries
+  for those signals. The system does not include ordering automation.
 
 ## Production Skeleton
 

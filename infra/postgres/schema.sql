@@ -1,4 +1,4 @@
--- migration-manifest-sha256: c3e290aefc75e8e3e59b5ce8cb1465c27d3df28d55a6ad0cfe0aa9a360de6715
+-- migration-manifest-sha256: 433d707617dc7ab5938800244e56564f9387e748bb420c0603df954c0163d04e
 --
 -- PostgreSQL database dump
 --
@@ -306,6 +306,69 @@ CREATE TABLE public.mail_message (
     received_at timestamp with time zone,
     first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
     payload jsonb NOT NULL
+);
+
+
+--
+-- Name: notification_channel; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notification_channel (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    type text NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    secret_ref text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT notification_channel_type_check CHECK ((type = ANY (ARRAY['in_app'::text, 'webhook'::text, 'logging'::text])))
+);
+
+
+--
+-- Name: notification_delivery; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notification_delivery (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    rule_id uuid,
+    channel_id uuid,
+    signal_event_id uuid,
+    digest_key text,
+    status text NOT NULL,
+    delivery_key text NOT NULL,
+    subject text NOT NULL,
+    body text NOT NULL,
+    payload jsonb DEFAULT '{}'::jsonb NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    last_error text,
+    queued_at timestamp with time zone DEFAULT now() NOT NULL,
+    sent_at timestamp with time zone,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT notification_delivery_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
+);
+
+
+--
+-- Name: notification_rule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.notification_rule (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    channel_id uuid NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    signal_types text[] DEFAULT '{}'::text[] NOT NULL,
+    severities text[] DEFAULT '{}'::text[] NOT NULL,
+    min_score integer DEFAULT 0 NOT NULL,
+    include_watch_hits boolean DEFAULT true NOT NULL,
+    include_digest boolean DEFAULT false NOT NULL,
+    cooldown_minutes integer DEFAULT 60 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT notification_rule_cooldown_minutes_check CHECK ((cooldown_minutes >= 0)),
+    CONSTRAINT notification_rule_min_score_check CHECK (((min_score >= '-100'::integer) AND (min_score <= 100)))
 );
 
 
@@ -659,6 +722,54 @@ ALTER TABLE ONLY public.mail_message
 
 
 --
+-- Name: notification_channel notification_channel_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_channel
+    ADD CONSTRAINT notification_channel_name_key UNIQUE (name);
+
+
+--
+-- Name: notification_channel notification_channel_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_channel
+    ADD CONSTRAINT notification_channel_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notification_delivery notification_delivery_delivery_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_delivery
+    ADD CONSTRAINT notification_delivery_delivery_key_key UNIQUE (delivery_key);
+
+
+--
+-- Name: notification_delivery notification_delivery_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_delivery
+    ADD CONSTRAINT notification_delivery_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: notification_rule notification_rule_name_channel_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_rule
+    ADD CONSTRAINT notification_rule_name_channel_id_key UNIQUE (name, channel_id);
+
+
+--
+-- Name: notification_rule notification_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_rule
+    ADD CONSTRAINT notification_rule_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: processing_run processing_run_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -908,6 +1019,48 @@ CREATE INDEX idx_mail_message_rfc822 ON public.mail_message USING btree (rfc822_
 
 
 --
+-- Name: idx_notification_channel_enabled_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_channel_enabled_type ON public.notification_channel USING btree (enabled, type);
+
+
+--
+-- Name: idx_notification_delivery_digest_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_delivery_digest_key ON public.notification_delivery USING btree (digest_key) WHERE (digest_key IS NOT NULL);
+
+
+--
+-- Name: idx_notification_delivery_rule_channel; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_delivery_rule_channel ON public.notification_delivery USING btree (rule_id, channel_id, queued_at DESC);
+
+
+--
+-- Name: idx_notification_delivery_signal_event; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_delivery_signal_event ON public.notification_delivery USING btree (signal_event_id) WHERE (signal_event_id IS NOT NULL);
+
+
+--
+-- Name: idx_notification_delivery_status_queued; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_delivery_status_queued ON public.notification_delivery USING btree (status, queued_at);
+
+
+--
+-- Name: idx_notification_rule_channel_enabled; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_notification_rule_channel_enabled ON public.notification_rule USING btree (channel_id, enabled);
+
+
+--
 -- Name: idx_service_log_event_component; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1094,6 +1247,38 @@ ALTER TABLE ONLY public.juno_live_observation
 
 ALTER TABLE ONLY public.mail_attachment
     ADD CONSTRAINT mail_attachment_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.mail_message(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notification_delivery notification_delivery_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_delivery
+    ADD CONSTRAINT notification_delivery_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channel(id) ON DELETE SET NULL;
+
+
+--
+-- Name: notification_delivery notification_delivery_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_delivery
+    ADD CONSTRAINT notification_delivery_rule_id_fkey FOREIGN KEY (rule_id) REFERENCES public.notification_rule(id) ON DELETE SET NULL;
+
+
+--
+-- Name: notification_delivery notification_delivery_signal_event_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_delivery
+    ADD CONSTRAINT notification_delivery_signal_event_id_fkey FOREIGN KEY (signal_event_id) REFERENCES public.signal_event(id) ON DELETE CASCADE;
+
+
+--
+-- Name: notification_rule notification_rule_channel_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.notification_rule
+    ADD CONSTRAINT notification_rule_channel_id_fkey FOREIGN KEY (channel_id) REFERENCES public.notification_channel(id) ON DELETE CASCADE;
 
 
 --

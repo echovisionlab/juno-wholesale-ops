@@ -16,6 +16,9 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
     catalogTrends: unknown;
     operatorDigest: unknown;
     watchRules: Array<{ id: string; enabled: boolean }> | null;
+    notificationDeliveries: unknown;
+    notificationRules: unknown;
+    notificationChannels: unknown;
     workerActionPending: boolean;
     watchRuleActionPending: boolean;
     onWorkerAction: (action: "start" | "stop" | "restart") => void;
@@ -80,6 +83,9 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ trends: { genres: [] } }))
       .mockResolvedValueOnce(jsonResponse({ digest: { generatedAt: "2026-06-17T00:00:00.000Z" } }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-1", enabled: true }] }))
+      .mockResolvedValueOnce(jsonResponse({ deliveries: [{ id: "delivery-1", status: "queued" }] }))
+      .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "notification-rule-1", enabled: true }] }))
+      .mockResolvedValueOnce(jsonResponse({ channels: [{ id: "channel-1", type: "in_app" }] }))
       .mockResolvedValueOnce(jsonResponse({ state: { lastQueryStatus: "succeeded" } }))
       .mockResolvedValueOnce(jsonResponse({ summary: { queued: 2 } }))
       .mockResolvedValueOnce(jsonResponse({ worker: { state: "running" } }))
@@ -89,6 +95,9 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ trends: { genres: [{ key: "jazz" }] } }))
       .mockResolvedValueOnce(jsonResponse({ digest: { generatedAt: "2026-06-17T00:30:00.000Z" } }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-2", enabled: false }] }))
+      .mockResolvedValueOnce(jsonResponse({ deliveries: [{ id: "delivery-2", status: "sent" }] }))
+      .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "notification-rule-2", enabled: true }] }))
+      .mockResolvedValueOnce(jsonResponse({ channels: [{ id: "channel-2", type: "webhook" }] }))
       .mockResolvedValueOnce(jsonResponse({ worker: { state: "running", pid: 123 } }))
       .mockResolvedValueOnce(new Response("nope", { status: 500 }))
       .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-3", enabled: true } }))
@@ -112,6 +121,9 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"signalId":"movement-1"');
     expect(readProps()).toContain('"generatedAt":"2026-06-17T00:00:00.000Z"');
     expect(readProps()).toContain('"id":"rule-1"');
+    expect(readProps()).toContain('"id":"delivery-1"');
+    expect(readProps()).toContain('"id":"notification-rule-1"');
+    expect(readProps()).toContain('"id":"channel-1"');
 
     await act(async () => {
       vi.advanceTimersByTime(30000);
@@ -124,6 +136,9 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"signalId":"movement-2"');
     expect(readProps()).toContain('"key":"jazz"');
     expect(readProps()).toContain('"id":"rule-2"');
+    expect(readProps()).toContain('"id":"delivery-2"');
+    expect(readProps()).toContain('"id":"notification-rule-2"');
+    expect(readProps()).toContain('"id":"channel-2"');
 
     await act(async () => {
       clickButton("start");
@@ -213,6 +228,9 @@ describe("Home dashboard polling", () => {
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(jsonResponse({ rule: { id: "fallback-rule", enabled: false } }))
         .mockResolvedValueOnce(jsonResponse({ deleted: true }))
         .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-from-null", enabled: true } })),
@@ -232,6 +250,9 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"catalogTrends":null');
     expect(readProps()).toContain('"operatorDigest":null');
     expect(readProps()).toContain('"watchRules":null');
+    expect(readProps()).toContain('"notificationDeliveries":null');
+    expect(readProps()).toContain('"notificationRules":null');
+    expect(readProps()).toContain('"notificationChannels":null');
 
     await act(async () => {
       clickButton("toggle-rule");
@@ -262,6 +283,9 @@ describe("Home dashboard polling", () => {
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(jsonResponse({ rule: { id: "created-from-null", enabled: true } })),
     );
 
@@ -282,6 +306,9 @@ describe("Home dashboard polling", () => {
       "fetch",
       vi.fn()
         .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))

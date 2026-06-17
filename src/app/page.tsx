@@ -12,6 +12,9 @@ import type {
   LiveWorkerAction,
   LiveWorkerStatus,
   MovementSignal,
+  NotificationChannel,
+  NotificationDelivery,
+  NotificationRule,
   TodayInsight,
   WatchRule,
   WatchRuleDraft,
@@ -27,6 +30,9 @@ export default function Home() {
   const [catalogTrends, setCatalogTrends] = useState<CatalogTrendSummary | null>(null);
   const [operatorDigest, setOperatorDigest] = useState<InsightDigest | null>(null);
   const [watchRules, setWatchRules] = useState<WatchRule[] | null>(null);
+  const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[] | null>(null);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(null);
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
   const [workerActionPending, setWorkerActionPending] = useState(false);
   const [watchRuleActionPending, setWatchRuleActionPending] = useState(false);
 
@@ -43,6 +49,9 @@ export default function Home() {
       setCatalogTrends,
       setOperatorDigest,
       setWatchRules,
+      setNotificationDeliveries,
+      setNotificationRules,
+      setNotificationChannels,
     );
     const intervalId = window.setInterval(() => {
       void refreshDashboardState(
@@ -56,6 +65,9 @@ export default function Home() {
         setCatalogTrends,
         setOperatorDigest,
         setWatchRules,
+        setNotificationDeliveries,
+        setNotificationRules,
+        setNotificationChannels,
       );
     }, 30000);
     return () => {
@@ -143,6 +155,9 @@ export default function Home() {
       catalogTrends={catalogTrends}
       operatorDigest={operatorDigest}
       watchRules={watchRules}
+      notificationDeliveries={notificationDeliveries}
+      notificationRules={notificationRules}
+      notificationChannels={notificationChannels}
       workerActionPending={workerActionPending}
       watchRuleActionPending={watchRuleActionPending}
       onWorkerAction={handleWorkerAction}
@@ -164,6 +179,9 @@ async function refreshDashboardState(
   setCatalogTrends: (trends: CatalogTrendSummary | null) => void,
   setOperatorDigest: (digest: InsightDigest | null) => void,
   setWatchRules: (rules: WatchRule[] | null) => void,
+  setNotificationDeliveries: (deliveries: NotificationDelivery[] | null) => void,
+  setNotificationRules: (rules: NotificationRule[] | null) => void,
+  setNotificationChannels: (channels: NotificationChannel[] | null) => void,
 ) {
   const [
     ingestPayload,
@@ -175,6 +193,9 @@ async function refreshDashboardState(
     trendsPayload,
     digestPayload,
     watchRulesPayload,
+    notificationDeliveriesPayload,
+    notificationRulesPayload,
+    notificationChannelsPayload,
   ] = await Promise.all([
     fetchJson<{ state?: GmailIngestState }>("/api/ingest/status"),
     fetchJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status"),
@@ -185,6 +206,9 @@ async function refreshDashboardState(
     fetchJson<{ trends?: CatalogTrendSummary }>("/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20"),
     fetchJson<{ digest?: InsightDigest }>("/api/insights/digest"),
     fetchJson<{ rules?: WatchRule[] }>("/api/watch-rules"),
+    fetchJson<{ deliveries?: NotificationDelivery[] }>("/api/notifications/deliveries?limit=100"),
+    fetchJson<{ rules?: NotificationRule[] }>("/api/notifications/rules"),
+    fetchJson<{ channels?: NotificationChannel[] }>("/api/notifications/channels"),
   ]);
 
   if (!isCancelled()) {
@@ -197,6 +221,9 @@ async function refreshDashboardState(
     setCatalogTrends(trendsPayload?.trends ?? null);
     setOperatorDigest(digestPayload?.digest ?? null);
     setWatchRules(watchRulesPayload?.rules ?? null);
+    setNotificationDeliveries(notificationDeliveriesPayload?.deliveries ?? null);
+    setNotificationRules(notificationRulesPayload?.rules ?? null);
+    setNotificationChannels(notificationChannelsPayload?.channels ?? null);
   }
 }
 

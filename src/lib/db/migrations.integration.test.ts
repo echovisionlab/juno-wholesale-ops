@@ -20,7 +20,7 @@ describe("PostgreSQL migrations", () => {
   });
 
   it("applies every migration to a real PostgreSQL database and records hashes", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(10);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(11);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({
         version: 1,
@@ -70,6 +70,11 @@ describe("PostgreSQL migrations", () => {
       expect.objectContaining({
         version: 10,
         filename: "0010_stock_movement_insights.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 11,
+        filename: "0011_notification_delivery.sql",
         sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
     ]);
