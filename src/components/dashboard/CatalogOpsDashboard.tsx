@@ -45,7 +45,7 @@ export function CatalogOpsDashboard({
             <Group justify="space-between" align="flex-start">
               <Box>
                 <Text size="sm" fw={700} tt="uppercase" c="sage.7">
-                  Wholesale Ops
+                  Juno Wholesale Ops
                 </Text>
                 <Title order={1} mt={6}>
                   Juno catalog control desk

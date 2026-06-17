@@ -1,4 +1,4 @@
-# Wholesale Ops
+# Juno Wholesale Ops
 
 Internal catalog-ingestion and purchasing operations service for Juno wholesale emails.
 
@@ -20,7 +20,7 @@ Gmail state303@dsub.io
   -> write catalog snapshot and raw item rows to Postgres
 ```
 
-Use a separate `wholesale` database when possible. If this must share the dsub
+Use a separate `juno_wholesale_ops` database when possible. If this must share the dsub
 Postgres server, keep it outside dsub's `public` application schema.
 
 ## Environment

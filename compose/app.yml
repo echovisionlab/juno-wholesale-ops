@@ -1,11 +1,11 @@
-name: ${INVENTORY_STACK_PROJECT_NAME:-inventory}
+name: ${JUNO_WHOLESALE_OPS_STACK_PROJECT_NAME:-juno-wholesale-ops}
 
 services:
   web-prod:
-    image: ${INVENTORY_WEB_IMAGE:?set INVENTORY_WEB_IMAGE to an immutable image tag}
-    container_name: inventory-web-${INVENTORY_CONTAINER_SUFFIX:-prod}
+    image: ${JUNO_WHOLESALE_OPS_WEB_IMAGE:?set JUNO_WHOLESALE_OPS_WEB_IMAGE to an immutable image tag}
+    container_name: juno-wholesale-ops-web-${JUNO_WHOLESALE_OPS_CONTAINER_SUFFIX:-prod}
     ports:
-      - "${INVENTORY_WEB_PUBLIC_PORT:-3100}:3000"
+      - "${JUNO_WHOLESALE_OPS_WEB_PUBLIC_PORT:-3100}:3000"
     environment:
       NODE_ENV: production
       HOSTNAME: 0.0.0.0
@@ -25,13 +25,13 @@ services:
       GMAIL_MAX_RESULTS: ${GMAIL_MAX_RESULTS:-25}
       GMAIL_INGEST_LOOKBACK_MS: ${GMAIL_INGEST_LOOKBACK_MS:-604800000}
       GMAIL_PROCESSED_LABEL: ${GMAIL_PROCESSED_LABEL:-Wholesale Processed}
-      GMAIL_STORAGE_DIR: ${GMAIL_STORAGE_DIR:-/var/lib/wholesale-ops/mail-attachments}
+      GMAIL_STORAGE_DIR: ${GMAIL_STORAGE_DIR:-/var/lib/juno-wholesale-ops/mail-attachments}
       CATALOG_ATTACHMENT_PATTERN: ${CATALOG_ATTACHMENT_PATTERN:-New Preorders|New Releases In Stock}
       SUPPLIER_CODE: ${SUPPLIER_CODE:-juno}
       JUNO_LIVE_ENQUEUE_ON_INGEST: ${JUNO_LIVE_ENQUEUE_ON_INGEST:-false}
       JUNO_LOGIN_EMAIL: ${JUNO_LOGIN_EMAIL:?set JUNO_LOGIN_EMAIL}
       JUNO_LOGIN_PASSWORD: ${JUNO_LOGIN_PASSWORD:?set JUNO_LOGIN_PASSWORD}
-      JUNO_BROWSER_PROFILE_DIR: ${JUNO_BROWSER_PROFILE_DIR:-/var/lib/wholesale-ops/juno-browser-profile}
+      JUNO_BROWSER_PROFILE_DIR: ${JUNO_BROWSER_PROFILE_DIR:-/var/lib/juno-wholesale-ops/juno-browser-profile}
       JUNO_BROWSER_HEADLESS: ${JUNO_BROWSER_HEADLESS:-true}
       JUNO_LIVE_CONCURRENCY: ${JUNO_LIVE_CONCURRENCY:-6}
       JUNO_LIVE_DELAY_MIN_MS: ${JUNO_LIVE_DELAY_MIN_MS:-15000}
@@ -44,8 +44,8 @@ services:
       JUNO_LIVE_WORKER_COMMAND: ${JUNO_LIVE_WORKER_COMMAND:-}
       JUNO_LIVE_WORKER_ARGS: ${JUNO_LIVE_WORKER_ARGS:-}
     volumes:
-      - inventory-mail-attachments:/var/lib/wholesale-ops/mail-attachments
-      - inventory-juno-browser-profile:/var/lib/wholesale-ops/juno-browser-profile
+      - juno-wholesale-ops-mail-attachments:/var/lib/juno-wholesale-ops/mail-attachments
+      - juno-wholesale-ops-browser-profile:/var/lib/juno-wholesale-ops/juno-browser-profile
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
@@ -54,5 +54,5 @@ services:
       retries: 3
 
 volumes:
-  inventory-mail-attachments:
-  inventory-juno-browser-profile:
+  juno-wholesale-ops-mail-attachments:
+  juno-wholesale-ops-browser-profile:

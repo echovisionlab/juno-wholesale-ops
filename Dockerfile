@@ -28,7 +28,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV PORT=3000
 
-RUN install -d -o pwuser -g pwuser /app /var/lib/wholesale-ops/mail-attachments /var/lib/wholesale-ops/juno-browser-profile
+RUN install -d -o pwuser -g pwuser /app /var/lib/juno-wholesale-ops/mail-attachments /var/lib/juno-wholesale-ops/juno-browser-profile
 
 COPY --from=deps --chown=pwuser:pwuser /app/node_modules ./node_modules
 COPY --from=builder --chown=pwuser:pwuser /app/public ./public

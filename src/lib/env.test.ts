@@ -40,7 +40,7 @@ describe("loadRuntimeEnv", () => {
   it("coerces numeric env values and accepts optional database URL", () => {
     const env = loadRuntimeEnv({
       ...requiredEnv,
-      DATABASE_URL: "postgres://user:pass@localhost:5432/wholesale",
+      DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
       GMAIL_MAX_RESULTS: "5",
       GMAIL_INGEST_LOOKBACK_MS: "86400000",
       SUPPLIER_CODE: "juno-wholesale",
@@ -56,7 +56,7 @@ describe("loadRuntimeEnv", () => {
       JUNO_LIVE_WORKER_ARGS: "--loop",
     });
 
-    expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/wholesale");
+    expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/juno_wholesale_ops");
     expect(env.GMAIL_MAX_RESULTS).toBe(5);
     expect(env.GMAIL_INGEST_LOOKBACK_MS).toBe(86400000);
     expect(env.SUPPLIER_CODE).toBe("juno-wholesale");

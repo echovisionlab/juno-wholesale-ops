@@ -3,7 +3,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict wholesaleOpsSchemaDump
+\restrict junoWholesaleOpsSchemaDump
 
 -- Dumped from database version 16.14
 -- Dumped by pg_dump version 16.14
@@ -659,4 +659,4 @@ ALTER TABLE ONLY public.mail_attachment
 -- PostgreSQL database dump complete
 --
 
-\unrestrict wholesaleOpsSchemaDump
+\unrestrict junoWholesaleOpsSchemaDump

@@ -6,8 +6,8 @@ import { Providers } from "./providers";
 import { dsubFontStylesheetUrl } from "@/lib/fonts";
 
 export const metadata: Metadata = {
-  title: "Wholesale Ops",
-  description: "Wholesale catalog ingestion and purchasing operations",
+  title: "Juno Wholesale Ops",
+  description: "Juno wholesale catalog ingestion and purchasing operations",
 };
 
 export default function RootLayout({

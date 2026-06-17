@@ -21,7 +21,7 @@ export async function dumpMigratedMasterSchema(options: {
         "--no-privileges",
         "--no-comments",
         "--restrict-key",
-        "wholesaleOpsSchemaDump",
+        "junoWholesaleOpsSchemaDump",
         "--username",
         container.getUsername(),
         "--dbname",

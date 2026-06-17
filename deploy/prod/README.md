@@ -36,10 +36,10 @@ JUNO_LOGIN_EMAIL
 JUNO_LOGIN_PASSWORD
 ```
 
-Use an immutable image tag for `INVENTORY_WEB_IMAGE`, for example:
+Use an immutable image tag for `JUNO_WHOLESALE_OPS_WEB_IMAGE`, for example:
 
 ```text
-harbor.dsub.io/dsub/inventory-web:sha-<git-sha>
+harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<git-sha>
 ```
 
 The external Caddy/proxy layer must add:
@@ -78,7 +78,7 @@ The live worker needs all migrations applied before start. It is controlled by
 the Next.js server through `/api/live-lookups/worker`, which starts or stops the
 polling loop as a child process inside the web container. Its persistent
 Playwright profile is stored in the
-`inventory-juno-browser-profile` Docker volume so it does not relogin unless
+`juno-wholesale-ops-browser-profile` Docker volume so it does not relogin unless
 the Juno session expires. Juno settings resolve from the singleton
 `service_setting` row first and env fallback second. Leave both DB and env poll
 interval values empty to disable automatic idle polling.

@@ -1,13 +1,13 @@
-stackName: inventory-app-stack
-runDirectory: /home/state303/services/inventory
-projectName: inventory
+stackName: juno-wholesale-ops-app-stack
+runDirectory: /home/state303/services/juno-wholesale-ops
+projectName: juno-wholesale-ops
 filePaths:
   - compose/app.yml
 environment:
-  INVENTORY_STACK_PROJECT_NAME: inventory
-  INVENTORY_WEB_IMAGE: harbor.dsub.io/dsub/inventory-web:sha-REPLACE_ME
-  INVENTORY_CONTAINER_SUFFIX: prod
-  INVENTORY_WEB_PUBLIC_PORT: "3100"
+  JUNO_WHOLESALE_OPS_STACK_PROJECT_NAME: juno-wholesale-ops
+  JUNO_WHOLESALE_OPS_WEB_IMAGE: harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-REPLACE_ME
+  JUNO_WHOLESALE_OPS_CONTAINER_SUFFIX: prod
+  JUNO_WHOLESALE_OPS_WEB_PUBLIC_PORT: "3100"
   DSUB_AUTH_ENABLED: "true"
   DSUB_KRATOS_PUBLIC_URL: https://auth.dsub.io
   DSUB_LOGIN_URL: https://www.dsub.io/auth/login
@@ -20,11 +20,11 @@ environment:
   GMAIL_MAX_RESULTS: "25"
   GMAIL_INGEST_LOOKBACK_MS: "604800000"
   GMAIL_PROCESSED_LABEL: Wholesale Processed
-  GMAIL_STORAGE_DIR: /var/lib/wholesale-ops/mail-attachments
+  GMAIL_STORAGE_DIR: /var/lib/juno-wholesale-ops/mail-attachments
   CATALOG_ATTACHMENT_PATTERN: "New Preorders|New Releases In Stock"
   SUPPLIER_CODE: juno
   JUNO_LIVE_ENQUEUE_ON_INGEST: "false"
-  JUNO_BROWSER_PROFILE_DIR: /var/lib/wholesale-ops/juno-browser-profile
+  JUNO_BROWSER_PROFILE_DIR: /var/lib/juno-wholesale-ops/juno-browser-profile
   JUNO_BROWSER_HEADLESS: "true"
   JUNO_LIVE_CONCURRENCY: "6"
   JUNO_LIVE_DELAY_MIN_MS: "15000"

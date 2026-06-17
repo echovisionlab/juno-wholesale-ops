@@ -51,4 +51,4 @@ jobs:
         run: pnpm build
 
       - name: Build Docker image
-        run: docker build -t wholesale-ops:ci .
+        run: docker build -t juno-wholesale-ops:ci .
