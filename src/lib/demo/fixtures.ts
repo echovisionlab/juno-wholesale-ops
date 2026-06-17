@@ -41,7 +41,7 @@ export async function loadDemoCatalogFixtures(rootDir = process.cwd()): Promise<
       filename,
       sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
       bytes,
-      catalog: parseJunoCatalog(bytes, filename),
+      catalog: await parseJunoCatalog(bytes, filename),
     });
   }
   return fixtures;

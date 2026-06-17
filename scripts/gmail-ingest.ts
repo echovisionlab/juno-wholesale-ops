@@ -114,7 +114,7 @@ async function main() {
 
         const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
         const storageUri = await saveAttachment(gmailSettings.storageDir, sha256, attachment.filename, bytes);
-        const catalog = parseJunoCatalog(bytes, attachment.filename);
+        const catalog = await parseJunoCatalog(bytes, attachment.filename);
         attachmentCount += 1;
         parsedRows += catalog.rowCount;
 

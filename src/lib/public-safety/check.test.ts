@@ -160,10 +160,20 @@ describe("public safety check", () => {
             "Required status checks: Quality, Tests, Build",
             "Secret scanning is enabled",
             "Dependabot alerts are enabled",
+            "Dependabot open alerts are zero",
             "GitHub Actions permissions are minimal",
             "No production secrets in repository",
             "No real wholesale data in repository",
             "Demo fixtures synthetic-only",
+            "Runtime dependency audit passes",
+          ].join("\n"),
+        },
+        {
+          path: "SECURITY.md",
+          content: [
+            "## Dependency Vulnerability Handling",
+            "Dependabot alerts should be reduced to zero",
+            "accepted risk",
           ].join("\n"),
         },
         {
@@ -213,6 +223,7 @@ describe("public safety check", () => {
     const releaseNotes = read("docs/RELEASE_NOTES_v0.1.0.md");
     const repositoryChecklist = read("docs/PUBLIC_REPOSITORY_CHECKLIST.md");
     const roadmap = read("docs/ROADMAP.md");
+    const security = read("SECURITY.md");
     const packageJson = JSON.parse(read("package.json")) as {
       version?: string;
       scripts?: Record<string, string>;
@@ -231,8 +242,11 @@ describe("public safety check", () => {
       "This release does not automate ordering, cart actions, wishlist actions, checkout flows, or purchase decisions.",
     );
     expect(repositoryChecklist).toContain("Secret scanning is enabled");
+    expect(repositoryChecklist).toContain("Dependabot open alerts are zero");
     expect(repositoryChecklist).toContain("No production secrets in repository");
     expect(repositoryChecklist).toContain("No real wholesale data in repository");
+    expect(security).toContain("## Dependency Vulnerability Handling");
+    expect(security).toContain("Dependabot alerts should be reduced to zero");
     expect(roadmap).toContain("## Not planned");
     expect(roadmap).toContain("Auto-ordering");
     expect(roadmap).toContain("Cart automation");

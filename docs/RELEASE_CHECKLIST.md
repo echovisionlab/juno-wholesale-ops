@@ -16,6 +16,7 @@ until the owner explicitly approves those final actions.
 - [ ] Release notes drafted
 - [ ] GitHub Actions green
 - [ ] Public repository checklist reviewed
+- [ ] Dependabot open alerts are zero, or every remaining alert has an owner-approved accepted risk record with a review deadline
 - [ ] No cart, wishlist, checkout, purchase action, or Juno account mutation added
 - [ ] No sales-volume claims without observed evidence
 

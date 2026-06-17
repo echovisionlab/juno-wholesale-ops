@@ -110,10 +110,18 @@ const requiredPublicRepositoryChecklistPhrases = [
   "Required status checks: Quality, Tests, Build",
   "Secret scanning is enabled",
   "Dependabot alerts are enabled",
+  "Dependabot open alerts are zero",
   "GitHub Actions permissions are minimal",
   "No production secrets in repository",
   "No real wholesale data in repository",
   "Demo fixtures synthetic-only",
+  "Runtime dependency audit passes",
+] as const;
+
+const requiredSecurityPhrases = [
+  "## Dependency Vulnerability Handling",
+  "Dependabot alerts should be reduced to zero",
+  "accepted risk",
 ] as const;
 
 const requiredRoadmapPhrases = [
@@ -280,6 +288,7 @@ function checkRequiredDocumentSections(textFiles: PublicSafetyTextFile[]): Publi
       byPath.get("docs/PUBLIC_REPOSITORY_CHECKLIST.md") ?? "",
       requiredPublicRepositoryChecklistPhrases,
     ),
+    ...missingPhrases("SECURITY.md", byPath.get("SECURITY.md") ?? "", requiredSecurityPhrases),
     ...missingPhrases("docs/ROADMAP.md", byPath.get("docs/ROADMAP.md") ?? "", requiredRoadmapPhrases),
   );
   const packageJson = byPath.get("package.json") ?? "";

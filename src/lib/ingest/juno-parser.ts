@@ -1,5 +1,5 @@
 import crypto from "node:crypto";
-import * as XLSX from "xlsx";
+import readXlsxFile from "read-excel-file/node";
 
 export type CatalogKind = "preorder" | "in_stock" | "unknown";
 
@@ -31,6 +31,23 @@ export type ParsedCatalog = {
   items: ParsedCatalogItem[];
 };
 
+export type JunoWorkbook = {
+  sheets: Array<{
+    sheetName: string;
+    rows: SpreadsheetRow[];
+  }>;
+};
+
+type SpreadsheetCell = string | number | boolean | Date | null;
+type SpreadsheetRow = SpreadsheetCell[];
+type ReadExcelSheet = {
+  sheet: string;
+  data: SpreadsheetRow[];
+};
+
+export const maxJunoWorkbookBytes = 10 * 1024 * 1024;
+export const maxJunoWorkbookRows = 10_000;
+
 const monthNumbers: Record<string, string> = {
   jan: "01",
   january: "01",
@@ -58,22 +75,32 @@ const monthNumbers: Record<string, string> = {
   december: "12",
 };
 
-export function parseJunoCatalog(buffer: Buffer, filename: string): ParsedCatalog {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  return parseJunoWorkbook(workbook, filename);
+export async function parseJunoCatalog(buffer: Buffer, filename: string): Promise<ParsedCatalog> {
+  if (buffer.byteLength > maxJunoWorkbookBytes) {
+    throw new Error(`Workbook exceeds ${maxJunoWorkbookBytes} byte limit: ${filename}`);
+  }
+  const sheets = (await readXlsxFile(buffer, {
+    sheets: [1],
+    trim: true,
+  } as Parameters<typeof readXlsxFile>[1])) as ReadExcelSheet[];
+  return parseJunoWorkbook(
+    {
+      sheets: sheets.map((sheet) => ({
+        sheetName: sheet.sheet,
+        rows: sheet.data,
+      })),
+    },
+    filename,
+  );
 }
 
-export function parseJunoWorkbook(workbook: XLSX.WorkBook, filename: string): ParsedCatalog {
-  const sheetName = workbook.SheetNames[0];
-  if (!sheetName) {
+export function parseJunoWorkbook(workbook: JunoWorkbook, filename: string): ParsedCatalog {
+  const firstSheet = workbook.sheets[0];
+  if (!firstSheet) {
     throw new Error(`Workbook has no sheets: ${filename}`);
   }
 
-  const worksheet = workbook.Sheets[sheetName];
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, {
-    defval: null,
-    raw: false,
-  });
+  const rows = sheetRowsToObjects(firstSheet.rows, filename);
   const kind = detectCatalogKind(filename, rows[0]);
   const items = rows
     .map((row, index) => normalizeRow(row, index + 2))
@@ -91,12 +118,32 @@ export function parseJunoWorkbook(workbook: XLSX.WorkBook, filename: string): Pa
 
   return {
     kind,
-    sheetName,
+    sheetName: firstSheet.sheetName,
     catalogDate: inferCatalogDate(filename),
     contentHash,
     rowCount: items.length,
     items,
   };
+}
+
+function sheetRowsToObjects(rows: SpreadsheetRow[], filename: string): Array<Record<string, unknown>> {
+  if (rows.length === 0) {
+    return [];
+  }
+  const [headerRow, ...dataRows] = rows;
+  if (dataRows.length > maxJunoWorkbookRows) {
+    throw new Error(`Workbook exceeds ${maxJunoWorkbookRows} row limit: ${filename}`);
+  }
+  const headers = headerRow.map((cell) => cellString(cell));
+  return dataRows.map((row) => {
+    const record: Record<string, unknown> = {};
+    for (const [index, header] of headers.entries()) {
+      if (header) {
+        record[header] = row[index] ?? null;
+      }
+    }
+    return record;
+  });
 }
 
 function normalizeRow(row: Record<string, unknown>, rowNumber: number): ParsedCatalogItem {
@@ -149,6 +196,9 @@ function parseInteger(value: unknown): number | null {
 }
 
 function parseDate(value: unknown): string | null {
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString().slice(0, 10);
+  }
   const text = cellString(value);
   if (!text) {
     return null;

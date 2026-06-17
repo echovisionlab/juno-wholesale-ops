@@ -21,6 +21,9 @@
 - Conservative live lookup defaults.
 - Webhook secret masking.
 - Public fixture safety checks.
+- Replaced the vulnerable `xlsx` parser dependency with a maintained XLSX reader.
+- Added parser byte-size, row-count, and first-sheet-only safeguards for catalog workbooks.
+- Pinned `postcss` to a patched release through the package manager override.
 - Release checklist for repository visibility, GitHub settings, and CI status.
 
 ### Boundaries
@@ -30,4 +33,3 @@
 - No checkout automation.
 - No sales-volume claims without observed evidence.
 - No actual demand inference from observed stock or status changes.
-

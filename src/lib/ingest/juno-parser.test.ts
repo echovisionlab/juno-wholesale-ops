@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import * as XLSX from "xlsx";
-import { parseJunoCatalog, parseJunoWorkbook } from "./juno-parser";
+import writeXlsxFile, { type Sheet, type SheetData } from "write-excel-file/node";
+import {
+  maxJunoWorkbookBytes,
+  maxJunoWorkbookRows,
+  parseJunoCatalog,
+  parseJunoWorkbook,
+} from "./juno-parser";
 
 describe("parseJunoCatalog", () => {
-  it("normalizes preorder workbooks and computes deterministic content hashes", () => {
-    const buffer = workbookBuffer("Preorders", [
+  it("normalizes preorder workbooks and computes deterministic content hashes", async () => {
+    const buffer = await workbookBuffer("Preorders", [
       {
         Artist: "Artist A",
         Title: "Album A",
@@ -26,9 +31,9 @@ describe("parseJunoCatalog", () => {
       },
     ]);
 
-    const first = parseJunoCatalog(buffer, "Juno Wholesale New Preorders 16 June 2026.xlsx");
-    const second = parseJunoCatalog(buffer, " Juno  Wholesale  New Preorders 16 June 2026.xlsx ");
-    const resentWithDifferentName = parseJunoCatalog(buffer, "Juno Wholesale New Preorders 17 June 2026.xlsx");
+    const first = await parseJunoCatalog(buffer, "Juno Wholesale New Preorders 16 June 2026.xlsx");
+    const second = await parseJunoCatalog(buffer, " Juno  Wholesale  New Preorders 16 June 2026.xlsx ");
+    const resentWithDifferentName = await parseJunoCatalog(buffer, "Juno Wholesale New Preorders 17 June 2026.xlsx");
 
     expect(first.kind).toBe("preorder");
     expect(first.sheetName).toBe("Preorders");
@@ -55,9 +60,9 @@ describe("parseJunoCatalog", () => {
     });
   });
 
-  it("normalizes in-stock workbooks to source catalog fields only", () => {
-    const parsed = parseJunoCatalog(
-      workbookBuffer("Stock", [
+  it("normalizes in-stock workbooks to source catalog fields only", async () => {
+    const parsed = await parseJunoCatalog(
+      await workbookBuffer("Stock", [
         row("Vinyl", '7"', "£6.19", "45"),
         row("Vinyl", "3xLP in debossed sleeve", "£30.74", "25"),
         row("CD", "3CD box set", "£18.94", "2"),
@@ -86,9 +91,9 @@ describe("parseJunoCatalog", () => {
     ]);
   });
 
-  it("handles unknown catalog shape, invalid dates, invalid prices, and missing date in filename", () => {
-    const parsed = parseJunoCatalog(
-      workbookBuffer("Other", [
+  it("handles unknown catalog shape, invalid dates, invalid prices, and missing date in filename", async () => {
+    const parsed = await parseJunoCatalog(
+      await workbookBuffer("Other", [
         {
           Artist: "Artist B",
           Title: "Album B",
@@ -109,17 +114,17 @@ describe("parseJunoCatalog", () => {
     });
   });
 
-  it("returns null when the filename contains an unrecognized month name", () => {
-    const parsed = parseJunoCatalog(
-      workbookBuffer("Other", [{ Artist: "Artist Z", Title: "Album Z" }]),
+  it("returns null when the filename contains an unrecognized month name", async () => {
+    const parsed = await parseJunoCatalog(
+      await workbookBuffer("Other", [{ Artist: "Artist Z", Title: "Album Z" }]),
       "Wholesale Upload 15 Foo 2026.xlsx",
     );
 
     expect(parsed.catalogDate).toBeNull();
   });
 
-  it("returns an empty unknown catalog for empty sheets", () => {
-    const parsed = parseJunoCatalog(workbookBuffer("Empty", []), "Manual Upload.xlsx");
+  it("returns an empty unknown catalog for empty sheets", async () => {
+    const parsed = await parseJunoCatalog(await workbookBuffer("Empty", []), "Manual Upload.xlsx");
 
     expect(parsed.kind).toBe("unknown");
     expect(parsed.catalogDate).toBeNull();
@@ -128,14 +133,43 @@ describe("parseJunoCatalog", () => {
   });
 
   it("rejects workbooks without sheets", () => {
-    expect(() => parseJunoWorkbook({ SheetNames: [], Sheets: {} }, "empty.xlsx")).toThrow(
-      "Workbook has no sheets: empty.xlsx",
+    expect(() => parseJunoWorkbook({ sheets: [] }, "empty.xlsx")).toThrow("Workbook has no sheets: empty.xlsx");
+  });
+
+  it("rejects workbooks above the byte limit before parsing", async () => {
+    await expect(parseJunoCatalog(Buffer.alloc(maxJunoWorkbookBytes + 1), "too-large.xlsx")).rejects.toThrow(
+      `Workbook exceeds ${maxJunoWorkbookBytes} byte limit: too-large.xlsx`,
     );
   });
 
-  it("returns null for invalid release dates in preorder sheets", () => {
-    const parsed = parseJunoCatalog(
-      workbookBuffer("Preorder", [
+  it("rejects sheets above the row limit", () => {
+    const rows = Array.from({ length: maxJunoWorkbookRows + 1 }, (_, index) => ({
+      Artist: `Demo Artist ${index}`,
+      Title: `Demo Title ${index}`,
+    }));
+
+    expect(() => parseJunoWorkbook({ sheets: [{ sheetName: "Rows", rows: rowsToWorkbookRows(rows) }] }, "rows.xlsx"))
+      .toThrow(`Workbook exceeds ${maxJunoWorkbookRows} row limit: rows.xlsx`);
+  });
+
+  it("reads only the first sheet", async () => {
+    const parsed = await parseJunoCatalog(
+      await workbookBuffer(
+        "First",
+        [{ Artist: "First Artist", Title: "First Title", "Juno ID": "first-1" }],
+        [{ sheetName: "Second", rows: [{ Artist: "Second Artist", Title: "Second Title", "Juno ID": "second-1" }] }],
+      ),
+      "Manual Upload.xlsx",
+    );
+
+    expect(parsed.sheetName).toBe("First");
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0]).toMatchObject({ junoId: "first-1", artist: "First Artist" });
+  });
+
+  it("returns null for invalid release dates in preorder sheets", async () => {
+    const parsed = await parseJunoCatalog(
+      await workbookBuffer("Preorder", [
         {
           Artist: "Artist C",
           Title: "Album C",
@@ -152,6 +186,51 @@ describe("parseJunoCatalog", () => {
     expect(parsed.kind).toBe("preorder");
     expect(parsed.items[0].releaseDate).toBeNull();
   });
+
+  it("normalizes date cells and rejects invalid date objects", () => {
+    const parsed = parseJunoWorkbook(
+      {
+        sheets: [
+          {
+            sheetName: "Preorder Dates",
+            rows: [
+              ["Artist", "Title", "Juno ID", "Antic Rel Date"],
+              ["Date Artist", "Date Title", "date-1", new Date("2026-07-24T00:00:00.000Z")],
+              ["Bad Date Artist", "Bad Date Title", "date-2", new Date(Number.NaN)],
+            ],
+          },
+        ],
+      },
+      "Juno Wholesale New Preorders 01 June 2026.xlsx",
+    );
+
+    expect(parsed.items.map((item) => item.releaseDate)).toEqual(["2026-07-24", null]);
+  });
+
+  it("ignores blank headers and normalizes missing or whitespace cells", () => {
+    const parsed = parseJunoWorkbook(
+      {
+        sheets: [
+          {
+            sheetName: "Sparse",
+            rows: [[null, "Artist", "Title", "Missing"], ["ignored", "Sparse Artist", " "]],
+          },
+        ],
+      },
+      "Manual Upload.xlsx",
+    );
+
+    expect(parsed.items).toHaveLength(1);
+    expect(parsed.items[0]).toMatchObject({
+      artist: "Sparse Artist",
+      title: null,
+      raw: {
+        Artist: "Sparse Artist",
+        Title: " ",
+        Missing: null,
+      },
+    });
+  });
 });
 
 function row(medium: string, description: string, price: string, stock: unknown) {
@@ -167,9 +246,39 @@ function row(medium: string, description: string, price: string, stock: unknown)
   };
 }
 
-function workbookBuffer(sheetName: string, rows: Array<Record<string, unknown>>) {
-  const workbook = XLSX.utils.book_new();
-  const worksheet = XLSX.utils.json_to_sheet(rows);
-  XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
-  return XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }) as Buffer;
+async function workbookBuffer(
+  sheetName: string,
+  rows: Array<Record<string, unknown>>,
+  extraSheets: Array<{ sheetName: string; rows: Array<Record<string, unknown>> }> = [],
+): Promise<Buffer> {
+  const file = await writeXlsxFile(
+    [
+      { sheet: sheetName, data: rowsToSheetData(rows) },
+      ...extraSheets.map((sheet) => ({ sheet: sheet.sheetName, data: rowsToSheetData(sheet.rows) })),
+    ] satisfies Sheet<Buffer>[],
+    { buffer: true } as never,
+  );
+  return (file as { toBuffer: () => Promise<Buffer> }).toBuffer();
+}
+
+function rowsToSheetData(rows: Array<Record<string, unknown>>): SheetData {
+  return rowsToWorkbookRows(rows).map((row) => row.map((value) => ({ value: value ?? undefined })));
+}
+
+function rowsToWorkbookRows(rows: Array<Record<string, unknown>>): Array<Array<string | number | boolean | Date | null>> {
+  const headers = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  return [
+    headers,
+    ...rows.map((row) => headers.map((header) => normalizeTestCell(row[header]))),
+  ];
+}
+
+function normalizeTestCell(value: unknown): string | number | boolean | Date | null {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  if (value instanceof Date || typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return value;
+  }
+  return String(value);
 }

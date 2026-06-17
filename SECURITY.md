@@ -28,6 +28,19 @@ header, or database URL is exposed:
 3. Re-run `pnpm public:safety`.
 4. Review webhook delivery records and worker logs for unexpected activity.
 
+## Dependency Vulnerability Handling
+
+Before a public release, Dependabot alerts should be reduced to zero when a
+patch or safe replacement is available. For parser, Gmail, browser worker,
+database, authentication, and notification paths, prefer replacing an
+unpatched dependency over carrying a known issue.
+
+If an alert cannot be fixed before release, document the advisory id, affected
+path, exploitability assessment, mitigation, owner approval, and review
+deadline before treating it as an accepted risk. Runtime attachment parsing
+alerts should remain release blockers unless the owner explicitly approves the
+risk.
+
 ## Read-only Boundary Reports
 
 Please report any behavior that appears to call cart, wishlist, checkout, or

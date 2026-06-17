@@ -12,6 +12,7 @@ repository public until the owner explicitly approves that final action.
 - [ ] GitHub Actions permissions are minimal.
 - [ ] Secret scanning is enabled.
 - [ ] Dependabot alerts are enabled.
+- [ ] Dependabot open alerts are zero, or remaining alerts have owner-approved accepted risk records with review deadlines.
 - [ ] Public issue templates warn against sharing secrets or real wholesale data.
 
 ## Repository Contents
@@ -28,6 +29,7 @@ repository public until the owner explicitly approves that final action.
 - [ ] CHANGELOG.md present.
 - [ ] Release notes written.
 - [ ] Public safety check passes.
+- [ ] Runtime dependency audit passes at moderate severity or higher.
 
 ## Release Actions
 
@@ -38,4 +40,3 @@ repository public until the owner explicitly approves that final action.
 - [ ] Tag creation approved.
 - [ ] GitHub Release draft prepared.
 - [ ] Repository visibility change approved after release candidate review.
-
