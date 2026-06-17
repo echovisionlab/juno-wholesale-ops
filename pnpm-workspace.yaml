@@ -1,3 +1,9 @@
 ignoredBuiltDependencies:
+  - cpu-features
+  - ssh2
+
+onlyBuiltDependencies:
+  - esbuild
+  - protobufjs
   - sharp
   - unrs-resolver

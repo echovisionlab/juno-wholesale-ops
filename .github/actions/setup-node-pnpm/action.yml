@@ -1,0 +1,30 @@
+name: Set up Node and pnpm
+description: Install the pinned Node.js and pnpm toolchain with pnpm-store caching.
+
+inputs:
+  node-version:
+    description: Node.js version to install.
+    required: true
+  pnpm-version:
+    description: pnpm version to activate.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Set up pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+        run_install: false
+
+    - name: Set up Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: pnpm
+        cache-dependency-path: pnpm-lock.yaml
+
+    - name: Install dependencies
+      shell: bash
+      run: pnpm install --frozen-lockfile --prefer-offline
