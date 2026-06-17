@@ -1,167 +1,153 @@
 # Juno Wholesale Ops
 
-Local-first catalog ingestion, stock observation, and operator dashboard for
-Juno wholesale catalog emails.
+Unofficial project. Not affiliated with Juno.
 
-This project is read-only by design:
+Read-only by design.
 
-- No cart actions
-- No auto-ordering
-- No checkout automation
-- No resale or demand claims beyond observed data
+- No cart actions.
+- No auto-ordering.
+- No checkout automation.
+- No sales-volume claims without observed evidence.
 
-The MVP keeps the service compact:
+Juno Wholesale Ops is a local-first operations desk for parsing Juno wholesale
+catalog XLSX attachments, storing catalog snapshots in Postgres, enriching rows
+with read-only live observations, and surfacing observed signals for operators.
 
-- Next.js app for the operator UI and lightweight API routes
-- Mantine components with shared theme settings in `src/theme.ts`
-- Node worker scripts in the same repo for Gmail polling and XLSX ingestion
-- Postgres migrations under `infra/postgres/migrations`
-- Raw XLSX attachments stored outside git for replayable parsing
+## What it is
 
-## Runtime Shape
+This project is read-only catalog intelligence for self-hosted operators. It
+collects catalog attachments from a configured Gmail mailbox, parses the XLSX
+rows, deduplicates snapshots, stores raw catalog data, and shows watch hits,
+catalog trends, movement signals, operator digest data, and read-only
+notifications.
+
+The application is a Next.js app with API routes, Mantine UI components,
+Postgres migrations, and Node worker scripts. It is intended to run on your own
+machine or server with your own database and file storage.
+
+## What it does not do
+
+This project does not automate commercial actions or mutate a Juno account. It
+does not place orders, prepare carts, update wishlists, perform checkout flows,
+or infer actual sales volume. Observed stock/status changes are treated only as
+observed signals.
+
+It is not a SaaS platform, not a multi-tenant service, and not an official Juno
+integration. External adapters beyond the generic webhook notification channel
+are intentionally out of scope for this release.
+
+## Features
+
+- Gmail XLSX ingestion through Google Workspace service account delegation.
+- Duplicate protection by Gmail message id, RFC822 id, attachment SHA-256, and
+  catalog content hash.
+- Append-only Postgres migrations with generated schema drift checks.
+- Catalog item identity normalization and watch rule matching.
+- Today Signals, Movement Signals, Catalog Trends, and Operator Digest APIs.
+- Read-only live stock observation through Playwright browser workers.
+- Read-only notification delivery with in-app, logging, and generic webhook
+  channels.
+- Synthetic demo mode that does not require real Juno wholesale email or XLSX
+  data.
+- Public safety checks for release readiness.
+
+## Read-only boundary
+
+The boundary is documented in [docs/PROJECT_BOUNDARIES.md](docs/PROJECT_BOUNDARIES.md).
+The short version:
+
+- The live worker opens product pages for observation only.
+- The app does not call cart, wishlist, checkout, or ordering endpoints.
+- Notification dispatch is informational only.
+- Webhook sending is dry-run by default and requires an explicit `--send`.
+- Fast mover candidates are proxy candidates based only on observed stock or
+  status changes.
+
+## Architecture
 
 ```text
-Configured Google Workspace mailbox
-  -> query configured Juno XLSX mail search
-  -> save raw XLSX by sha256
-  -> parse Juno catalog rows
-  -> write catalog snapshot and raw item rows to Postgres
+Gmail mailbox
+  -> XLSX attachment archive outside git
+  -> Juno XLSX parser
+  -> Postgres catalog snapshots
+  -> identity normalization and watch matching
+  -> optional read-only live observation worker
+  -> insight refresh
+  -> notification queue and optional dispatch
+  -> Next.js dashboard on port 3006
 ```
 
-Use a separate `juno_wholesale_ops` database when possible. If this must share
-another Postgres server, keep the tables outside unrelated application schemas.
+Core directories:
 
-## Environment
+- `src/app`: Next.js app routes and API routes.
+- `src/components`: Mantine dashboard components.
+- `src/lib/ingest`: Gmail, XLSX parser, and ingest repository.
+- `src/lib/insights`: identity, watch, movement, trend, and digest logic.
+- `src/lib/notifications`: notification matching, rendering, repository, and
+  dispatcher.
+- `infra/postgres/migrations`: append-only SQL migrations.
+- `demo/fixtures`: synthetic XLSX fixtures.
+- `docs`: public operations and release documentation.
 
-Copy `.env.example` to `.env.local` for local development.
+## Quick start
 
 ```bash
-cp .env.example .env.local
+pnpm install
+pnpm db:dev:up
+DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm db:migrate
+DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+pnpm dev
 ```
 
-Set `GOOGLE_SERVICE_ACCOUNT_KEY_JSON` to the local service account JSON path or
-to the mounted secret path in production. Never commit the JSON key.
+Open `http://localhost:3006`.
 
-The delegated mailbox and Gmail query are deployment settings, not source-code
-constants. Set them through env or the singleton `service_setting` row:
+Local Postgres maps to host port `5437` so it can coexist with another
+development database on `5432`.
 
-```text
-GOOGLE_WORKSPACE_DELEGATED_USER=<workspace-user@example.com>
-GMAIL_INGEST_QUERY=has:attachment filename:xlsx newer_than:30d
-```
+## Demo mode
 
-The worker then filters XLSX attachments by filename:
+Demo mode uses only synthetic catalog workbooks:
 
-```text
-CATALOG_ATTACHMENT_PATTERN=New Preorders|New Releases In Stock
-```
+- `demo/fixtures/catalog/preorders-demo.xlsx`
+- `demo/fixtures/catalog/in-stock-demo.xlsx`
 
-That keeps large `Full Stock List` and `Bestselling Titles` files out of the
-daily MVP path unless we intentionally broaden the model.
-
-## Commands
+Seed the demo:
 
 ```bash
-pnpm db:dev:up # local Postgres on localhost:5437
-pnpm dev # http://localhost:3006
-pnpm lint
-pnpm typecheck
-pnpm test:coverage
-pnpm build
-pnpm storybook
-pnpm build-storybook
+DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
 ```
 
-`pnpm test:coverage` enforces 100% statements, branches, functions, and lines
-for the pure ingestion logic. Storybook runs on port `6008`.
-
-Local Postgres is defined in `compose/dev.yml` and intentionally maps to host
-port `5437` so it can coexist with other development databases on `5432`.
-`pnpm db:dev:down` stops it without removing the persistent Docker volume.
-
-Set `NEXT_PUBLIC_FONT_STYLESHEET_URL` when you want the app to load a hosted
-font stylesheet. If unset, the UI uses the same Mantine theme with local font
-fallbacks.
-
-## Admin Auth Gate
-
-The app can protect non-health routes with Better Auth. Email/password sign-in
-is built in, and one external OIDC/OAuth provider can be configured from env or
-from the singleton `service_setting` row.
-
-```text
-request
-  -> /api/session/admin
-  -> Better Auth session
-  -> auth_user.role=admin
-```
-
-`AUTH_ENABLED` defaults to `false`. Production must explicitly set
-`AUTH_ENABLED=true`, `AUTH_SECRET`, and `AUTH_BASE_URL`. Use
-`AUTH_EMAIL_PASSWORD_ENABLED=true` for local admin accounts. Use
-`AUTH_EXTERNAL_PROVIDER_ENABLED=true` with `AUTH_EXTERNAL_PROVIDER_ID`,
-`AUTH_EXTERNAL_DISCOVERY_URL`, `AUTH_EXTERNAL_CLIENT_ID`, and
-`AUTH_EXTERNAL_CLIENT_SECRET` for an external provider.
-
-Browser requests without a valid admin session redirect to:
-
-```text
-/login?redirect=<current request URL>
-```
-
-API requests receive JSON `401`, `403`, or `503`. `/api/health` stays public
-for Komodo health checks.
-
-If `AUTH_INITIAL_ADMIN_EMAIL` and `AUTH_INITIAL_ADMIN_PASSWORD` are set,
-`pnpm db:migrate` creates that administrator once. If the email already exists,
-the seed is a no-op.
-
-Gmail checks:
+Reset demo rows only:
 
 ```bash
-pnpm gmail:smoke
-pnpm gmail:ingest
-pnpm gmail:ingest:write
-pnpm juno:live:enqueue
-pnpm juno:live:worker
+DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:reset -- --confirm-demo-reset
 ```
 
-`pnpm gmail:ingest` is dry-run by default. It downloads and parses attachments
-into `.data/mail-attachments` but does not write Postgres rows. Use
-`pnpm gmail:ingest:write` only after applying all migrations.
+`demo:reset` refuses to run in `NODE_ENV=production`. See
+[docs/DEMO_DATA.md](docs/DEMO_DATA.md).
 
-Write mode records every run in the singleton `gmail_ingest_state` row:
+## Configuration
 
-- last Gmail query and query window
-- last query start/finish/status/error
-- last successful Gmail message received time
-- last unique catalog snapshot id, catalog date, and content hash inserted into DB
+Copy `.env.example` to `.env.local` for local development. Do not commit
+`.env.local`.
 
-After the first successful write, Gmail search becomes incremental. The worker
-removes any date filters from `GMAIL_INGEST_QUERY` and adds an `after:YYYY/MM/DD`
-filter based on `last_successful_message_received_at - GMAIL_INGEST_LOOKBACK_MS`.
-The default lookback is seven days to absorb Gmail date granularity and delayed
-group delivery. Duplicate group/direct deliveries are still rejected by message,
-attachment, and catalog content hashes.
+Important values:
 
-The current ingest cursor is exposed read-only:
+- `DATABASE_URL`
+- `AUTH_ENABLED`
+- `AUTH_SECRET`
+- `AUTH_BASE_URL`
+- `GOOGLE_WORKSPACE_DELEGATED_USER`
+- `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`
+- `GMAIL_INGEST_QUERY`
+- `GMAIL_STORAGE_DIR`
+- `JUNO_LOGIN_EMAIL`
+- `JUNO_LOGIN_PASSWORD`
 
-```http
-GET /api/ingest/status
-```
+Settings resolve from env and the singleton `service_setting` row. Secret values
+are never shown in the dashboard; only configured/unset status is shown.
 
-The setup checklist is exposed read-only:
-
-```http
-GET /api/settings/status
-```
-
-Add `--label` when you want the worker to create/apply `GMAIL_PROCESSED_LABEL`
-in Gmail after processing.
-
-```bash
-pnpm gmail:ingest -- --label
-```
+## Gmail ingestion
 
 The default Gmail scope is read-only:
 
@@ -169,155 +155,39 @@ The default Gmail scope is read-only:
 GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly
 ```
 
-Label mode mutates Gmail labels, so it requires:
-
-```text
-GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.modify
-```
-
-## Database Migrations
-
-Migration files live in `infra/postgres/migrations` and are append-only. Never
-edit an existing migration after it has been applied. Add the next sequential
-file instead.
-
-Rules enforced by `pnpm db:migrations:check`:
-
-- filenames use `<version>_<name>.sql`
-- versions are parsed numerically and must be gapless from `1`
-- versions can run through `9999999`, so more than 1000 migrations are supported
-- every applied migration is recorded in `schema_migration` with a SHA-256 hash
-- changed historical migration SQL fails validation through the hash ledger
-- `infra/postgres/schema.sql` must match a fresh `pg_dump --schema-only` from a Testcontainers PostgreSQL database after applying all migrations
-
-Use these commands:
+Commands:
 
 ```bash
-pnpm db:migrate
-pnpm db:schema:dump
-pnpm db:migrations:check
+pnpm gmail:smoke
+pnpm gmail:ingest
+pnpm gmail:ingest:write
 ```
 
-Next.js also applies pending migrations once during server startup when
-`DATABASE_URL` is configured. The migration runner uses the same Postgres
-advisory lock and hash ledger as `pnpm db:migrate`, so concurrent server
-instances serialize migration work instead of applying the same file twice.
+`gmail:ingest` is dry-run by default. `gmail:ingest:write` stores snapshots and
+raw catalog rows in Postgres, then runs insight processing only when a new
+snapshot is inserted.
 
-`schema.sql` is generated, not hand-edited. After adding a migration, run
-`pnpm db:schema:dump` and commit both the new migration and the regenerated
-master schema.
+Raw XLSX attachments are stored in `GMAIL_STORAGE_DIR`, which defaults to a
+local `.data` path. Keep that directory out of git and include it in private
+backup planning.
 
-## Juno Live Stock Lookup
+## Live stock observation
 
-Apply all migrations before running live lookups. The live worker never calls
-cart, wishlist, or alert endpoints. It opens read-only product pages in a
-persistent Playwright Chromium profile and parses the server-rendered
-`product-availability` text.
-
-Queue jobs from the latest catalog snapshot:
+The live worker is optional and conservative by default:
 
 ```bash
 pnpm juno:live:enqueue
-```
-
-Run one batch locally:
-
-```bash
 pnpm juno:live:worker
-```
-
-Run as a polling worker from the shell:
-
-```bash
 pnpm juno:live:worker -- --loop
 ```
 
-In production the Next.js server can also manage that same loop as a child
-process:
-
-```http
-GET  /api/live-lookups/worker
-POST /api/live-lookups/worker {"action":"start"}
-POST /api/live-lookups/worker {"action":"stop"}
-POST /api/live-lookups/worker {"action":"restart"}
-```
-
-The dashboard uses these endpoints for manual start/stop control. The default
-child command is `node_modules/.bin/tsx -r tsconfig-paths/register
-scripts/juno-live-worker.ts --loop`; override it with
-`JUNO_LIVE_WORKER_COMMAND` and `JUNO_LIVE_WORKER_ARGS` only when the runtime
-layout changes.
-
-Set these as secrets or private runtime env values:
-
-```text
-JUNO_LOGIN_EMAIL
-JUNO_LOGIN_PASSWORD
-```
-
-Juno runtime settings resolve from the singleton `service_setting` row first
-and fall back to typed env values when a DB column is `NULL`. Leave
-`service_setting.juno_live_poll_interval_ms` and `JUNO_LIVE_POLL_INTERVAL_MS`
-empty to disable automatic idle polling; the worker will process already queued
-jobs and then exit instead of sleeping on a schedule.
-
-When `juno_live_poll_interval_ms` or `JUNO_LIVE_POLL_INTERVAL_MS` is set, loop
-mode stays alive. If credentials are configured and
-`juno_live_auto_enqueue_on_interval` / `JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL` is
-true, each interval enqueues unique Juno IDs from the latest catalog snapshot
-before claiming jobs. Start conservatively with one to two hours, for example:
-
-```text
-JUNO_LIVE_POLL_INTERVAL_MS=7200000
-```
-
-The example and container defaults are intentionally manual and conservative:
-
-```text
-JUNO_LIVE_CONCURRENCY=1
-JUNO_LIVE_DELAY_MIN_MS=30000
-JUNO_LIVE_DELAY_MAX_MS=180000
-JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL=false
-```
-
-Per-product navigation still uses the configured randomized delay window, so the
-interval controls how often new batches are queued, not a fixed request cadence.
-
-The worker logs every major action through `AppLogger`. The default production
-worker uses both JSON console logs and the `service_log_event` Postgres audit
-table. Log context is sanitized before writing; credentials, cookies, auth
-headers, and full HTML bodies are not stored.
+It uses Playwright Chromium with a persistent profile and randomized delays.
+Automatic polling is disabled unless credentials and a poll interval are
+configured. Credentials belong in runtime env or secret mounts, not source.
 
 ## Insights
 
-The insights layer is read-only and observation-based. It uses stored XLSX
-catalog snapshots, watch rules, generated signal events, and live stock
-observations. It does not place orders, prepare carts, update wishlists, or
-perform checkout actions.
-
-Watch rules can match exact normalized artist, label, and genre values, plus
-normalized keyword or exclude-keyword substrings across catalog text fields.
-Exclude matches create negative observed signals; they do not delete or hide
-catalog rows.
-
-Movement signals are generated from observed catalog snapshots and live stock
-lookups:
-
-- `observed_restock`
-- `observed_stock_drop`
-- `observed_live_low_stock`
-- `observed_status_change`
-- `observed_price_change`
-- `fast_mover_candidate`
-
-`fast_mover_candidate` is a proxy candidate based only on observed stock or
-status changes. It is not an actual demand measurement.
-
-Trend summaries compare the current catalog window with the previous catalog
-window for top genres, top labels, and watch-rule overlap. Trend spike signals
-use deterministic event keys so refreshes are idempotent.
-
-Run insight processors manually:
+Insight commands:
 
 ```bash
 pnpm insights:movement
@@ -325,7 +195,7 @@ pnpm insights:trends
 pnpm insights:refresh
 ```
 
-Read-only admin APIs:
+Admin-protected APIs:
 
 ```http
 GET /api/insights/today
@@ -334,21 +204,10 @@ GET /api/insights/trends?windowDays=7&previousWindowDays=7&limit=20
 GET /api/insights/digest
 ```
 
+Insights use observed catalog snapshots, watch rules, signal events, and live
+observations. They do not prove actual demand or actual sales volume.
+
 ## Notifications
-
-Notifications are read-only signal deliveries for operators. They never trigger
-cart, wishlist, checkout, ordering, or Juno account mutation actions. Treat
-notification subjects, bodies, and webhook payloads as informational read-only
-alerts over observed signals, catalog trends, low observed stock, watch hits,
-and operator digest data.
-
-Notification refresh is separate from insight refresh. Run them in order when a
-scheduler needs both:
-
-```bash
-pnpm insights:refresh
-pnpm notifications:refresh
-```
 
 Notification scripts:
 
@@ -360,12 +219,13 @@ pnpm notifications:refresh
 pnpm notifications:refresh -- --send
 ```
 
-`notifications:queue` creates deterministic delivery records from existing
-`signal_event` rows and digest rules. `notifications:dispatch` and
-`notifications:refresh` default to dry-run mode. Actual webhook sending requires
-`--send`.
+`notifications:dispatch` and `notifications:refresh` default to dry-run mode.
+Actual generic webhook sending requires `--send`. Prefer `secret_ref` for
+production webhook URLs. `config.url` is supported for local development only.
+Dashboard/API responses mask webhook config, and logs must not include webhook
+URLs, auth headers, cookies, or secret values.
 
-Read-only admin APIs:
+Admin-protected APIs:
 
 ```http
 GET    /api/notifications/channels
@@ -384,52 +244,40 @@ POST /api/notifications/dispatch
 POST /api/notifications/refresh
 ```
 
-Supported channel types are `in_app`, `logging`, and generic `webhook`.
-Provider-specific Slack, Discord, Telegram, and OAuth adapters are intentionally
-out of scope for this layer.
+## Self-hosting
 
-Webhook URLs may contain secrets. Prefer `secret_ref` values that point to
-runtime environment variables in production. `config.url` is supported for local
-development convenience only and is not recommended for production. Dashboard
-and API responses mask webhook config, and logs must not include webhook URLs,
-auth headers, cookies, or secret values.
+See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) and
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-## Dedupe Contract
+Production recommendations:
 
-The worker treats duplicates at multiple levels:
+- Enable auth.
+- Use mounted secrets or runtime env for credentials.
+- Back up Postgres and raw attachment storage.
+- Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
+- Run `pnpm validate`, `pnpm build`, and Docker build before release.
 
-- Gmail message: `gmail_user_email + gmail_message_id`
-- Mail identity: `rfc822_message_id`
-- Attachment identity: `sha256`
-- Catalog identity: `supplier + sheet content_hash`
+## Privacy and security
 
-This handles group-delivery duplicates, direct + group duplicate delivery, and
-the same XLSX content being resent under a different email, filename, or date.
+See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).
 
-## Current Limits
+The project does not send catalog data to a central service. Data remains in
+the database, local filesystem, browser profile, and webhook destinations you
+configure. Do not paste real wholesale XLSX contents, Gmail payloads,
+credentials, cookies, auth headers, or webhook URLs into public issues.
 
-- Local filesystem storage is the first raw-attachment backend. Replace
-  `GMAIL_STORAGE_DIR` with MinIO/S3 storage before running this as a multi-host
-  production worker.
-- The first parser targets the observed Juno XLSX columns only.
-- The insight surface is limited to observed catalog, watch-rule, and live
-  stock movement signals. Notifications are informational read-only deliveries
-  for those signals. The system does not include ordering automation.
+Run the public safety check:
 
-## Production Skeleton
-
-Deployment files:
-
-- `Dockerfile`: Next standalone image
-- `compose/app.yml`: production web service with a managed worker child process
-- `deploy/prod/app.stack.yml`: Komodo stack skeleton
-- `deploy/prod/README.md`: proxy, secret, and smoke-check notes
-
-Target route example:
-
-```text
-catalog.example.com -> app-host.example.com:3006
+```bash
+pnpm public:safety
 ```
 
-Do not commit production secrets. `DATABASE_URL` and Google service account
-material belong in the Komodo stack environment or secret mount.
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Contributions must preserve the
+read-only boundary, use synthetic fixtures only, and keep coverage at 100% for
+the configured gates.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

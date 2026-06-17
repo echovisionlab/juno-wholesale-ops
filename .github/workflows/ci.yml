@@ -46,6 +46,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Public safety check
+        run: pnpm public:safety
+
       - name: Unused code check
         run: pnpm unused
 

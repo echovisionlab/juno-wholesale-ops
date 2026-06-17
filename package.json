@@ -7,7 +7,7 @@
     "dev": "next dev -p 3006",
     "build": "next build",
     "start": "next start -p 3006",
-    "validate": "pnpm lint && pnpm typecheck && pnpm db:migrations:check && pnpm test:coverage && pnpm unused",
+    "validate": "pnpm lint && pnpm typecheck && pnpm db:migrations:check && pnpm public:safety && pnpm test:coverage && pnpm unused",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
     "unused": "knip --reporter symbols",
@@ -33,7 +33,10 @@
     "insights:refresh": "tsx -r tsconfig-paths/register scripts/insights-refresh.ts",
     "notifications:queue": "tsx -r tsconfig-paths/register scripts/notifications-queue.ts",
     "notifications:dispatch": "tsx -r tsconfig-paths/register scripts/notifications-dispatch.ts",
-    "notifications:refresh": "tsx -r tsconfig-paths/register scripts/notifications-refresh.ts"
+    "notifications:refresh": "tsx -r tsconfig-paths/register scripts/notifications-refresh.ts",
+    "demo:seed": "tsx -r tsconfig-paths/register scripts/demo-seed.ts",
+    "demo:reset": "tsx -r tsconfig-paths/register scripts/demo-reset.ts",
+    "public:safety": "tsx -r tsconfig-paths/register scripts/check-public-safety.ts"
   },
   "dependencies": {
     "@mantine/core": "^9.3.2",
