@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 69dae42882cd9f2faa693d8ef87002923d2c953ec376d34c123fe28869016123
+-- migration-manifest-sha256: 61b9ca93c6cf4878eb2c3f549fda6f77edfdec766c9a63876e9164fe79fd32a4
 --
 -- PostgreSQL database dump
 --
@@ -29,6 +29,74 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: auth_account; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_account (
+    id text NOT NULL,
+    account_id text NOT NULL,
+    provider_id text NOT NULL,
+    user_id text NOT NULL,
+    access_token text,
+    refresh_token text,
+    id_token text,
+    access_token_expires_at timestamp with time zone,
+    refresh_token_expires_at timestamp with time zone,
+    scope text,
+    password text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: auth_session; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_session (
+    id text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    token text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    ip_address text,
+    user_agent text,
+    user_id text NOT NULL
+);
+
+
+--
+-- Name: auth_user; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_user (
+    id text NOT NULL,
+    name text NOT NULL,
+    email text NOT NULL,
+    email_verified boolean DEFAULT false NOT NULL,
+    image text,
+    role text DEFAULT 'user'::text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT auth_user_role_check CHECK ((role = ANY (ARRAY['user'::text, 'admin'::text])))
+);
+
+
+--
+-- Name: auth_verification; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_verification (
+    id text NOT NULL,
+    identifier text NOT NULL,
+    value text NOT NULL,
+    expires_at timestamp with time zone NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 
 --
 -- Name: catalog_item_raw; Type: TABLE; Schema: public; Owner: -
@@ -72,6 +140,23 @@ CREATE TABLE public.catalog_snapshot (
     row_count integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT catalog_snapshot_catalog_kind_check CHECK ((catalog_kind = ANY (ARRAY['preorder'::text, 'in_stock'::text, 'unknown'::text])))
+);
+
+
+--
+-- Name: email_adapter; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.email_adapter (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    type text NOT NULL,
+    is_active boolean DEFAULT false NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT email_adapter_type_check CHECK ((type = ANY (ARRAY['logging'::text, 'smtp'::text])))
 );
 
 
@@ -283,6 +368,16 @@ CREATE TABLE public.service_setting (
     gmail_storage_dir text,
     catalog_attachment_pattern text,
     supplier_code text,
+    auth_enabled boolean,
+    auth_base_url text,
+    auth_trusted_origins text,
+    auth_email_password_enabled boolean,
+    auth_external_provider_enabled boolean,
+    auth_external_provider_id text,
+    auth_external_provider_name text,
+    auth_external_discovery_url text,
+    auth_external_client_id text,
+    auth_external_client_secret text,
     CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
     CONSTRAINT service_setting_gmail_max_results_check CHECK (((gmail_max_results > 0) AND (gmail_max_results <= 500))),
     CONSTRAINT service_setting_id_check CHECK (id),
@@ -306,6 +401,62 @@ CREATE TABLE public.supplier (
     name text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
 );
+
+
+--
+-- Name: auth_account auth_account_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_account
+    ADD CONSTRAINT auth_account_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_account auth_account_provider_id_account_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_account
+    ADD CONSTRAINT auth_account_provider_id_account_id_key UNIQUE (provider_id, account_id);
+
+
+--
+-- Name: auth_session auth_session_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_session
+    ADD CONSTRAINT auth_session_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_session auth_session_token_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_session
+    ADD CONSTRAINT auth_session_token_key UNIQUE (token);
+
+
+--
+-- Name: auth_user auth_user_email_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_user
+    ADD CONSTRAINT auth_user_email_key UNIQUE (email);
+
+
+--
+-- Name: auth_user auth_user_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_user
+    ADD CONSTRAINT auth_user_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_verification auth_verification_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_verification
+    ADD CONSTRAINT auth_verification_pkey PRIMARY KEY (id);
 
 
 --
@@ -338,6 +489,14 @@ ALTER TABLE ONLY public.catalog_snapshot
 
 ALTER TABLE ONLY public.catalog_snapshot
     ADD CONSTRAINT catalog_snapshot_supplier_id_catalog_kind_catalog_date_cont_key UNIQUE (supplier_id, catalog_kind, catalog_date, content_hash);
+
+
+--
+-- Name: email_adapter email_adapter_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.email_adapter
+    ADD CONSTRAINT email_adapter_pkey PRIMARY KEY (id);
 
 
 --
@@ -461,6 +620,27 @@ ALTER TABLE ONLY public.supplier
 
 
 --
+-- Name: idx_auth_account_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_account_user_id ON public.auth_account USING btree (user_id);
+
+
+--
+-- Name: idx_auth_session_user_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_session_user_id ON public.auth_session USING btree (user_id);
+
+
+--
+-- Name: idx_auth_verification_identifier; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_verification_identifier ON public.auth_verification USING btree (identifier);
+
+
+--
 -- Name: idx_catalog_item_raw_barcode; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -500,6 +680,13 @@ CREATE INDEX idx_catalog_snapshot_kind_date ON public.catalog_snapshot USING btr
 --
 
 CREATE UNIQUE INDEX idx_catalog_snapshot_supplier_content_hash_unique ON public.catalog_snapshot USING btree (supplier_id, content_hash);
+
+
+--
+-- Name: idx_email_adapter_active_priority; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_email_adapter_active_priority ON public.email_adapter USING btree (is_active, priority, created_at);
 
 
 --
@@ -591,6 +778,22 @@ CREATE INDEX idx_service_log_event_job ON public.service_log_event USING btree (
 --
 
 CREATE INDEX idx_service_log_event_run ON public.service_log_event USING btree (run_id, occurred_at DESC) WHERE (run_id IS NOT NULL);
+
+
+--
+-- Name: auth_account auth_account_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_account
+    ADD CONSTRAINT auth_account_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.auth_user(id) ON DELETE CASCADE;
+
+
+--
+-- Name: auth_session auth_session_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_session
+    ADD CONSTRAINT auth_session_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.auth_user(id) ON DELETE CASCADE;
 
 
 --

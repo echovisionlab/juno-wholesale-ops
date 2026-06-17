@@ -142,5 +142,15 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     gmail_storage_dir: null,
     catalog_attachment_pattern: null,
     supplier_code: null,
+    auth_enabled: null,
+    auth_base_url: null,
+    auth_trusted_origins: null,
+    auth_email_password_enabled: null,
+    auth_external_provider_enabled: null,
+    auth_external_provider_id: null,
+    auth_external_provider_name: null,
+    auth_external_discovery_url: null,
+    auth_external_client_id: null,
+    auth_external_client_secret: null,
   };
 }

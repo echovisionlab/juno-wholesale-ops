@@ -15,6 +15,20 @@ const stringBoolean = z.preprocess((value) => {
 
 const serverEnvSchema = {
   DATABASE_URL: z.string().url().optional(),
+  AUTH_ENABLED: stringBoolean.default(false),
+  AUTH_SECRET: z.string().min(32).optional(),
+  AUTH_BASE_URL: z.string().url().optional(),
+  AUTH_TRUSTED_ORIGINS: z.string().optional(),
+  AUTH_EMAIL_PASSWORD_ENABLED: stringBoolean.default(true),
+  AUTH_EXTERNAL_PROVIDER_ENABLED: stringBoolean.default(false),
+  AUTH_EXTERNAL_PROVIDER_ID: z.string().min(1).optional(),
+  AUTH_EXTERNAL_PROVIDER_NAME: z.string().min(1).optional(),
+  AUTH_EXTERNAL_DISCOVERY_URL: z.string().url().optional(),
+  AUTH_EXTERNAL_CLIENT_ID: z.string().min(1).optional(),
+  AUTH_EXTERNAL_CLIENT_SECRET: z.string().min(1).optional(),
+  AUTH_INITIAL_ADMIN_EMAIL: z.string().email().optional(),
+  AUTH_INITIAL_ADMIN_PASSWORD: z.string().min(8).optional(),
+  AUTH_INITIAL_ADMIN_NAME: z.string().min(1).default("Initial Admin"),
   GOOGLE_WORKSPACE_DELEGATED_USER: z.string().email().optional(),
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: z.string().min(1).optional(),
   GOOGLE_GMAIL_SCOPES: z

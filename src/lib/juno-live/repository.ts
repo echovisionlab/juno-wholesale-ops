@@ -99,7 +99,17 @@ export class JunoLiveRepository {
           gmail_processed_label,
           gmail_storage_dir,
           catalog_attachment_pattern,
-          supplier_code
+          supplier_code,
+          auth_enabled,
+          auth_base_url,
+          auth_trusted_origins,
+          auth_email_password_enabled,
+          auth_external_provider_enabled,
+          auth_external_provider_id,
+          auth_external_provider_name,
+          auth_external_discovery_url,
+          auth_external_client_id,
+          auth_external_client_secret
         FROM service_setting
         WHERE id = true
         LIMIT 1

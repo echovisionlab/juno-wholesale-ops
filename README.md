@@ -72,28 +72,36 @@ fallbacks.
 
 ## Admin Auth Gate
 
-The app can protect non-health routes with an external Kratos-compatible
-`whoami` endpoint.
+The app can protect non-health routes with Better Auth. Email/password sign-in
+is built in, and one external OIDC/OAuth provider can be configured from env or
+from the singleton `service_setting` row.
 
 ```text
-configured session cookie
-  -> <kratos-public-url>/sessions/whoami
-  -> active session
-  -> identity.metadata_public.role=admin
+request
+  -> /api/session/admin
+  -> Better Auth session
+  -> auth_user.role=admin
 ```
 
-`AUTH_ADMIN_ENABLED` defaults to `false`; production must explicitly set it to
-`true` along with `AUTH_ADMIN_KRATOS_PUBLIC_URL`, `AUTH_ADMIN_LOGIN_URL`, and
-`AUTH_ADMIN_SESSION_COOKIE_NAMES`.
+`AUTH_ENABLED` defaults to `false`. Production must explicitly set
+`AUTH_ENABLED=true`, `AUTH_SECRET`, and `AUTH_BASE_URL`. Use
+`AUTH_EMAIL_PASSWORD_ENABLED=true` for local admin accounts. Use
+`AUTH_EXTERNAL_PROVIDER_ENABLED=true` with `AUTH_EXTERNAL_PROVIDER_ID`,
+`AUTH_EXTERNAL_DISCOVERY_URL`, `AUTH_EXTERNAL_CLIENT_ID`, and
+`AUTH_EXTERNAL_CLIENT_SECRET` for an external provider.
 
 Browser requests without a valid admin session redirect to:
 
 ```text
-<login-url>?redirect=<current request URL>
+/login?redirect=<current request URL>
 ```
 
 API requests receive JSON `401`, `403`, or `503`. `/api/health` stays public
 for Komodo health checks.
+
+If `AUTH_INITIAL_ADMIN_EMAIL` and `AUTH_INITIAL_ADMIN_PASSWORD` are set,
+`pnpm db:migrate` creates that administrator once. If the email already exists,
+the seed is a no-op.
 
 Gmail checks:
 
@@ -274,7 +282,7 @@ Deployment files:
 Target route example:
 
 ```text
-inventory.example.com -> app-host.example.com:3100
+catalog.example.com -> app-host.example.com:3100
 ```
 
 Do not commit production secrets. `DATABASE_URL` and Google service account

@@ -3,7 +3,7 @@
 Target hostname:
 
 ```text
-inventory.example.com -> app-host.example.com:3100
+catalog.example.com -> app-host.example.com:3100
 ```
 
 The repository owns the canonical Compose and stack files, while the deployment
@@ -13,11 +13,10 @@ environment owns runtime values and secrets.
 
 The app protects all non-health routes through `src/proxy.ts`.
 
-- reads configured session cookies
-- calls `<kratos-public-url>/sessions/whoami`
-- requires an active Kratos session
-- requires `identity.metadata_public.role=admin`
-- redirects browser requests to `<login-url>?redirect=...`
+- checks `/api/session/admin`
+- requires an active Better Auth session
+- requires `auth_user.role=admin`
+- redirects browser requests to `/login?redirect=...`
 - returns JSON `401`, `403`, or `503` for API/non-browser requests
 
 `/api/health`, Next assets, and public static files bypass this gate.
@@ -30,6 +29,8 @@ Set these secrets in the stack environment, not in git:
 
 ```text
 DATABASE_URL
+AUTH_SECRET
+AUTH_BASE_URL
 GOOGLE_SERVICE_ACCOUNT_KEY_JSON
 JUNO_LOGIN_EMAIL
 JUNO_LOGIN_PASSWORD
@@ -44,7 +45,7 @@ registry.example.com/example/juno-wholesale-ops-web:sha-<git-sha>
 The external Caddy/proxy layer must add:
 
 ```caddyfile
-inventory.example.com {
+catalog.example.com {
     reverse_proxy app-host.example.com:3100
 }
 ```
@@ -54,13 +55,13 @@ inventory.example.com {
 Unauthenticated browser request should redirect:
 
 ```bash
-curl -I https://inventory.example.com/
+curl -I https://catalog.example.com/
 ```
 
 Health should stay available for Komodo:
 
 ```bash
-curl -fsS https://inventory.example.com/api/health
+curl -fsS https://catalog.example.com/api/health
 ```
 
 An authenticated admin should render the dashboard in a browser. A non-admin
@@ -92,6 +93,7 @@ unique DB catalog date before widening any search window.
 
 ## Future Hardening
 
-This app performs its own Kratos-compatible `whoami` and role check. If the app
-becomes part of a broader internal platform, move the hostname behind the
-platform's gateway and centralize the admin-role check there.
+This app performs its own Better Auth session and admin-role check. If the app
+becomes part of a broader internal platform, configure the platform identity
+provider through the external provider settings instead of adding platform-
+specific compatibility code.

@@ -1,8 +1,5 @@
 import type { RuntimeEnv } from "@/lib/env";
-import {
-  isAdminAuthProviderConfigured,
-  type AdminAuthConfig,
-} from "@/lib/auth/admin-auth";
+import { getMissingAppAuthSettings, resolveAppAuthSettings } from "@/lib/auth/settings";
 import {
   getMissingGmailIngestSettings,
   resolveGmailIngestSettings,
@@ -27,7 +24,6 @@ export type AppSetupStatus = {
 export function buildAppSetupStatus(options: {
   env: RuntimeEnv;
   settingsRow: JunoLiveServiceSettingsRow | null;
-  authConfig: AdminAuthConfig;
 }): AppSetupStatus {
   const databaseMissing = options.env.DATABASE_URL ? [] : ["DATABASE_URL"];
   const gmailSettings = resolveGmailIngestSettings(options.env, options.settingsRow);
@@ -37,22 +33,20 @@ export function buildAppSetupStatus(options: {
     liveSettings.loginEmail ? null : "juno_login_email",
     liveSettings.loginPassword ? null : "juno_login_password",
   ].filter((value): value is string => Boolean(value));
-  const authMissing =
-    options.authConfig.enabled && !isAdminAuthProviderConfigured(options.authConfig)
-      ? ["AUTH_ADMIN_KRATOS_PUBLIC_URL", "AUTH_ADMIN_LOGIN_URL", "AUTH_ADMIN_SESSION_COOKIE_NAMES"]
-      : [];
+  const authSettings = resolveAppAuthSettings(options.env, options.settingsRow);
+  const authMissing = getMissingAppAuthSettings(authSettings);
 
   const steps: SetupStep[] = [
     setupStep("database", "Database", databaseMissing, "required for persistence and worker state"),
     setupStep("gmail", "Gmail ingest", gmailMissing, "required for catalog email ingestion"),
     setupStep("juno", "Juno account", junoMissing, "required for live stock lookup"),
-    options.authConfig.enabled
-      ? setupStep("auth", "Admin auth", authMissing, "enabled external admin gate")
+    authSettings.enabled
+      ? setupStep("auth", "Admin auth", authMissing, "Better Auth admin gate")
       : {
           id: "auth",
           label: "Admin auth",
           state: "disabled",
-          detail: "external admin gate disabled",
+          detail: "admin gate disabled",
           missing: [],
         },
   ];

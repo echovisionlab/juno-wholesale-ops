@@ -27,6 +27,16 @@ export type JunoLiveServiceSettingsRow = {
   gmail_storage_dir: string | null;
   catalog_attachment_pattern: string | null;
   supplier_code: string | null;
+  auth_enabled: boolean | null;
+  auth_base_url: string | null;
+  auth_trusted_origins: string | null;
+  auth_email_password_enabled: boolean | null;
+  auth_external_provider_enabled: boolean | null;
+  auth_external_provider_id: string | null;
+  auth_external_provider_name: string | null;
+  auth_external_discovery_url: string | null;
+  auth_external_client_id: string | null;
+  auth_external_client_secret: string | null;
 };
 
 export type JunoLiveSettings = {

@@ -1,61 +1,69 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-import {
-  buildLoginRedirectUrl,
-  buildPublicRequestUrl,
-  buildSessionCookieHeader,
-  buildWhoamiUrl,
-  extractAdminSessionUser,
-  isAdminAuthProviderConfigured,
-  loadAdminAuthConfig,
-  shouldBypassAdminAuth,
-  shouldRedirectToLogin,
-  type AdminAuthConfig,
-  type KratosWhoamiSession,
-} from "@/lib/auth/admin-auth";
+const PUBLIC_FILE_EXTENSION_RE =
+  /\.(?:avif|css|gif|ico|jpg|jpeg|js|map|png|svg|txt|webmanifest|webp|woff|woff2)$/i;
 
-function authRequiredResponse(request: NextRequest, config: AdminAuthConfig): NextResponse {
+type AdminSessionResponse = {
+  enabled?: boolean;
+  error?: string;
+  user?: {
+    id?: string;
+    email?: string;
+    name?: string;
+    role?: string;
+  };
+};
+
+function shouldBypassAuth(pathname: string): boolean {
+  return (
+    pathname === "/api/health" ||
+    pathname === "/api/session/admin" ||
+    pathname === "/favicon.ico" ||
+    pathname === "/robots.txt" ||
+    pathname === "/sitemap.xml" ||
+    pathname === "/login" ||
+    pathname.startsWith("/api/auth/") ||
+    pathname.startsWith("/_next/") ||
+    PUBLIC_FILE_EXTENSION_RE.test(pathname)
+  );
+}
+
+function shouldRedirectToLogin(pathname: string, acceptHeader: string | null): boolean {
+  if (pathname.startsWith("/api/")) {
+    return false;
+  }
+
+  if (!acceptHeader) {
+    return true;
+  }
+
+  return acceptHeader.includes("text/html") || acceptHeader.includes("*/*");
+}
+
+function authRequiredResponse(request: NextRequest): NextResponse {
   if (shouldRedirectToLogin(request.nextUrl.pathname, request.headers.get("accept"))) {
-    const publicRequestUrl = buildPublicRequestUrl({
-      requestUrl: request.url,
-      hostHeader: request.headers.get("host"),
-      forwardedHost: request.headers.get("x-forwarded-host"),
-      forwardedProto: request.headers.get("x-forwarded-proto"),
-    });
-
-    return NextResponse.redirect(
-      buildLoginRedirectUrl(config.loginUrl, config.loginRedirectParam, publicRequestUrl)
-    );
+    const loginUrl = new URL("/login", request.url);
+    loginUrl.searchParams.set("redirect", buildPublicRequestUrl(request));
+    return NextResponse.redirect(loginUrl);
   }
 
   return NextResponse.json({ error: "authentication_required" }, { status: 401 });
 }
 
-function forbiddenResponse(): NextResponse {
-  return NextResponse.json({ error: "admin_required" }, { status: 403 });
-}
-
-function authUnavailableResponse(): NextResponse {
-  return NextResponse.json({ error: "auth_unavailable" }, { status: 503 });
-}
-
-function withUserHeaders(
-  request: NextRequest,
-  session: KratosWhoamiSession,
-  requiredRole: string
-): NextResponse {
-  const user = extractAdminSessionUser(session, requiredRole);
+function withUserHeaders(request: NextRequest, user: NonNullable<AdminSessionResponse["user"]>): NextResponse {
   const requestHeaders = new Headers(request.headers);
 
-  if (user) {
+  if (user.id) {
     requestHeaders.set("x-juno-wholesale-ops-user-id", user.id);
+  }
+  if (user.role) {
     requestHeaders.set("x-juno-wholesale-ops-user-role", user.role);
-    if (user.email) {
-      requestHeaders.set("x-juno-wholesale-ops-user-email", user.email);
-    }
-    if (user.name) {
-      requestHeaders.set("x-juno-wholesale-ops-user-name", user.name);
-    }
+  }
+  if (user.email) {
+    requestHeaders.set("x-juno-wholesale-ops-user-email", user.email);
+  }
+  if (user.name) {
+    requestHeaders.set("x-juno-wholesale-ops-user-name", user.name);
   }
 
   return NextResponse.next({
@@ -66,61 +74,68 @@ function withUserHeaders(
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
-  const config = loadAdminAuthConfig();
-  const pathname = request.nextUrl.pathname;
-
-  if (!config.enabled || shouldBypassAdminAuth(pathname)) {
+  if (shouldBypassAuth(request.nextUrl.pathname)) {
     return NextResponse.next();
   }
 
-  if (!isAdminAuthProviderConfigured(config)) {
-    return authUnavailableResponse();
-  }
-
-  const sessionCookieHeader = buildSessionCookieHeader(
-    request.cookies.getAll(),
-    config.sessionCookieNames
-  );
-
-  if (!sessionCookieHeader) {
-    return authRequiredResponse(request, config);
-  }
-
-  let whoamiResponse: Response;
+  let sessionResponse: Response;
 
   try {
-    whoamiResponse = await fetch(buildWhoamiUrl(config.kratosPublicUrl), {
+    sessionResponse = await fetch(new URL("/api/session/admin", request.url), {
       headers: {
         accept: "application/json",
-        cookie: sessionCookieHeader,
+        cookie: request.headers.get("cookie") ?? "",
       },
       cache: "no-store",
     });
   } catch {
-    return authUnavailableResponse();
+    return NextResponse.json({ error: "auth_unavailable" }, { status: 503 });
   }
 
-  if (whoamiResponse.status === 401) {
-    return authRequiredResponse(request, config);
+  const payload = (await sessionResponse.json().catch(() => null)) as AdminSessionResponse | null;
+
+  if (sessionResponse.ok && payload?.enabled === false) {
+    return NextResponse.next();
   }
 
-  if (!whoamiResponse.ok) {
-    return authUnavailableResponse();
+  if (sessionResponse.ok && payload?.user?.role === "admin") {
+    return withUserHeaders(request, payload.user);
   }
 
-  let session: KratosWhoamiSession;
-
-  try {
-    session = (await whoamiResponse.json()) as KratosWhoamiSession;
-  } catch {
-    return authUnavailableResponse();
+  if (sessionResponse.status === 401) {
+    return authRequiredResponse(request);
   }
 
-  if (!extractAdminSessionUser(session, config.requiredRole)) {
-    return forbiddenResponse();
+  if (sessionResponse.status === 403) {
+    return NextResponse.json({ error: "admin_required" }, { status: 403 });
   }
 
-  return withUserHeaders(request, session, config.requiredRole);
+  return NextResponse.json(
+    { error: payload?.error ?? "auth_unavailable" },
+    { status: sessionResponse.status === 503 ? 503 : 401 },
+  );
+}
+
+function firstForwardedHeaderValue(value: string | null): string | null {
+  const firstValue = value?.split(",")[0]?.trim();
+  return firstValue || null;
+}
+
+function buildPublicRequestUrl(request: NextRequest): string {
+  const url = new URL(request.url);
+  const host =
+    firstForwardedHeaderValue(request.headers.get("x-forwarded-host")) ??
+    firstForwardedHeaderValue(request.headers.get("host")) ??
+    url.host;
+  const proto = firstForwardedHeaderValue(request.headers.get("x-forwarded-proto")) ?? url.protocol.replace(":", "");
+
+  url.host = host;
+  if (!host.includes(":")) {
+    url.port = "";
+  }
+  url.protocol = `${proto.replace(/:$/, "")}:`;
+
+  return url.toString();
 }
 
 export const config = {

@@ -20,6 +20,10 @@ describe("loadRuntimeEnv", () => {
       CATALOG_ATTACHMENT_PATTERN: "New Preorders|New Releases In Stock",
       SUPPLIER_CODE: "juno",
       JUNO_LIVE_ENQUEUE_ON_INGEST: false,
+      AUTH_ENABLED: false,
+      AUTH_EMAIL_PASSWORD_ENABLED: true,
+      AUTH_EXTERNAL_PROVIDER_ENABLED: false,
+      AUTH_INITIAL_ADMIN_NAME: "Initial Admin",
       JUNO_BROWSER_PROFILE_DIR: ".data/juno-browser-profile",
       JUNO_BROWSER_HEADLESS: true,
       JUNO_LIVE_CONCURRENCY: 6,
@@ -32,6 +36,11 @@ describe("loadRuntimeEnv", () => {
     });
     expect(env.GOOGLE_WORKSPACE_DELEGATED_USER).toBeUndefined();
     expect(env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON).toBeUndefined();
+    expect(env.AUTH_SECRET).toBeUndefined();
+    expect(env.AUTH_BASE_URL).toBeUndefined();
+    expect(env.AUTH_TRUSTED_ORIGINS).toBeUndefined();
+    expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBeUndefined();
+    expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBeUndefined();
     expect(env.JUNO_LOGIN_EMAIL).toBeUndefined();
     expect(env.JUNO_LOGIN_PASSWORD).toBeUndefined();
     expect(env.JUNO_LIVE_POLL_INTERVAL_MS).toBeUndefined();
@@ -41,6 +50,20 @@ describe("loadRuntimeEnv", () => {
     const env = loadRuntimeEnv({
       ...configuredEnv,
       DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
+      AUTH_ENABLED: "true",
+      AUTH_SECRET: "a".repeat(32),
+      AUTH_BASE_URL: "https://app.example.com",
+      AUTH_TRUSTED_ORIGINS: "https://app.example.com,https://admin.example.com",
+      AUTH_EMAIL_PASSWORD_ENABLED: "false",
+      AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+      AUTH_EXTERNAL_PROVIDER_ID: "workspace",
+      AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
+      AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
+      AUTH_EXTERNAL_CLIENT_ID: "client-id",
+      AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+      AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
+      AUTH_INITIAL_ADMIN_PASSWORD: "password123",
+      AUTH_INITIAL_ADMIN_NAME: "Ops Admin",
       GMAIL_MAX_RESULTS: "5",
       GMAIL_INGEST_LOOKBACK_MS: "86400000",
       SUPPLIER_CODE: "juno-wholesale",
@@ -57,6 +80,20 @@ describe("loadRuntimeEnv", () => {
     });
 
     expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/juno_wholesale_ops");
+    expect(env.AUTH_ENABLED).toBe(true);
+    expect(env.AUTH_SECRET).toBe("a".repeat(32));
+    expect(env.AUTH_BASE_URL).toBe("https://app.example.com");
+    expect(env.AUTH_TRUSTED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
+    expect(env.AUTH_EMAIL_PASSWORD_ENABLED).toBe(false);
+    expect(env.AUTH_EXTERNAL_PROVIDER_ENABLED).toBe(true);
+    expect(env.AUTH_EXTERNAL_PROVIDER_ID).toBe("workspace");
+    expect(env.AUTH_EXTERNAL_PROVIDER_NAME).toBe("Workspace");
+    expect(env.AUTH_EXTERNAL_DISCOVERY_URL).toBe("https://login.example.com/.well-known/openid-configuration");
+    expect(env.AUTH_EXTERNAL_CLIENT_ID).toBe("client-id");
+    expect(env.AUTH_EXTERNAL_CLIENT_SECRET).toBe("client-secret");
+    expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBe("admin@example.com");
+    expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBe("password123");
+    expect(env.AUTH_INITIAL_ADMIN_NAME).toBe("Ops Admin");
     expect(env.GMAIL_MAX_RESULTS).toBe(5);
     expect(env.GMAIL_INGEST_LOOKBACK_MS).toBe(86400000);
     expect(env.SUPPLIER_CODE).toBe("juno-wholesale");
@@ -106,6 +143,22 @@ describe("loadRuntimeEnv", () => {
       loadRuntimeEnv({
         ...configuredEnv,
         GOOGLE_WORKSPACE_DELEGATED_USER: "not-an-email",
+      }),
+    ).toThrow();
+  });
+
+  it("rejects short auth secrets and invalid external discovery URLs", () => {
+    expect(() =>
+      loadRuntimeEnv({
+        ...configuredEnv,
+        AUTH_SECRET: "too-short",
+      }),
+    ).toThrow();
+
+    expect(() =>
+      loadRuntimeEnv({
+        ...configuredEnv,
+        AUTH_EXTERNAL_DISCOVERY_URL: "not-a-url",
       }),
     ).toThrow();
   });

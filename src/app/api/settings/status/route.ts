@@ -1,4 +1,3 @@
-import { loadAdminAuthConfig } from "@/lib/auth/admin-auth";
 import { loadRuntimeEnv } from "@/lib/env";
 import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { buildAppSetupStatus } from "@/lib/setup/status";
@@ -15,7 +14,6 @@ export async function GET() {
     setup: buildAppSetupStatus({
       env,
       settingsRow,
-      authConfig: loadAdminAuthConfig(process.env),
     }),
   });
 }

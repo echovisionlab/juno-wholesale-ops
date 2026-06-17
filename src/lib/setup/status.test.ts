@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { loadAdminAuthConfig } from "@/lib/auth/admin-auth";
 import { loadRuntimeEnv } from "@/lib/env";
 import type { JunoLiveServiceSettingsRow } from "@/lib/juno-live/settings";
 import { buildAppSetupStatus } from "./status";
@@ -10,7 +9,6 @@ describe("buildAppSetupStatus", () => {
       buildAppSetupStatus({
         env: loadRuntimeEnv({}),
         settingsRow: null,
-        authConfig: loadAdminAuthConfig({}),
       }),
     ).toEqual({
       ready: false,
@@ -35,6 +33,9 @@ describe("buildAppSetupStatus", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_ENABLED: "true",
+        AUTH_SECRET: "a".repeat(32),
+        AUTH_BASE_URL: "https://app.example.com",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
       }),
@@ -43,12 +44,6 @@ describe("buildAppSetupStatus", () => {
         juno_login_email: "buyer@example.com",
         juno_login_password: "secret",
       },
-      authConfig: loadAdminAuthConfig({
-        AUTH_ADMIN_ENABLED: "true",
-        AUTH_ADMIN_KRATOS_PUBLIC_URL: "https://auth.example.com",
-        AUTH_ADMIN_LOGIN_URL: "https://login.example.com",
-        AUTH_ADMIN_SESSION_COOKIE_NAMES: "session",
-      }),
     });
 
     expect(status.ready).toBe(true);
@@ -59,13 +54,13 @@ describe("buildAppSetupStatus", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_ENABLED: "true",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
       }),
       settingsRow: null,
-      authConfig: loadAdminAuthConfig({ AUTH_ADMIN_ENABLED: "true" }),
     });
 
     expect(status.ready).toBe(false);
@@ -73,7 +68,7 @@ describe("buildAppSetupStatus", () => {
       expect.objectContaining({
         id: "auth",
         state: "missing",
-        missing: ["AUTH_ADMIN_KRATOS_PUBLIC_URL", "AUTH_ADMIN_LOGIN_URL", "AUTH_ADMIN_SESSION_COOKIE_NAMES"],
+        missing: ["AUTH_SECRET", "auth_base_url"],
       }),
     );
   });
@@ -104,5 +99,15 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     gmail_storage_dir: null,
     catalog_attachment_pattern: null,
     supplier_code: null,
+    auth_enabled: null,
+    auth_base_url: null,
+    auth_trusted_origins: null,
+    auth_email_password_enabled: null,
+    auth_external_provider_enabled: null,
+    auth_external_provider_id: null,
+    auth_external_provider_name: null,
+    auth_external_discovery_url: null,
+    auth_external_client_id: null,
+    auth_external_client_secret: null,
   };
 }

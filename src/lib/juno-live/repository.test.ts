@@ -25,7 +25,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(6);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(7);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -33,6 +33,7 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 4, filename: "0004_catalog_content_hash_unique.sql" }),
       expect.objectContaining({ version: 5, filename: "0005_ingest_cursor_and_auto_stock.sql" }),
       expect.objectContaining({ version: 6, filename: "0006_configurable_ingest_settings.sql" }),
+      expect.objectContaining({ version: 7, filename: "0007_auth_and_email_settings.sql" }),
     ]);
   });
 
@@ -60,7 +61,17 @@ describe("JunoLiveRepository", () => {
             gmail_processed_label = 'Processed',
             gmail_storage_dir = '/storage',
             catalog_attachment_pattern = 'New Releases',
-            supplier_code = 'juno-test'
+            supplier_code = 'juno-test',
+            auth_enabled = true,
+            auth_base_url = 'https://app.example.com',
+            auth_trusted_origins = 'https://app.example.com',
+            auth_email_password_enabled = true,
+            auth_external_provider_enabled = true,
+            auth_external_provider_id = 'workspace',
+            auth_external_provider_name = 'Workspace',
+            auth_external_discovery_url = 'https://login.example.com/.well-known/openid-configuration',
+            auth_external_client_id = 'client-id',
+            auth_external_client_secret = 'client-secret'
         WHERE id = true
       `,
     );
@@ -89,6 +100,16 @@ describe("JunoLiveRepository", () => {
       gmail_storage_dir: "/storage",
       catalog_attachment_pattern: "New Releases",
       supplier_code: "juno-test",
+      auth_enabled: true,
+      auth_base_url: "https://app.example.com",
+      auth_trusted_origins: "https://app.example.com",
+      auth_email_password_enabled: true,
+      auth_external_provider_enabled: true,
+      auth_external_provider_id: "workspace",
+      auth_external_provider_name: "Workspace",
+      auth_external_discovery_url: "https://login.example.com/.well-known/openid-configuration",
+      auth_external_client_id: "client-id",
+      auth_external_client_secret: "client-secret",
     });
   });
 
