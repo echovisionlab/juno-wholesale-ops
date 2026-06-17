@@ -3,7 +3,7 @@ import { ColorSchemeScript } from "@mantine/core";
 import "@mantine/core/styles.css";
 import "./globals.css";
 import { Providers } from "./providers";
-import { dsubFontStylesheetUrl } from "@/lib/fonts";
+import { fontStylesheetUrl } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "Juno Wholesale Ops",
@@ -19,7 +19,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <ColorSchemeScript defaultColorScheme="light" />
-        <link rel="stylesheet" href={dsubFontStylesheetUrl} />
+        {fontStylesheetUrl ? <link rel="stylesheet" href={fontStylesheetUrl} /> : null}
       </head>
       <body>
         <Providers>{children}</Providers>

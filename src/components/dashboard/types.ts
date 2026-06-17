@@ -48,3 +48,18 @@ export type LiveWorkerStatus = {
     occurredAt: string;
   }>;
 };
+
+export type SetupStepState = "complete" | "missing" | "disabled";
+
+export type SetupStep = {
+  id: "database" | "gmail" | "juno" | "auth";
+  label: string;
+  state: SetupStepState;
+  detail: string;
+  missing: string[];
+};
+
+export type AppSetupStatus = {
+  ready: boolean;
+  steps: SetupStep[];
+};

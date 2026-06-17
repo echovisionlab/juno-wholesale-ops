@@ -18,6 +18,15 @@ export type JunoLiveServiceSettingsRow = {
   juno_live_auto_enqueue_on_interval: boolean | null;
   juno_live_auto_enqueue_limit: number | null;
   gmail_ingest_lookback_ms: number | null;
+  google_workspace_delegated_user: string | null;
+  google_service_account_key_json: string | null;
+  google_gmail_scopes: string | null;
+  gmail_ingest_query: string | null;
+  gmail_max_results: number | null;
+  gmail_processed_label: string | null;
+  gmail_storage_dir: string | null;
+  catalog_attachment_pattern: string | null;
+  supplier_code: string | null;
 };
 
 export type JunoLiveSettings = {

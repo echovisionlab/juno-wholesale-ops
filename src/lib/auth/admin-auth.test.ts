@@ -6,63 +6,74 @@ import {
   buildSessionCookieHeader,
   buildWhoamiUrl,
   extractAdminSessionUser,
-  loadDsubAuthConfig,
+  isAdminAuthProviderConfigured,
+  loadAdminAuthConfig,
   normalizeBaseUrl,
   parseSessionCookieNames,
   resolveAuthEnabled,
-  shouldBypassDsubAuth,
+  shouldBypassAdminAuth,
   shouldRedirectToLogin,
   type KratosWhoamiSession,
-} from "./dsub-session";
+} from "./admin-auth";
 
 describe("resolveAuthEnabled", () => {
-  it("defaults to production-only auth when unset", () => {
-    expect(resolveAuthEnabled(undefined, "production")).toBe(true);
-    expect(resolveAuthEnabled("", "development")).toBe(false);
+  it("defaults to disabled auth when unset", () => {
+    expect(resolveAuthEnabled(undefined)).toBe(false);
+    expect(resolveAuthEnabled("")).toBe(false);
   });
 
   it("honors explicit truthy and falsey values", () => {
-    expect(resolveAuthEnabled("yes", "development")).toBe(true);
-    expect(resolveAuthEnabled("OFF", "production")).toBe(false);
+    expect(resolveAuthEnabled("yes")).toBe(true);
+    expect(resolveAuthEnabled("OFF")).toBe(false);
   });
 
-  it("falls back to NODE_ENV for invalid values", () => {
-    expect(resolveAuthEnabled("sometimes", "production")).toBe(true);
-    expect(resolveAuthEnabled("sometimes", "test")).toBe(false);
+  it("treats invalid values as disabled", () => {
+    expect(resolveAuthEnabled("sometimes")).toBe(false);
   });
 });
 
 describe("auth config parsing", () => {
-  it("loads secure dsub defaults", () => {
-    expect(loadDsubAuthConfig({ NODE_ENV: "production" })).toEqual({
-      enabled: true,
-      kratosPublicUrl: "https://auth.dsub.io",
-      loginUrl: "https://www.dsub.io/auth/login",
+  it("loads open-source safe defaults", () => {
+    expect(loadAdminAuthConfig({ NODE_ENV: "production" })).toEqual({
+      enabled: false,
+      kratosPublicUrl: "",
+      loginUrl: "",
       loginRedirectParam: "redirect",
       requiredRole: "admin",
-      sessionCookieNames: ["dsub_session", "dsub_session_dev"],
+      sessionCookieNames: ["session"],
     });
+    expect(isAdminAuthProviderConfigured(loadAdminAuthConfig({ NODE_ENV: "production" }))).toBe(false);
   });
 
   it("loads explicit overrides", () => {
     expect(
-      loadDsubAuthConfig({
+      loadAdminAuthConfig({
         NODE_ENV: "production",
-        DSUB_AUTH_ENABLED: "false",
-        DSUB_KRATOS_PUBLIC_URL: "https://auth.example.test/",
-        DSUB_LOGIN_URL: "https://www.example.test/login",
-        DSUB_LOGIN_REDIRECT_PARAM: "return_to",
-        DSUB_REQUIRED_ROLE: "manager",
-        DSUB_SESSION_COOKIE_NAMES: "custom, dsub_session, custom",
+        AUTH_ADMIN_ENABLED: "true",
+        AUTH_ADMIN_KRATOS_PUBLIC_URL: "https://auth.example.test/",
+        AUTH_ADMIN_LOGIN_URL: "https://www.example.test/login",
+        AUTH_ADMIN_LOGIN_REDIRECT_PARAM: "return_to",
+        AUTH_ADMIN_REQUIRED_ROLE: "manager",
+        AUTH_ADMIN_SESSION_COOKIE_NAMES: "custom, session, custom",
       })
     ).toEqual({
-      enabled: false,
+      enabled: true,
       kratosPublicUrl: "https://auth.example.test",
       loginUrl: "https://www.example.test/login",
       loginRedirectParam: "return_to",
       requiredRole: "manager",
-      sessionCookieNames: ["custom", "dsub_session"],
+      sessionCookieNames: ["custom", "session"],
     });
+    expect(
+      isAdminAuthProviderConfigured(
+        loadAdminAuthConfig({
+          AUTH_ADMIN_ENABLED: "true",
+          AUTH_ADMIN_KRATOS_PUBLIC_URL: "https://auth.example.test/",
+          AUTH_ADMIN_LOGIN_URL: "https://www.example.test/login",
+          AUTH_ADMIN_SESSION_COOKIE_NAMES: "custom",
+        }),
+      ),
+    ).toBe(true);
   });
 
   it("normalizes base URLs and cookie names", () => {
@@ -70,23 +81,23 @@ describe("auth config parsing", () => {
       "https://auth.example.test"
     );
     expect(normalizeBaseUrl("   ", "https://fallback.test/")).toBe("https://fallback.test");
-    expect(parseSessionCookieNames(" , ")).toEqual(["dsub_session", "dsub_session_dev"]);
+    expect(parseSessionCookieNames(" , ")).toEqual(["session"]);
   });
 });
 
 describe("request matching", () => {
   it("bypasses health checks, next assets, public files, and known metadata files", () => {
-    expect(shouldBypassDsubAuth("/api/health")).toBe(true);
-    expect(shouldBypassDsubAuth("/_next/static/chunk.js")).toBe(true);
-    expect(shouldBypassDsubAuth("/favicon.ico")).toBe(true);
-    expect(shouldBypassDsubAuth("/robots.txt")).toBe(true);
-    expect(shouldBypassDsubAuth("/sitemap.xml")).toBe(true);
-    expect(shouldBypassDsubAuth("/logo.svg")).toBe(true);
+    expect(shouldBypassAdminAuth("/api/health")).toBe(true);
+    expect(shouldBypassAdminAuth("/_next/static/chunk.js")).toBe(true);
+    expect(shouldBypassAdminAuth("/favicon.ico")).toBe(true);
+    expect(shouldBypassAdminAuth("/robots.txt")).toBe(true);
+    expect(shouldBypassAdminAuth("/sitemap.xml")).toBe(true);
+    expect(shouldBypassAdminAuth("/logo.svg")).toBe(true);
   });
 
   it("protects app and API paths by default", () => {
-    expect(shouldBypassDsubAuth("/")).toBe(false);
-    expect(shouldBypassDsubAuth("/api/catalogs")).toBe(false);
+    expect(shouldBypassAdminAuth("/")).toBe(false);
+    expect(shouldBypassAdminAuth("/api/catalogs")).toBe(false);
   });
 
   it("redirects browser-like app requests but not API requests", () => {
@@ -104,25 +115,25 @@ describe("cookie and URL helpers", () => {
       buildSessionCookieHeader(
         [
           { name: "theme", value: "dark" },
-          { name: "dsub_session_dev", value: "dev-session" },
-          { name: "dsub_session", value: "" },
+          { name: "dev_session", value: "dev-session" },
+          { name: "session", value: "" },
         ],
-        ["dsub_session", "dsub_session_dev"]
+        ["session", "dev_session"]
       )
-    ).toBe("dsub_session_dev=dev-session");
+    ).toBe("dev_session=dev-session");
   });
 
-  it("builds Kratos whoami and dsub login redirect URLs", () => {
-    expect(buildWhoamiUrl("https://auth.dsub.io/")).toBe("https://auth.dsub.io/sessions/whoami");
+  it("builds Kratos whoami and login redirect URLs", () => {
+    expect(buildWhoamiUrl("https://auth.example.com/")).toBe("https://auth.example.com/sessions/whoami");
 
     const redirectUrl = buildLoginRedirectUrl(
-      "https://www.dsub.io/auth/login?provider=google",
+      "https://login.example.com/auth/login?provider=google",
       "redirect",
-      "https://inventory.dsub.io/catalogs?kind=preorders"
+      "https://inventory.example.com/catalogs?kind=preorders"
     );
 
     expect(redirectUrl.toString()).toBe(
-      "https://www.dsub.io/auth/login?provider=google&redirect=https%3A%2F%2Finventory.dsub.io%2Fcatalogs%3Fkind%3Dpreorders"
+      "https://login.example.com/auth/login?provider=google&redirect=https%3A%2F%2Finventory.example.com%2Fcatalogs%3Fkind%3Dpreorders"
     );
   });
 
@@ -131,10 +142,10 @@ describe("cookie and URL helpers", () => {
       buildPublicRequestUrl({
         requestUrl: "http://0.0.0.0:3000/catalogs?kind=preorders",
         hostHeader: "127.0.0.1:3103",
-        forwardedHost: "inventory.dsub.io, internal.proxy",
+        forwardedHost: "inventory.example.com, internal.proxy",
         forwardedProto: "https",
       })
-    ).toBe("https://inventory.dsub.io/catalogs?kind=preorders");
+    ).toBe("https://inventory.example.com/catalogs?kind=preorders");
   });
 
   it("falls back to Host and then the internal request URL", () => {
@@ -164,9 +175,9 @@ describe("extractAdminSessionUser", () => {
     identity: {
       id: "user-1",
       traits: {
-        email: "admin@dsub.io",
+        email: "admin@example.com",
         name: "Admin User",
-        image: "https://cdn.dsub.io/avatar.png",
+        image: "https://cdn.example.com/avatar.png",
         preferred_locale: "ko",
       },
       metadata_public: {
@@ -178,9 +189,9 @@ describe("extractAdminSessionUser", () => {
   it("extracts active sessions with the required role", () => {
     expect(extractAdminSessionUser(adminSession, "admin")).toEqual({
       id: "user-1",
-      email: "admin@dsub.io",
+      email: "admin@example.com",
       name: "Admin User",
-      image: "https://cdn.dsub.io/avatar.png",
+      image: "https://cdn.example.com/avatar.png",
       preferredLocale: "ko",
       role: "Admin",
     });

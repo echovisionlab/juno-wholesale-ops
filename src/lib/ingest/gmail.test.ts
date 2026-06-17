@@ -21,7 +21,7 @@ describe("GmailClient", () => {
       { ok: true, json: { messages: [{ id: "m1", threadId: "t1" }] } },
       { ok: true, json: {} },
     ]);
-    const client = new GmailClient("state303@dsub.io", "token");
+    const client = new GmailClient("operator@example.com", "token");
 
     await expect(client.listMessages("filename:xlsx", 10)).resolves.toEqual([
       { id: "m1", threadId: "t1" },
@@ -43,7 +43,7 @@ describe("GmailClient", () => {
       { ok: true, json: { data: encoded } },
       { ok: true, json: {} },
     ]);
-    const client = new GmailClient("state303@dsub.io", "token");
+    const client = new GmailClient("operator@example.com", "token");
 
     await expect(client.getMessage("m1")).resolves.toMatchObject({ id: "m1" });
     await expect(client.getAttachment("m1", "a1")).resolves.toEqual(Buffer.from("xlsx bytes"));
@@ -59,7 +59,7 @@ describe("GmailClient", () => {
       { ok: true, json: { labels: [] } },
       { ok: true, json: { id: "Label_2" } },
     ]);
-    const client = new GmailClient("state303@dsub.io", "token");
+    const client = new GmailClient("operator@example.com", "token");
 
     await expect(client.getOrCreateLabel("Processed")).resolves.toBe("Label_1");
     await expect(client.getOrCreateLabel("Processed")).resolves.toBe("Label_2");
@@ -82,7 +82,7 @@ describe("GmailClient", () => {
         jsonError: new Error("not json"),
       },
     ]);
-    const client = new GmailClient("state303@dsub.io", "token");
+    const client = new GmailClient("operator@example.com", "token");
 
     await expect(client.listMessages("filename:xlsx", 10)).rejects.toThrow("Gmail API 403");
   });
@@ -94,8 +94,8 @@ describe("Gmail message helpers", () => {
     payload: {
       headers: [
         { name: "Subject", value: "Daily Juno" },
-        { name: "Delivered-To", value: "state303@dsub.io" },
-        { name: "delivered-to", value: "inventory@dsub.io" },
+        { name: "Delivered-To", value: "operator@example.com" },
+        { name: "delivered-to", value: "catalog@example.com" },
       ],
       parts: [
         {
@@ -129,8 +129,8 @@ describe("Gmail message helpers", () => {
     expect(getHeader(message, "subject")).toBe("Daily Juno");
     expect(getHeader({ id: "empty" }, "subject")).toBeUndefined();
     expect(getAllHeaders(message, "DELIVERED-TO")).toEqual([
-      "state303@dsub.io",
-      "inventory@dsub.io",
+      "operator@example.com",
+      "catalog@example.com",
     ]);
     expect(getAllHeaders({ id: "empty" }, "DELIVERED-TO")).toEqual([]);
   });

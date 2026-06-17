@@ -92,7 +92,7 @@ describe("recordCatalogAttachment", () => {
 
     await recordGmailIngestStarted({
       databaseUrl,
-      query: "to:inventory@dsub.io filename:xlsx after:2026/06/10",
+      query: "to:catalog@example.com filename:xlsx after:2026/06/10",
       windowFrom: "2026-06-10T00:00:00.000Z",
       windowTo: "2026-06-17T00:00:00.000Z",
     });
@@ -109,7 +109,7 @@ describe("recordCatalogAttachment", () => {
     });
 
     await expect(getGmailIngestState(databaseUrl)).resolves.toMatchObject({
-      lastQuery: "to:inventory@dsub.io filename:xlsx after:2026/06/10",
+      lastQuery: "to:catalog@example.com filename:xlsx after:2026/06/10",
       lastQueryWindowFrom: "2026-06-10 00:00:00+00",
       lastQueryWindowTo: "2026-06-17 00:00:00+00",
       lastQueryStatus: "succeeded",
@@ -170,14 +170,14 @@ describe("recordCatalogAttachment", () => {
 
 function message(gmailMessageId: string): MessageRecord {
   return {
-    userEmail: "state303@dsub.io",
+    userEmail: "operator@example.com",
     gmailMessageId,
     gmailThreadId: null,
     rfc822MessageId: `<${gmailMessageId}@example.com>`,
     subject: "Daily Juno",
     fromAddress: "juno@example.com",
-    toAddresses: ["inventory@dsub.io"],
-    deliveredTo: ["state303@dsub.io"],
+    toAddresses: ["catalog@example.com"],
+    deliveredTo: ["operator@example.com"],
     receivedAt: "2026-06-17T00:00:00.000Z",
     payload: { id: gmailMessageId, payload: { headers: [] } },
   };

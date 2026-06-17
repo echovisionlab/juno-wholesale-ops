@@ -1,23 +1,33 @@
 import { loadRuntimeEnv, parseScopes } from "@/lib/env";
 import { GmailClient } from "@/lib/ingest/gmail";
 import { getDelegatedAccessToken, loadServiceAccountKey } from "@/lib/ingest/google-auth";
+import {
+  assertRunnableGmailIngestSettings,
+  resolveGmailIngestSettings,
+} from "@/lib/ingest/settings";
+import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
-  const key = await loadServiceAccountKey(env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON);
+  const settingsRow = env.DATABASE_URL
+    ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
+    : null;
+  const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
+  assertRunnableGmailIngestSettings(gmailSettings);
+  const key = await loadServiceAccountKey(gmailSettings.serviceAccountKeyJson);
   const accessToken = await getDelegatedAccessToken({
     key,
-    subject: env.GOOGLE_WORKSPACE_DELEGATED_USER,
-    scopes: parseScopes(env.GOOGLE_GMAIL_SCOPES),
+    subject: gmailSettings.delegatedUser,
+    scopes: parseScopes(gmailSettings.scopes),
   });
-  const gmail = new GmailClient(env.GOOGLE_WORKSPACE_DELEGATED_USER, accessToken);
-  const messages = await gmail.listMessages(env.GMAIL_INGEST_QUERY, Math.min(env.GMAIL_MAX_RESULTS, 10));
+  const gmail = new GmailClient(gmailSettings.delegatedUser, accessToken);
+  const messages = await gmail.listMessages(gmailSettings.query, Math.min(gmailSettings.maxResults, 10));
 
   console.log(
     JSON.stringify(
       {
-        delegatedUser: env.GOOGLE_WORKSPACE_DELEGATED_USER,
-        query: env.GMAIL_INGEST_QUERY,
+        delegatedUser: gmailSettings.delegatedUser,
+        query: gmailSettings.query,
         returnedMessageCount: messages.length,
       },
       null,

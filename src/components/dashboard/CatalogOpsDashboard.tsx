@@ -6,6 +6,7 @@ import {
   Boxes,
   CheckCircle2,
   Clock3,
+  ClipboardCheck,
   PackageCheck,
   PackageSearch,
   Play,
@@ -16,7 +17,15 @@ import { CommandPanel } from "./CommandPanel";
 import { PipelineCard } from "./PipelineCard";
 import { SectionHeader } from "./SectionHeader";
 import { StatCard } from "./StatCard";
-import type { LiveLookupDashboardSummary, LiveWorkerAction, LiveWorkerStatus, PipelineItem, StatCardData } from "./types";
+import type {
+  AppSetupStatus,
+  LiveLookupDashboardSummary,
+  LiveWorkerAction,
+  LiveWorkerStatus,
+  PipelineItem,
+  SetupStep,
+  StatCardData,
+} from "./types";
 
 export type CatalogOpsDashboardProps = {
   stats: StatCardData[];
@@ -24,6 +33,7 @@ export type CatalogOpsDashboardProps = {
   commands: string[];
   liveSummary?: LiveLookupDashboardSummary | null;
   workerStatus?: LiveWorkerStatus | null;
+  setupStatus?: AppSetupStatus | null;
   workerActionPending?: boolean;
   onWorkerAction?: (action: LiveWorkerAction) => void;
 };
@@ -34,6 +44,7 @@ export function CatalogOpsDashboard({
   commands,
   liveSummary,
   workerStatus,
+  setupStatus,
   workerActionPending = false,
   onWorkerAction,
 }: CatalogOpsDashboardProps) {
@@ -72,6 +83,11 @@ export function CatalogOpsDashboard({
 
       <Container py="xl">
         <Grid gap="lg">
+          <Grid.Col span={12}>
+            <SectionHeader icon={ClipboardCheck}>Setup</SectionHeader>
+            <SetupChecklist setupStatus={setupStatus} />
+          </Grid.Col>
+
           <Grid.Col span={{ base: 12, lg: 8 }}>
             <SectionHeader icon={PackageCheck}>Ingestion Pipeline</SectionHeader>
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -126,6 +142,63 @@ export function CatalogOpsDashboard({
       </Container>
     </Box>
   );
+}
+
+function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }) {
+  const steps = setupStatus?.steps ?? [];
+
+  if (steps.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>Setup status unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          Configuration status will appear after the server can evaluate runtime settings.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
+      {steps.map((step) => (
+        <SetupStepCard key={step.id} step={step} />
+      ))}
+    </SimpleGrid>
+  );
+}
+
+function SetupStepCard({ step }: { step: SetupStep }) {
+  const status = setupStepPresentation(step);
+  return (
+    <Card>
+      <Group justify="space-between" align="flex-start">
+        <Stack gap={4}>
+          <Text fw={700}>{step.label}</Text>
+          <Text size="sm" c="dimmed">
+            {step.detail}
+          </Text>
+        </Stack>
+        <Badge color={status.color} variant="light">
+          {status.label}
+        </Badge>
+      </Group>
+      {step.missing.length > 0 ? (
+        <Code mt="md" block>
+          {step.missing.join("\n")}
+        </Code>
+      ) : null}
+    </Card>
+  );
+}
+
+function setupStepPresentation(step: SetupStep): { label: string; color: string } {
+  if (step.state === "complete") {
+    return { label: "Complete", color: "green" };
+  }
+  if (step.state === "disabled") {
+    return { label: "Disabled", color: "gray" };
+  }
+  return { label: "Missing", color: "red" };
 }
 
 function formatObservedAt(value: string | null | undefined): string {

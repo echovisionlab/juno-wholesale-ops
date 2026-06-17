@@ -90,7 +90,16 @@ export class JunoLiveRepository {
           juno_live_poll_interval_ms,
           juno_live_auto_enqueue_on_interval,
           juno_live_auto_enqueue_limit,
-          gmail_ingest_lookback_ms
+          gmail_ingest_lookback_ms,
+          google_workspace_delegated_user,
+          google_service_account_key_json,
+          google_gmail_scopes,
+          gmail_ingest_query,
+          gmail_max_results,
+          gmail_processed_label,
+          gmail_storage_dir,
+          catalog_attachment_pattern,
+          supplier_code
         FROM service_setting
         WHERE id = true
         LIMIT 1

@@ -1,22 +1,23 @@
 stackName: juno-wholesale-ops-app-stack
-runDirectory: /home/state303/services/juno-wholesale-ops
+runDirectory: /srv/juno-wholesale-ops
 projectName: juno-wholesale-ops
 filePaths:
   - compose/app.yml
 environment:
   JUNO_WHOLESALE_OPS_STACK_PROJECT_NAME: juno-wholesale-ops
-  JUNO_WHOLESALE_OPS_WEB_IMAGE: harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-REPLACE_ME
+  JUNO_WHOLESALE_OPS_WEB_IMAGE: registry.example.com/example/juno-wholesale-ops-web:sha-REPLACE_ME
   JUNO_WHOLESALE_OPS_CONTAINER_SUFFIX: prod
   JUNO_WHOLESALE_OPS_WEB_PUBLIC_PORT: "3100"
-  DSUB_AUTH_ENABLED: "true"
-  DSUB_KRATOS_PUBLIC_URL: https://auth.dsub.io
-  DSUB_LOGIN_URL: https://www.dsub.io/auth/login
-  DSUB_LOGIN_REDIRECT_PARAM: redirect
-  DSUB_REQUIRED_ROLE: admin
-  DSUB_SESSION_COOKIE_NAMES: dsub_session,dsub_session_dev
-  GOOGLE_WORKSPACE_DELEGATED_USER: state303@dsub.io
+  AUTH_ADMIN_ENABLED: "false"
+  AUTH_ADMIN_KRATOS_PUBLIC_URL: ""
+  AUTH_ADMIN_LOGIN_URL: ""
+  AUTH_ADMIN_LOGIN_REDIRECT_PARAM: redirect
+  AUTH_ADMIN_REQUIRED_ROLE: admin
+  AUTH_ADMIN_SESSION_COOKIE_NAMES: session
+  NEXT_PUBLIC_FONT_STYLESHEET_URL: ""
+  GOOGLE_WORKSPACE_DELEGATED_USER: ""
   GOOGLE_GMAIL_SCOPES: https://www.googleapis.com/auth/gmail.modify
-  GMAIL_INGEST_QUERY: "to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d"
+  GMAIL_INGEST_QUERY: "has:attachment filename:xlsx newer_than:30d"
   GMAIL_MAX_RESULTS: "25"
   GMAIL_INGEST_LOOKBACK_MS: "604800000"
   GMAIL_PROCESSED_LABEL: Wholesale Processed

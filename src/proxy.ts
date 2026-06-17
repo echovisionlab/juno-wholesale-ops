@@ -6,14 +6,15 @@ import {
   buildSessionCookieHeader,
   buildWhoamiUrl,
   extractAdminSessionUser,
-  loadDsubAuthConfig,
-  shouldBypassDsubAuth,
+  isAdminAuthProviderConfigured,
+  loadAdminAuthConfig,
+  shouldBypassAdminAuth,
   shouldRedirectToLogin,
-  type DsubAuthConfig,
+  type AdminAuthConfig,
   type KratosWhoamiSession,
-} from "@/lib/auth/dsub-session";
+} from "@/lib/auth/admin-auth";
 
-function authRequiredResponse(request: NextRequest, config: DsubAuthConfig): NextResponse {
+function authRequiredResponse(request: NextRequest, config: AdminAuthConfig): NextResponse {
   if (shouldRedirectToLogin(request.nextUrl.pathname, request.headers.get("accept"))) {
     const publicRequestUrl = buildPublicRequestUrl({
       requestUrl: request.url,
@@ -47,13 +48,13 @@ function withUserHeaders(
   const requestHeaders = new Headers(request.headers);
 
   if (user) {
-    requestHeaders.set("x-inventory-user-id", user.id);
-    requestHeaders.set("x-inventory-user-role", user.role);
+    requestHeaders.set("x-juno-wholesale-ops-user-id", user.id);
+    requestHeaders.set("x-juno-wholesale-ops-user-role", user.role);
     if (user.email) {
-      requestHeaders.set("x-inventory-user-email", user.email);
+      requestHeaders.set("x-juno-wholesale-ops-user-email", user.email);
     }
     if (user.name) {
-      requestHeaders.set("x-inventory-user-name", user.name);
+      requestHeaders.set("x-juno-wholesale-ops-user-name", user.name);
     }
   }
 
@@ -65,11 +66,15 @@ function withUserHeaders(
 }
 
 export async function proxy(request: NextRequest): Promise<NextResponse> {
-  const config = loadDsubAuthConfig();
+  const config = loadAdminAuthConfig();
   const pathname = request.nextUrl.pathname;
 
-  if (!config.enabled || shouldBypassDsubAuth(pathname)) {
+  if (!config.enabled || shouldBypassAdminAuth(pathname)) {
     return NextResponse.next();
+  }
+
+  if (!isAdminAuthProviderConfigured(config)) {
+    return authUnavailableResponse();
   }
 
   const sessionCookieHeader = buildSessionCookieHeader(

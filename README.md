@@ -13,15 +13,15 @@ The MVP keeps the service compact:
 ## Runtime Shape
 
 ```text
-Gmail state303@dsub.io
-  -> query inventory@dsub.io Juno XLSX mail
+Configured Google Workspace mailbox
+  -> query configured Juno XLSX mail search
   -> save raw XLSX by sha256
   -> parse Juno catalog rows
   -> write catalog snapshot and raw item rows to Postgres
 ```
 
-Use a separate `juno_wholesale_ops` database when possible. If this must share the dsub
-Postgres server, keep it outside dsub's `public` application schema.
+Use a separate `juno_wholesale_ops` database when possible. If this must share
+another Postgres server, keep the tables outside unrelated application schemas.
 
 ## Environment
 
@@ -34,16 +34,12 @@ cp .env.example .env.local
 Set `GOOGLE_SERVICE_ACCOUNT_KEY_JSON` to the local service account JSON path or
 to the mounted secret path in production. Never commit the JSON key.
 
-Current delegated mailbox:
+The delegated mailbox and Gmail query are deployment settings, not source-code
+constants. Set them through env or the singleton `service_setting` row:
 
 ```text
-GOOGLE_WORKSPACE_DELEGATED_USER=state303@dsub.io
-```
-
-Default Gmail search:
-
-```text
-to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d
+GOOGLE_WORKSPACE_DELEGATED_USER=<workspace-user@example.com>
+GMAIL_INGEST_QUERY=has:attachment filename:xlsx newer_than:30d
 ```
 
 The worker then filters XLSX attachments by filename:
@@ -70,29 +66,30 @@ pnpm build-storybook
 `pnpm test:coverage` enforces 100% statements, branches, functions, and lines
 for the pure ingestion logic. Storybook runs on port `6008`.
 
-The UI loads Noto font families through the DSUB CDN font proxy at
-`https://cdn.dsub.io/fonts/css2?...`; app and Storybook use the same Mantine
-theme object.
+Set `NEXT_PUBLIC_FONT_STYLESHEET_URL` when you want the app to load a hosted
+font stylesheet. If unset, the UI uses the same Mantine theme with local font
+fallbacks.
 
-## DSUB Auth Gate
+## Admin Auth Gate
 
-Production protects the app with the existing DSUB Kratos session cookie.
+The app can protect non-health routes with an external Kratos-compatible
+`whoami` endpoint.
 
 ```text
-dsub_session / dsub_session_dev
-  -> https://auth.dsub.io/sessions/whoami
+configured session cookie
+  -> <kratos-public-url>/sessions/whoami
   -> active session
   -> identity.metadata_public.role=admin
 ```
 
-`DSUB_AUTH_ENABLED` defaults to `true` only under `NODE_ENV=production`, so
-local development stays open unless you explicitly enable it. Komodo production
-sets `DSUB_AUTH_ENABLED=true`.
+`AUTH_ADMIN_ENABLED` defaults to `false`; production must explicitly set it to
+`true` along with `AUTH_ADMIN_KRATOS_PUBLIC_URL`, `AUTH_ADMIN_LOGIN_URL`, and
+`AUTH_ADMIN_SESSION_COOKIE_NAMES`.
 
 Browser requests without a valid admin session redirect to:
 
 ```text
-https://www.dsub.io/auth/login?redirect=<current inventory URL>
+<login-url>?redirect=<current request URL>
 ```
 
 API requests receive JSON `401`, `403`, or `503`. `/api/health` stays public
@@ -130,6 +127,12 @@ The current ingest cursor is exposed read-only:
 
 ```http
 GET /api/ingest/status
+```
+
+The setup checklist is exposed read-only:
+
+```http
+GET /api/settings/status
 ```
 
 Add `--label` when you want the worker to create/apply `GMAIL_PROCESSED_LABEL`
@@ -268,10 +271,10 @@ Deployment files:
 - `deploy/prod/app.stack.yml`: Komodo stack skeleton
 - `deploy/prod/README.md`: proxy, secret, and smoke-check notes
 
-Target route:
+Target route example:
 
 ```text
-inventory.dsub.io -> dsub-app-vm.intra.io:3100
+inventory.example.com -> app-host.example.com:3100
 ```
 
 Do not commit production secrets. `DATABASE_URL` and Google service account

@@ -4,14 +4,14 @@ import { buildGmailIngestQueryPlan, removeGmailDateFilters } from "./gmail-query
 describe("buildGmailIngestQueryPlan", () => {
   it("uses the base query when there is no prior successful message cursor", () => {
     const plan = buildGmailIngestQueryPlan({
-      baseQuery: " to:inventory@dsub.io   has:attachment  filename:xlsx ",
+      baseQuery: " to:catalog@example.com   has:attachment  filename:xlsx ",
       lastSuccessfulMessageReceivedAt: null,
       lookbackMs: 604800000,
       now: new Date("2026-06-17T12:00:00.000Z"),
     });
 
     expect(plan).toEqual({
-      query: "to:inventory@dsub.io has:attachment filename:xlsx",
+      query: "to:catalog@example.com has:attachment filename:xlsx",
       windowFrom: null,
       windowTo: "2026-06-17T12:00:00.000Z",
       incremental: false,
@@ -37,14 +37,14 @@ describe("buildGmailIngestQueryPlan", () => {
 
   it("replaces existing date filters with an overlap window after the last cursor", () => {
     const plan = buildGmailIngestQueryPlan({
-      baseQuery: "to:inventory@dsub.io newer_than:30d has:attachment before:2026/06/30 filename:xlsx",
+      baseQuery: "to:catalog@example.com newer_than:30d has:attachment before:2026/06/30 filename:xlsx",
       lastSuccessfulMessageReceivedAt: "2026-06-17T08:30:00.000Z",
       lookbackMs: 48 * 60 * 60 * 1000,
       now: new Date("2026-06-18T00:00:00.000Z"),
     });
 
     expect(plan).toEqual({
-      query: "to:inventory@dsub.io has:attachment filename:xlsx after:2026/06/15",
+      query: "to:catalog@example.com has:attachment filename:xlsx after:2026/06/15",
       windowFrom: "2026-06-15T08:30:00.000Z",
       windowTo: "2026-06-18T00:00:00.000Z",
       incremental: true,

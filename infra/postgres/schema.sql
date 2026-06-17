@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 2119a665d36bdb6f49651ebc46510e58b4b86ef0428f18591e05c94697416c3a
+-- migration-manifest-sha256: 69dae42882cd9f2faa693d8ef87002923d2c953ec376d34c123fe28869016123
 --
 -- PostgreSQL database dump
 --
@@ -274,7 +274,17 @@ CREATE TABLE public.service_setting (
     gmail_ingest_lookback_ms integer,
     juno_live_auto_enqueue_on_interval boolean,
     juno_live_auto_enqueue_limit integer,
+    google_workspace_delegated_user text,
+    google_service_account_key_json text,
+    google_gmail_scopes text,
+    gmail_ingest_query text,
+    gmail_max_results integer,
+    gmail_processed_label text,
+    gmail_storage_dir text,
+    catalog_attachment_pattern text,
+    supplier_code text,
     CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
+    CONSTRAINT service_setting_gmail_max_results_check CHECK (((gmail_max_results > 0) AND (gmail_max_results <= 500))),
     CONSTRAINT service_setting_id_check CHECK (id),
     CONSTRAINT service_setting_juno_live_auto_enqueue_limit_check CHECK ((juno_live_auto_enqueue_limit > 0)),
     CONSTRAINT service_setting_juno_live_concurrency_check CHECK (((juno_live_concurrency >= 1) AND (juno_live_concurrency <= 10))),

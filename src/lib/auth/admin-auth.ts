@@ -3,7 +3,7 @@ export interface CookieLike {
   value: string;
 }
 
-export interface DsubAuthConfig {
+export interface AdminAuthConfig {
   enabled: boolean;
   kratosPublicUrl: string;
   loginUrl: string;
@@ -28,7 +28,7 @@ export interface KratosWhoamiSession {
   } | null;
 }
 
-export interface DsubSessionUser {
+export interface AdminSessionUser {
   id: string;
   email?: string;
   name?: string;
@@ -37,21 +37,21 @@ export interface DsubSessionUser {
   role: string;
 }
 
-const DEFAULT_KRATOS_PUBLIC_URL = "https://auth.dsub.io";
-const DEFAULT_LOGIN_URL = "https://www.dsub.io/auth/login";
+const DEFAULT_KRATOS_PUBLIC_URL = "";
+const DEFAULT_LOGIN_URL = "";
 const DEFAULT_LOGIN_REDIRECT_PARAM = "redirect";
 const DEFAULT_REQUIRED_ROLE = "admin";
-const DEFAULT_SESSION_COOKIE_NAMES = ["dsub_session", "dsub_session_dev"] as const;
+const DEFAULT_SESSION_COOKIE_NAMES = ["session"] as const;
 const PUBLIC_FILE_EXTENSION_RE =
   /\.(?:avif|css|gif|ico|jpg|jpeg|js|map|png|svg|txt|webmanifest|webp|woff|woff2)$/i;
 
-type DsubAuthEnv = Record<string, string | undefined>;
+type AdminAuthEnv = Record<string, string | undefined>;
 
-export function resolveAuthEnabled(value: string | undefined, nodeEnv: string | undefined): boolean {
+export function resolveAuthEnabled(value: string | undefined): boolean {
   const normalizedValue = value?.trim().toLowerCase();
 
   if (!normalizedValue) {
-    return nodeEnv === "production";
+    return false;
   }
 
   if (["1", "true", "yes", "on"].includes(normalizedValue)) {
@@ -62,7 +62,7 @@ export function resolveAuthEnabled(value: string | undefined, nodeEnv: string | 
     return false;
   }
 
-  return nodeEnv === "production";
+  return false;
 }
 
 export function normalizeBaseUrl(value: string | undefined, fallback: string): string {
@@ -80,18 +80,22 @@ export function parseSessionCookieNames(value: string | undefined): string[] {
   return names.length ? [...new Set(names)] : [...DEFAULT_SESSION_COOKIE_NAMES];
 }
 
-export function loadDsubAuthConfig(env: DsubAuthEnv = process.env): DsubAuthConfig {
+export function loadAdminAuthConfig(env: AdminAuthEnv = process.env): AdminAuthConfig {
   return {
-    enabled: resolveAuthEnabled(env.DSUB_AUTH_ENABLED, env.NODE_ENV),
-    kratosPublicUrl: normalizeBaseUrl(env.DSUB_KRATOS_PUBLIC_URL, DEFAULT_KRATOS_PUBLIC_URL),
-    loginUrl: env.DSUB_LOGIN_URL?.trim() || DEFAULT_LOGIN_URL,
-    loginRedirectParam: env.DSUB_LOGIN_REDIRECT_PARAM?.trim() || DEFAULT_LOGIN_REDIRECT_PARAM,
-    requiredRole: env.DSUB_REQUIRED_ROLE?.trim() || DEFAULT_REQUIRED_ROLE,
-    sessionCookieNames: parseSessionCookieNames(env.DSUB_SESSION_COOKIE_NAMES),
+    enabled: resolveAuthEnabled(env.AUTH_ADMIN_ENABLED),
+    kratosPublicUrl: normalizeBaseUrl(env.AUTH_ADMIN_KRATOS_PUBLIC_URL, DEFAULT_KRATOS_PUBLIC_URL),
+    loginUrl: env.AUTH_ADMIN_LOGIN_URL?.trim() || DEFAULT_LOGIN_URL,
+    loginRedirectParam: env.AUTH_ADMIN_LOGIN_REDIRECT_PARAM?.trim() || DEFAULT_LOGIN_REDIRECT_PARAM,
+    requiredRole: env.AUTH_ADMIN_REQUIRED_ROLE?.trim() || DEFAULT_REQUIRED_ROLE,
+    sessionCookieNames: parseSessionCookieNames(env.AUTH_ADMIN_SESSION_COOKIE_NAMES),
   };
 }
 
-export function shouldBypassDsubAuth(pathname: string): boolean {
+export function isAdminAuthProviderConfigured(config: AdminAuthConfig): boolean {
+  return Boolean(config.kratosPublicUrl && config.loginUrl && config.sessionCookieNames.length > 0);
+}
+
+export function shouldBypassAdminAuth(pathname: string): boolean {
   return (
     pathname === "/api/health" ||
     pathname === "/favicon.ico" ||
@@ -121,7 +125,7 @@ export function buildWhoamiUrl(kratosPublicUrl: string): string {
 export function extractAdminSessionUser(
   session: KratosWhoamiSession,
   requiredRole: string
-): DsubSessionUser | null {
+): AdminSessionUser | null {
   const identity = session.identity;
   const role = identity?.metadata_public?.role;
 

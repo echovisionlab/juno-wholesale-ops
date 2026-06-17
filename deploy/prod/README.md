@@ -3,22 +3,21 @@
 Target hostname:
 
 ```text
-inventory.dsub.io -> dsub-app-vm.intra.io:3100
+inventory.example.com -> app-host.example.com:3100
 ```
 
-This follows the dsub production pattern: the repository owns the canonical
-Compose and stack files, while Komodo stack environment owns runtime values and
-secrets.
+The repository owns the canonical Compose and stack files, while the deployment
+environment owns runtime values and secrets.
 
 ## Security Gate
 
 The app protects all non-health routes through `src/proxy.ts`.
 
-- reads `dsub_session` and `dsub_session_dev`
-- calls `https://auth.dsub.io/sessions/whoami`
+- reads configured session cookies
+- calls `<kratos-public-url>/sessions/whoami`
 - requires an active Kratos session
 - requires `identity.metadata_public.role=admin`
-- redirects browser requests to `https://www.dsub.io/auth/login?redirect=...`
+- redirects browser requests to `<login-url>?redirect=...`
 - returns JSON `401`, `403`, or `503` for API/non-browser requests
 
 `/api/health`, Next assets, and public static files bypass this gate.
@@ -39,14 +38,14 @@ JUNO_LOGIN_PASSWORD
 Use an immutable image tag for `JUNO_WHOLESALE_OPS_WEB_IMAGE`, for example:
 
 ```text
-harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<git-sha>
+registry.example.com/example/juno-wholesale-ops-web:sha-<git-sha>
 ```
 
 The external Caddy/proxy layer must add:
 
 ```caddyfile
-inventory.dsub.io {
-    reverse_proxy dsub-app-vm.intra.io:3100
+inventory.example.com {
+    reverse_proxy app-host.example.com:3100
 }
 ```
 
@@ -55,17 +54,17 @@ inventory.dsub.io {
 Unauthenticated browser request should redirect:
 
 ```bash
-curl -I https://inventory.dsub.io/
+curl -I https://inventory.example.com/
 ```
 
 Health should stay available for Komodo:
 
 ```bash
-curl -fsS https://inventory.dsub.io/api/health
+curl -fsS https://inventory.example.com/api/health
 ```
 
-An authenticated DSUB admin should render the dashboard in a browser. A
-non-admin DSUB user should receive `403`.
+An authenticated admin should render the dashboard in a browser. A non-admin
+user should receive `403`.
 
 Before deployment, validate that migrations and the generated master schema are
 in sync:
@@ -93,7 +92,6 @@ unique DB catalog date before widening any search window.
 
 ## Future Hardening
 
-This app performs its own Kratos `whoami` and role check. If inventory grows
-into a broader DSUB internal surface, move the hostname behind dsub Oathkeeper
-and check the admin role through Keto using the same generated-rule pattern as
-the main dsub manage APIs.
+This app performs its own Kratos-compatible `whoami` and role check. If the app
+becomes part of a broader internal platform, move the hostname behind the
+platform's gateway and centralize the admin-role check there.

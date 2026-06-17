@@ -19,6 +19,10 @@ import {
   recordGmailIngestFinished,
   recordGmailIngestStarted,
 } from "@/lib/ingest/repository";
+import {
+  assertRunnableGmailIngestSettings,
+  resolveGmailIngestSettings,
+} from "@/lib/ingest/settings";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 
@@ -26,22 +30,25 @@ async function main() {
   const writeMode = process.argv.includes("--write");
   const labelMode = process.argv.includes("--label");
   const env = loadRuntimeEnv();
+  const settingsRow =
+    writeMode && env.DATABASE_URL
+      ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
+      : null;
   const liveSettings =
     writeMode && env.DATABASE_URL
-      ? resolveJunoLiveSettings(
-          env,
-          await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow()),
-        )
+      ? resolveJunoLiveSettings(env, settingsRow)
       : resolveJunoLiveSettings(env, null);
+  const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
+  assertRunnableGmailIngestSettings(gmailSettings);
   if (writeMode && !env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required when using --write");
   }
 
   const ingestState = writeMode && env.DATABASE_URL ? await getGmailIngestState(env.DATABASE_URL) : null;
   const queryPlan = buildGmailIngestQueryPlan({
-    baseQuery: env.GMAIL_INGEST_QUERY,
+    baseQuery: gmailSettings.query,
     lastSuccessfulMessageReceivedAt: ingestState?.lastSuccessfulMessageReceivedAt,
-    lookbackMs: liveSettings.gmailIngestLookbackMs,
+    lookbackMs: gmailSettings.lookbackMs,
   });
 
   if (writeMode && env.DATABASE_URL) {
@@ -53,7 +60,7 @@ async function main() {
     });
   }
 
-  const attachmentPattern = new RegExp(env.CATALOG_ATTACHMENT_PATTERN, "i");
+  const attachmentPattern = new RegExp(gmailSettings.attachmentPattern, "i");
   let messages: Awaited<ReturnType<GmailClient["listMessages"]>> = [];
   let attachmentCount = 0;
   let parsedRows = 0;
@@ -67,15 +74,15 @@ async function main() {
   const results: Array<Record<string, unknown>> = [];
 
   try {
-    const key = await loadServiceAccountKey(env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON);
+    const key = await loadServiceAccountKey(gmailSettings.serviceAccountKeyJson);
     const accessToken = await getDelegatedAccessToken({
       key,
-      subject: env.GOOGLE_WORKSPACE_DELEGATED_USER,
-      scopes: parseScopes(env.GOOGLE_GMAIL_SCOPES),
+      subject: gmailSettings.delegatedUser,
+      scopes: parseScopes(gmailSettings.scopes),
     });
-    const gmail = new GmailClient(env.GOOGLE_WORKSPACE_DELEGATED_USER, accessToken);
-    messages = await gmail.listMessages(queryPlan.query, env.GMAIL_MAX_RESULTS);
-    const processedLabelId = labelMode ? await gmail.getOrCreateLabel(env.GMAIL_PROCESSED_LABEL) : null;
+    const gmail = new GmailClient(gmailSettings.delegatedUser, accessToken);
+    messages = await gmail.listMessages(queryPlan.query, gmailSettings.maxResults);
+    const processedLabelId = labelMode ? await gmail.getOrCreateLabel(gmailSettings.processedLabel) : null;
 
     for (const messageRef of messages) {
       const message = await gmail.getMessage(messageRef.id);
@@ -99,7 +106,7 @@ async function main() {
         }
 
         const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-        const storageUri = await saveAttachment(env.GMAIL_STORAGE_DIR, sha256, attachment.filename, bytes);
+        const storageUri = await saveAttachment(gmailSettings.storageDir, sha256, attachment.filename, bytes);
         const catalog = parseJunoCatalog(bytes, attachment.filename);
         attachmentCount += 1;
         parsedRows += catalog.rowCount;
@@ -108,8 +115,8 @@ async function main() {
         if (writeMode && env.DATABASE_URL) {
           dbResult = await recordCatalogAttachment({
             databaseUrl: env.DATABASE_URL,
-            supplierCode: env.SUPPLIER_CODE,
-            message: buildMessageRecord(env.GOOGLE_WORKSPACE_DELEGATED_USER, message),
+            supplierCode: gmailSettings.supplierCode,
+            message: buildMessageRecord(gmailSettings.delegatedUser, message),
             attachment: {
               filename: attachment.filename,
               mimeType: attachment.mimeType,
@@ -184,7 +191,7 @@ async function main() {
           queryWindowFrom: queryPlan.windowFrom,
           queryWindowTo: queryPlan.windowTo,
           incrementalQuery: queryPlan.incremental,
-          attachmentPattern: env.CATALOG_ATTACHMENT_PATTERN,
+          attachmentPattern: gmailSettings.attachmentPattern,
           messages: messages.length,
           attachments: attachmentCount,
           parsedRows,

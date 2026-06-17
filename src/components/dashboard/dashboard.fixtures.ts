@@ -3,15 +3,15 @@ import type { CatalogOpsDashboardProps } from "./CatalogOpsDashboard";
 
 export const dashboardFixture: CatalogOpsDashboardProps = {
   stats: [
-    { label: "Mailbox", value: "state303@dsub.io", detail: "delegated Gmail access", icon: MailSearch },
-    { label: "Source", value: "inventory@dsub.io", detail: "group-delivered catalog mail", icon: Archive },
+    { label: "Mailbox", value: "Configurable", detail: "delegated Gmail access", icon: MailSearch },
+    { label: "Source", value: "Gmail query", detail: "catalog mail search expression", icon: Archive },
     { label: "Deduping", value: "4 keys", detail: "message, RFC822, attachment, content", icon: CircleCheck },
     { label: "Storage", value: "raw XLSX", detail: "replayable attachment archive", icon: Database },
   ],
   pipeline: [
     {
       title: "Fetch",
-      body: "Query Gmail for Juno XLSX messages delivered through inventory@dsub.io.",
+      body: "Query Gmail for Juno XLSX messages using configured workspace settings.",
       status: "Ready",
     },
     {
@@ -37,4 +37,37 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
     "pnpm juno:live:enqueue",
     "pnpm juno:live:worker",
   ],
+  setupStatus: {
+    ready: false,
+    steps: [
+      {
+        id: "database",
+        label: "Database",
+        state: "complete",
+        detail: "required for persistence and worker state",
+        missing: [],
+      },
+      {
+        id: "gmail",
+        label: "Gmail ingest",
+        state: "missing",
+        detail: "required for catalog email ingestion",
+        missing: ["google_workspace_delegated_user", "google_service_account_key_json"],
+      },
+      {
+        id: "juno",
+        label: "Juno account",
+        state: "missing",
+        detail: "required for live stock lookup",
+        missing: ["juno_login_email", "juno_login_password"],
+      },
+      {
+        id: "auth",
+        label: "Admin auth",
+        state: "disabled",
+        detail: "external admin gate disabled",
+        missing: [],
+      },
+    ],
+  },
 };

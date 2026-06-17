@@ -25,13 +25,14 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(5);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(6);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
       expect.objectContaining({ version: 3, filename: "0003_service_setting.sql" }),
       expect.objectContaining({ version: 4, filename: "0004_catalog_content_hash_unique.sql" }),
       expect.objectContaining({ version: 5, filename: "0005_ingest_cursor_and_auto_stock.sql" }),
+      expect.objectContaining({ version: 6, filename: "0006_configurable_ingest_settings.sql" }),
     ]);
   });
 
@@ -40,7 +41,7 @@ describe("JunoLiveRepository", () => {
       `
         UPDATE service_setting
         SET juno_live_enqueue_on_ingest = true,
-            juno_login_email = 'inventory@dsub.io',
+            juno_login_email = 'catalog@example.com',
             juno_browser_profile_dir = '/profile',
             juno_browser_headless = true,
             juno_live_concurrency = 6,
@@ -50,14 +51,23 @@ describe("JunoLiveRepository", () => {
             juno_live_max_attempts = 2,
             juno_live_auto_enqueue_on_interval = true,
             juno_live_auto_enqueue_limit = 50,
-            gmail_ingest_lookback_ms = 86400000
+            gmail_ingest_lookback_ms = 86400000,
+            google_workspace_delegated_user = 'operator@example.com',
+            google_service_account_key_json = '/run/secrets/google.json',
+            google_gmail_scopes = 'scope-a scope-b',
+            gmail_ingest_query = 'has:attachment filename:xlsx',
+            gmail_max_results = 15,
+            gmail_processed_label = 'Processed',
+            gmail_storage_dir = '/storage',
+            catalog_attachment_pattern = 'New Releases',
+            supplier_code = 'juno-test'
         WHERE id = true
       `,
     );
 
     await expect(repository.getServiceSettingsRow()).resolves.toMatchObject({
       juno_live_enqueue_on_ingest: true,
-      juno_login_email: "inventory@dsub.io",
+      juno_login_email: "catalog@example.com",
       juno_login_password: null,
       juno_browser_profile_dir: "/profile",
       juno_browser_headless: true,
@@ -70,6 +80,15 @@ describe("JunoLiveRepository", () => {
       juno_live_auto_enqueue_on_interval: true,
       juno_live_auto_enqueue_limit: 50,
       gmail_ingest_lookback_ms: 86400000,
+      google_workspace_delegated_user: "operator@example.com",
+      google_service_account_key_json: "/run/secrets/google.json",
+      google_gmail_scopes: "scope-a scope-b",
+      gmail_ingest_query: "has:attachment filename:xlsx",
+      gmail_max_results: 15,
+      gmail_processed_label: "Processed",
+      gmail_storage_dir: "/storage",
+      catalog_attachment_pattern: "New Releases",
+      supplier_code: "juno-test",
     });
   });
 
@@ -202,7 +221,7 @@ describe("JunoLiveRepository", () => {
     const message = await database.pool.query<{ id: string }>(
       `
         INSERT INTO mail_message (gmail_user_email, gmail_message_id, payload)
-        VALUES ('state303@dsub.io', 'message-1', '{}')
+        VALUES ('operator@example.com', 'message-1', '{}')
         RETURNING id
       `,
     );

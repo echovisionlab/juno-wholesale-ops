@@ -3,18 +3,24 @@
 import { useEffect, useState } from "react";
 import { CatalogOpsDashboard } from "@/components/dashboard/CatalogOpsDashboard";
 import { dashboardFixture } from "@/components/dashboard/dashboard.fixtures";
-import type { LiveLookupDashboardSummary, LiveWorkerAction, LiveWorkerStatus } from "@/components/dashboard/types";
+import type {
+  AppSetupStatus,
+  LiveLookupDashboardSummary,
+  LiveWorkerAction,
+  LiveWorkerStatus,
+} from "@/components/dashboard/types";
 
 export default function Home() {
   const [liveSummary, setLiveSummary] = useState<LiveLookupDashboardSummary | null>(null);
   const [workerStatus, setWorkerStatus] = useState<LiveWorkerStatus | null>(null);
+  const [setupStatus, setSetupStatus] = useState<AppSetupStatus | null>(null);
   const [workerActionPending, setWorkerActionPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus);
+    void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus, setSetupStatus);
     const intervalId = window.setInterval(() => {
-      void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus);
+      void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus, setSetupStatus);
     }, 30000);
     return () => {
       cancelled = true;
@@ -42,6 +48,7 @@ export default function Home() {
       {...dashboardFixture}
       liveSummary={liveSummary}
       workerStatus={workerStatus}
+      setupStatus={setupStatus}
       workerActionPending={workerActionPending}
       onWorkerAction={handleWorkerAction}
     />
@@ -52,15 +59,18 @@ async function refreshLiveState(
   isCancelled: () => boolean,
   setLiveSummary: (summary: LiveLookupDashboardSummary | null) => void,
   setWorkerStatus: (status: LiveWorkerStatus | null) => void,
+  setSetupStatus: (status: AppSetupStatus | null) => void,
 ) {
-  const [summaryPayload, workerPayload] = await Promise.all([
+  const [summaryPayload, workerPayload, setupPayload] = await Promise.all([
     fetchJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status"),
     fetchJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker"),
+    fetchJson<{ setup?: AppSetupStatus }>("/api/settings/status"),
   ]);
 
   if (!isCancelled()) {
     setLiveSummary(summaryPayload?.summary ?? null);
     setWorkerStatus(workerPayload?.worker ?? null);
+    setSetupStatus(setupPayload?.setup ?? null);
   }
 }
 

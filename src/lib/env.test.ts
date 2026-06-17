@@ -1,20 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { loadRuntimeEnv, parseScopes } from "./env";
 
-const requiredEnv = {
-  GOOGLE_WORKSPACE_DELEGATED_USER: "state303@dsub.io",
+const configuredEnv = {
+  GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
 };
 
 describe("loadRuntimeEnv", () => {
   it("loads required values and applies defaults", () => {
-    const env = loadRuntimeEnv(requiredEnv);
+    const env = loadRuntimeEnv({});
 
     expect(env).toMatchObject({
-      GOOGLE_WORKSPACE_DELEGATED_USER: "state303@dsub.io",
-      GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
       GOOGLE_GMAIL_SCOPES: "https://www.googleapis.com/auth/gmail.modify",
-      GMAIL_INGEST_QUERY: "to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d",
+      GMAIL_INGEST_QUERY: "has:attachment filename:xlsx newer_than:30d",
       GMAIL_MAX_RESULTS: 25,
       GMAIL_INGEST_LOOKBACK_MS: 604800000,
       GMAIL_PROCESSED_LABEL: "Wholesale Processed",
@@ -32,6 +30,8 @@ describe("loadRuntimeEnv", () => {
       JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: true,
       JUNO_LIVE_AUTO_ENQUEUE_LIMIT: 1000,
     });
+    expect(env.GOOGLE_WORKSPACE_DELEGATED_USER).toBeUndefined();
+    expect(env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON).toBeUndefined();
     expect(env.JUNO_LOGIN_EMAIL).toBeUndefined();
     expect(env.JUNO_LOGIN_PASSWORD).toBeUndefined();
     expect(env.JUNO_LIVE_POLL_INTERVAL_MS).toBeUndefined();
@@ -39,13 +39,13 @@ describe("loadRuntimeEnv", () => {
 
   it("coerces numeric env values and accepts optional database URL", () => {
     const env = loadRuntimeEnv({
-      ...requiredEnv,
+      ...configuredEnv,
       DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
       GMAIL_MAX_RESULTS: "5",
       GMAIL_INGEST_LOOKBACK_MS: "86400000",
       SUPPLIER_CODE: "juno-wholesale",
       JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
-      JUNO_LOGIN_EMAIL: "inventory@dsub.io",
+      JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
       JUNO_BROWSER_HEADLESS: "false",
       JUNO_LIVE_CONCURRENCY: "4",
@@ -61,7 +61,7 @@ describe("loadRuntimeEnv", () => {
     expect(env.GMAIL_INGEST_LOOKBACK_MS).toBe(86400000);
     expect(env.SUPPLIER_CODE).toBe("juno-wholesale");
     expect(env.JUNO_LIVE_ENQUEUE_ON_INGEST).toBe(true);
-    expect(env.JUNO_LOGIN_EMAIL).toBe("inventory@dsub.io");
+    expect(env.JUNO_LOGIN_EMAIL).toBe("catalog@example.com");
     expect(env.JUNO_LOGIN_PASSWORD).toBe("secret");
     expect(env.JUNO_BROWSER_HEADLESS).toBe(false);
     expect(env.JUNO_LIVE_CONCURRENCY).toBe(4);
@@ -74,7 +74,7 @@ describe("loadRuntimeEnv", () => {
 
   it("treats blank Juno credentials as unset optional values", () => {
     const env = loadRuntimeEnv({
-      ...requiredEnv,
+      ...configuredEnv,
       JUNO_LOGIN_EMAIL: "",
       JUNO_LOGIN_PASSWORD: "",
     });
@@ -85,7 +85,7 @@ describe("loadRuntimeEnv", () => {
 
   it("accepts non-string boolean values from programmatic overrides", () => {
     const env = loadRuntimeEnv({
-      ...requiredEnv,
+      ...configuredEnv,
       JUNO_BROWSER_HEADLESS: true as unknown as string,
     });
 
@@ -95,7 +95,7 @@ describe("loadRuntimeEnv", () => {
   it("rejects invalid boolean strings", () => {
     expect(() =>
       loadRuntimeEnv({
-        ...requiredEnv,
+        ...configuredEnv,
         JUNO_BROWSER_HEADLESS: "yes",
       }),
     ).toThrow();
@@ -104,7 +104,7 @@ describe("loadRuntimeEnv", () => {
   it("rejects invalid delegated users", () => {
     expect(() =>
       loadRuntimeEnv({
-        ...requiredEnv,
+        ...configuredEnv,
         GOOGLE_WORKSPACE_DELEGATED_USER: "not-an-email",
       }),
     ).toThrow();

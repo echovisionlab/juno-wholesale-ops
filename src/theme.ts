@@ -1,11 +1,11 @@
 "use client";
 
 import { createTheme } from "@mantine/core";
-import { dsubMonoFontFamily, dsubSansFontFamily } from "@/lib/fonts";
+import { appMonoFontFamily, appSansFontFamily } from "@/lib/fonts";
 
 export const theme = createTheme({
-  fontFamily: dsubSansFontFamily,
-  fontFamilyMonospace: dsubMonoFontFamily,
+  fontFamily: appSansFontFamily,
+  fontFamilyMonospace: appMonoFontFamily,
   defaultRadius: "sm",
   primaryColor: "sage",
   colors: {
@@ -23,7 +23,7 @@ export const theme = createTheme({
     ],
   },
   headings: {
-    fontFamily: dsubSansFontFamily,
+    fontFamily: appSansFontFamily,
     fontWeight: "700",
   },
   components: {

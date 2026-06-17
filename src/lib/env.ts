@@ -15,14 +15,14 @@ const stringBoolean = z.preprocess((value) => {
 
 const serverEnvSchema = {
   DATABASE_URL: z.string().url().optional(),
-  GOOGLE_WORKSPACE_DELEGATED_USER: z.string().email(),
-  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: z.string().min(1),
+  GOOGLE_WORKSPACE_DELEGATED_USER: z.string().email().optional(),
+  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: z.string().min(1).optional(),
   GOOGLE_GMAIL_SCOPES: z
     .string()
     .default("https://www.googleapis.com/auth/gmail.modify"),
   GMAIL_INGEST_QUERY: z
     .string()
-    .default("to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d"),
+    .default("has:attachment filename:xlsx newer_than:30d"),
   GMAIL_MAX_RESULTS: z.coerce.number().int().positive().max(500).default(25),
   GMAIL_INGEST_LOOKBACK_MS: z.coerce.number().int().positive().default(604800000),
   GMAIL_PROCESSED_LABEL: z.string().min(1).default("Wholesale Processed"),

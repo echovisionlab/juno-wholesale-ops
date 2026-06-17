@@ -7,7 +7,7 @@ const meta = {
   component: StatCard,
   args: {
     label: "Mailbox",
-    value: "state303@dsub.io",
+    value: "Configured",
     detail: "delegated Gmail access",
     icon: MailSearch,
   },

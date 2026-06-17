@@ -8,7 +8,7 @@ import {
 } from "./settings";
 
 const requiredEnv = {
-  GOOGLE_WORKSPACE_DELEGATED_USER: "state303@dsub.io",
+  GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
 };
 
@@ -16,7 +16,7 @@ describe("resolveJunoLiveSettings", () => {
   it("uses env values when the service settings row is empty", () => {
     const env = loadRuntimeEnv({
       ...requiredEnv,
-      JUNO_LOGIN_EMAIL: "inventory@dsub.io",
+      JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
       JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
@@ -26,7 +26,7 @@ describe("resolveJunoLiveSettings", () => {
 
     expect(settings).toMatchObject({
       enqueueOnIngest: true,
-      loginEmail: "inventory@dsub.io",
+      loginEmail: "catalog@example.com",
       loginPassword: "secret",
       browserProfileDir: ".data/juno-browser-profile",
       browserHeadless: true,
@@ -48,7 +48,7 @@ describe("resolveJunoLiveSettings", () => {
   it("lets database settings override env values", () => {
     const env = loadRuntimeEnv({
       ...requiredEnv,
-      JUNO_LOGIN_EMAIL: "env@dsub.io",
+      JUNO_LOGIN_EMAIL: "env@example.com",
       JUNO_LOGIN_PASSWORD: "env-secret",
       JUNO_LIVE_CONCURRENCY: "3",
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
@@ -60,7 +60,7 @@ describe("resolveJunoLiveSettings", () => {
     const settings = resolveJunoLiveSettings(env, {
       ...emptyRow(),
       juno_live_enqueue_on_ingest: true,
-      juno_login_email: "db@dsub.io",
+      juno_login_email: "db@example.com",
       juno_login_password: "db-secret",
       juno_browser_profile_dir: "/profile",
       juno_browser_headless: false,
@@ -77,7 +77,7 @@ describe("resolveJunoLiveSettings", () => {
 
     expect(settings).toMatchObject({
       enqueueOnIngest: true,
-      loginEmail: "db@dsub.io",
+      loginEmail: "db@example.com",
       loginPassword: "db-secret",
       browserProfileDir: "/profile",
       browserHeadless: false,
@@ -133,5 +133,14 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     juno_live_auto_enqueue_on_interval: null,
     juno_live_auto_enqueue_limit: null,
     gmail_ingest_lookback_ms: null,
+    google_workspace_delegated_user: null,
+    google_service_account_key_json: null,
+    google_gmail_scopes: null,
+    gmail_ingest_query: null,
+    gmail_max_results: null,
+    gmail_processed_label: null,
+    gmail_storage_dir: null,
+    catalog_attachment_pattern: null,
+    supplier_code: null,
   };
 }

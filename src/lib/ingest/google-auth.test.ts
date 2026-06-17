@@ -46,7 +46,7 @@ describe("getDelegatedAccessToken", () => {
           private_key: privateKey,
           token_uri: "https://oauth.example/token",
         },
-        subject: "state303@dsub.io",
+        subject: "operator@example.com",
         scopes: ["scope-a", "scope-b"],
       }),
     ).resolves.toBe("access-token");
@@ -78,7 +78,7 @@ describe("getDelegatedAccessToken", () => {
           client_email: "svc@example.iam.gserviceaccount.com",
           private_key: privateKey,
         },
-        subject: "state303@dsub.io",
+        subject: "operator@example.com",
         scopes: ["scope-a"],
       }),
     ).rejects.toThrow("Google OAuth token request failed: unauthorized_client delegation missing");
@@ -94,7 +94,7 @@ describe("getDelegatedAccessToken", () => {
           client_email: "svc@example.iam.gserviceaccount.com",
           private_key: privateKey,
         },
-        subject: "state303@dsub.io",
+        subject: "operator@example.com",
         scopes: ["scope-a"],
       }),
     ).rejects.toThrow("Google OAuth token request failed: 200");
