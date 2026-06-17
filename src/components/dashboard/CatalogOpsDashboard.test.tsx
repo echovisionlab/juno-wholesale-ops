@@ -49,6 +49,8 @@ describe("CatalogOpsDashboard", () => {
 
     expect(pageText()).toContain("Setup status unavailable");
     expect(pageText()).toContain("Gmail ingest status unavailable");
+    expect(pageText()).toContain("Today signals unavailable");
+    expect(pageText()).toContain("Watch rules unavailable");
     expect(pageText()).toContain("Queued / Running");
     expect(pageText()).toContain("N/A");
     expect(pageText()).toContain("worker status unavailable");
@@ -65,6 +67,102 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("75fba5fd45...5d2a7a");
     expect(pageText()).toContain("Configuration action required");
     expect(pageText()).toContain("Migration ledger");
+    expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).toContain("Low observed stock");
+    expect(pageText()).toContain("Blue Note");
+    expect(pageText()).toContain("Exclude keyword");
+  });
+
+  it("renders empty insights states and dispatches watch rule actions", () => {
+    const onCreateWatchRule = vi.fn();
+    const onToggleWatchRule = vi.fn();
+    const onDeleteWatchRule = vi.fn();
+
+    renderDashboard({
+      ...dashboardFixture,
+      todaySignals: [],
+      watchRules: [],
+      onCreateWatchRule,
+      onToggleWatchRule,
+      onDeleteWatchRule,
+    });
+
+    expect(pageText()).toContain("No observed signals today");
+    expect(pageText()).toContain("No watch rules configured");
+    setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Impulse");
+    clickButton("Add rule");
+    expect(onCreateWatchRule).toHaveBeenCalledWith({ type: "artist", pattern: "Impulse", weight: null });
+    setSelectValue("select", "exclude_keyword");
+    setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Damaged sleeve");
+    setInputValue('input[placeholder="-10"]', "-12");
+    clickButton("Add rule");
+    expect(onCreateWatchRule).toHaveBeenCalledWith({
+      type: "exclude_keyword",
+      pattern: "Damaged sleeve",
+      weight: -12,
+    });
+
+    renderDashboard({
+      ...dashboardFixture,
+      onCreateWatchRule,
+      onToggleWatchRule,
+      onDeleteWatchRule,
+    });
+    clickByAriaLabel("Toggle Blue Note");
+    clickByAriaLabel("Delete Blue Note");
+    expect(onToggleWatchRule).toHaveBeenCalledWith(expect.objectContaining({ id: "watch-rule-1" }));
+    expect(onDeleteWatchRule).toHaveBeenCalledWith(expect.objectContaining({ id: "watch-rule-1" }));
+
+    renderDashboard({
+      ...dashboardFixture,
+      todaySignals: [
+        {
+          ...dashboardFixture.todaySignals![0],
+          signalId: "signal-new-arrival",
+          type: "new_arrival",
+          severity: "info",
+          title: "New catalog arrival: 1148569-01",
+          detail: "First observed in this XLSX catalog snapshot.",
+        },
+        {
+          ...dashboardFixture.todaySignals![0],
+          signalId: "signal-exclude",
+          type: "exclude_match",
+          severity: "critical",
+          item: {
+            ...dashboardFixture.todaySignals![0].item,
+            artist: null,
+            title: null,
+            label: null,
+            genre: null,
+            stock: null,
+            junoId: null,
+          },
+          reasons: [],
+        },
+      ],
+      watchRules: [
+        {
+          ...dashboardFixture.watchRules![0],
+          type: "artist",
+          pattern: "Lara Voss",
+          patternNorm: "lara voss",
+        },
+        {
+          ...dashboardFixture.watchRules![0],
+          type: "keyword",
+          pattern: "Warehouse Find",
+          patternNorm: "warehouse find",
+          enabled: false,
+        },
+      ],
+      watchRuleActionPending: true,
+    });
+    expect(pageText()).toContain("not reported");
+    expect(pageText()).toContain("New arrival");
+    expect(pageText()).toContain("Exclude match");
+    expect(pageText()).toContain("Warehouse Find");
+    expect(pageText()).toContain("Disabled");
   });
 
   it("renders running, failed, and not-run ingest variants", () => {
@@ -324,6 +422,41 @@ function clickButton(name: string): void {
   }
   act(() => {
     button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function clickByAriaLabel(label: string): void {
+  const element = document.querySelector(`[aria-label="${label}"]`);
+  if (!element) {
+    throw new Error(`Missing control ${label}`);
+  }
+  act(() => {
+    element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function setInputValue(selector: string, value: string): void {
+  const input = document.querySelector(selector);
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Missing input ${selector}`);
+  }
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+    setter?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function setSelectValue(selector: string, value: string): void {
+  const select = document.querySelector(selector);
+  if (!(select instanceof HTMLSelectElement)) {
+    throw new Error(`Missing select ${selector}`);
+  }
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")?.set;
+    setter?.call(select, value);
+    select.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 

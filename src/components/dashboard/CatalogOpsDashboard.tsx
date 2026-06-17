@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import {
+  ActionIcon,
   Alert,
   Badge,
   Box,
@@ -11,10 +13,16 @@ import {
   Divider,
   Grid,
   Group,
+  NativeSelect,
+  NumberInput,
   SimpleGrid,
   Stack,
+  Switch,
+  Table,
   Text,
+  TextInput,
   Title,
+  Tooltip,
 } from "@mantine/core";
 import {
   AlertTriangle,
@@ -26,8 +34,12 @@ import {
   PackageCheck,
   PackageSearch,
   Play,
+  Plus,
   RotateCw,
+  Signal,
+  SlidersHorizontal,
   Square,
+  Trash2,
 } from "lucide-react";
 import { CommandPanel } from "./CommandPanel";
 import { PipelineCard } from "./PipelineCard";
@@ -44,6 +56,10 @@ import type {
   SetupSetting,
   SetupStep,
   StatCardData,
+  TodayInsight,
+  WatchRule,
+  WatchRuleDraft,
+  WatchRuleType,
 } from "./types";
 
 export type CatalogOpsDashboardProps = {
@@ -54,8 +70,14 @@ export type CatalogOpsDashboardProps = {
   liveSummary?: LiveLookupDashboardSummary | null;
   workerStatus?: LiveWorkerStatus | null;
   setupStatus?: AppSetupStatus | null;
+  todaySignals?: TodayInsight[] | null;
+  watchRules?: WatchRule[] | null;
   workerActionPending?: boolean;
+  watchRuleActionPending?: boolean;
   onWorkerAction?: (action: LiveWorkerAction) => void;
+  onCreateWatchRule?: (draft: WatchRuleDraft) => void;
+  onToggleWatchRule?: (rule: WatchRule) => void;
+  onDeleteWatchRule?: (rule: WatchRule) => void;
 };
 
 export function CatalogOpsDashboard({
@@ -66,8 +88,14 @@ export function CatalogOpsDashboard({
   liveSummary,
   workerStatus,
   setupStatus,
+  todaySignals,
+  watchRules,
   workerActionPending = false,
+  watchRuleActionPending = false,
   onWorkerAction,
+  onCreateWatchRule,
+  onToggleWatchRule,
+  onDeleteWatchRule,
 }: CatalogOpsDashboardProps) {
   return (
     <Box component="main" bg="gray.0" mih="100vh">
@@ -127,6 +155,22 @@ export function CatalogOpsDashboard({
             <GmailIngestStatusPanel state={ingestState} />
           </Grid.Col>
 
+          <Grid.Col span={{ base: 12, lg: 7 }}>
+            <SectionHeader icon={Signal}>Today Signals</SectionHeader>
+            <TodaySignalsPanel signals={todaySignals} />
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 5 }}>
+            <SectionHeader icon={SlidersHorizontal}>Watch Rules</SectionHeader>
+            <WatchRulesPanel
+              rules={watchRules}
+              pending={watchRuleActionPending}
+              onCreate={onCreateWatchRule}
+              onToggle={onToggleWatchRule}
+              onDelete={onDeleteWatchRule}
+            />
+          </Grid.Col>
+
           <Grid.Col span={12}>
             <SectionHeader icon={PackageSearch}>Live Stock Watch</SectionHeader>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
@@ -167,6 +211,214 @@ export function CatalogOpsDashboard({
         </Grid>
       </Container>
     </Box>
+  );
+}
+
+function TodaySignalsPanel({ signals }: { signals?: TodayInsight[] | null }) {
+  if (!signals) {
+    return (
+      <Card>
+        <Text fw={700}>Today signals unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable observed signal data.
+        </Text>
+      </Card>
+    );
+  }
+
+  if (signals.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>No observed signals today</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          New arrivals, watch hits, low observed stock, and exclude matches will appear here.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Stack gap="sm">
+        {signals.map((signal) => (
+          <Box key={signal.signalId}>
+            <Group justify="space-between" align="flex-start" gap="sm">
+              <Stack gap={4}>
+                <Group gap={6}>
+                  <Badge color={signalSeverityColor(signal.severity)} variant="light">
+                    {formatSignalType(signal.type)}
+                  </Badge>
+                  <Badge color="gray" variant="outline">
+                    score {signal.score}
+                  </Badge>
+                </Group>
+                <Text fw={700}>{signal.title}</Text>
+                <Text size="sm" c="dimmed">
+                  {signal.detail}
+                </Text>
+              </Stack>
+              <Text size="sm" c="dimmed" ta="right">
+                {formatOptionalDate(signal.createdAt)}
+              </Text>
+            </Group>
+
+            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="sm">
+              <SignalFact label="Artist / Title" value={formatArtistTitle(signal)} />
+              <SignalFact label="Label / Genre" value={formatLabelGenre(signal)} />
+              <SignalFact label="Catalog stock" value={signal.item.stock === null ? "not reported" : String(signal.item.stock)} />
+              <SignalFact label="Juno ID" value={signal.item.junoId ?? "N/A"} />
+            </SimpleGrid>
+
+            {signal.reasons.length > 0 ? (
+              <Text size="sm" c="dimmed" mt="sm">
+                {signal.reasons.join(" ")}
+              </Text>
+            ) : null}
+            <Divider mt="sm" />
+          </Box>
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+function WatchRulesPanel({
+  rules,
+  pending,
+  onCreate,
+  onToggle,
+  onDelete,
+}: {
+  rules?: WatchRule[] | null;
+  pending: boolean;
+  onCreate?: (draft: WatchRuleDraft) => void;
+  onToggle?: (rule: WatchRule) => void;
+  onDelete?: (rule: WatchRule) => void;
+}) {
+  const [type, setType] = useState<WatchRuleType>("artist");
+  const [pattern, setPattern] = useState("");
+  const [weight, setWeight] = useState<number | string>("");
+
+  if (!rules) {
+    return (
+      <Card>
+        <Text fw={700}>Watch rules unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable watch rule data.
+        </Text>
+      </Card>
+    );
+  }
+
+  const canSubmit = Boolean(pattern.trim()) && Boolean(onCreate) && !pending;
+
+  function submitRule() {
+    onCreate?.({
+      type,
+      pattern: pattern.trim(),
+      weight: normalizeDraftWeight(weight),
+    });
+    setPattern("");
+    setWeight("");
+  }
+
+  return (
+    <Card>
+      <Stack gap="md">
+        <SimpleGrid cols={{ base: 1, sm: 3 }} spacing="xs">
+          <NativeSelect
+            label="Rule type"
+            value={type}
+            data={watchRuleTypeOptions}
+            onChange={(event) => setType(event.currentTarget.value as WatchRuleType)}
+          />
+          <TextInput
+            label="Pattern"
+            placeholder="Artist, label, genre, or keyword"
+            value={pattern}
+            onChange={(event) => setPattern(event.currentTarget.value)}
+          />
+          <NumberInput
+            label="Weight"
+            placeholder={type === "exclude_keyword" ? "-10" : "10"}
+            min={-100}
+            max={100}
+            step={1}
+            value={weight}
+            onChange={setWeight}
+          />
+        </SimpleGrid>
+        <Group justify="flex-end">
+          <Button
+            leftSection={<Plus size={16} aria-hidden="true" />}
+            disabled={!canSubmit}
+            loading={pending}
+            onClick={submitRule}
+          >
+            Add rule
+          </Button>
+        </Group>
+
+        {rules.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            No watch rules configured. Add artist, label, genre, keyword, or exclude keyword rules to surface observed signals.
+          </Text>
+        ) : (
+          <Table.ScrollContainer minWidth={520}>
+            <Table verticalSpacing="sm">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Rule</Table.Th>
+                  <Table.Th>Weight</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th />
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {rules.map((rule) => (
+                  <Table.Tr key={rule.id}>
+                    <Table.Td>
+                      <Stack gap={2}>
+                        <Badge color={rule.type === "exclude_keyword" ? "red" : "blue"} variant="light">
+                          {formatWatchRuleType(rule.type)}
+                        </Badge>
+                        <Text fw={700}>{rule.pattern}</Text>
+                        <Text size="xs" c="dimmed">
+                          normalized {rule.patternNorm}
+                        </Text>
+                      </Stack>
+                    </Table.Td>
+                    <Table.Td>{rule.weight}</Table.Td>
+                    <Table.Td>
+                      <Switch
+                        aria-label={`Toggle ${rule.pattern}`}
+                        checked={rule.enabled}
+                        disabled={pending || !onToggle}
+                        label={rule.enabled ? "Enabled" : "Disabled"}
+                        onChange={() => onToggle?.(rule)}
+                      />
+                    </Table.Td>
+                    <Table.Td>
+                      <Tooltip label="Delete watch rule">
+                        <ActionIcon
+                          aria-label={`Delete ${rule.pattern}`}
+                          color="red"
+                          variant="light"
+                          disabled={pending || !onDelete}
+                          onClick={() => onDelete?.(rule)}
+                        >
+                          <Trash2 size={16} aria-hidden="true" />
+                        </ActionIcon>
+                      </Tooltip>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+      </Stack>
+    </Card>
   );
 }
 
@@ -265,6 +517,76 @@ function IngestFact({ label, value, detail }: { label: string; value: string; de
       </Text>
     </Box>
   );
+}
+
+function SignalFact({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+        {label}
+      </Text>
+      <Text size="sm">{value}</Text>
+    </Box>
+  );
+}
+
+function signalSeverityColor(severity: TodayInsight["severity"]): string {
+  if (severity === "critical") {
+    return "red";
+  }
+  if (severity === "warning") {
+    return "yellow";
+  }
+  if (severity === "watch") {
+    return "blue";
+  }
+  return "gray";
+}
+
+function formatSignalType(type: TodayInsight["type"]): string {
+  if (type === "new_arrival") {
+    return "New arrival";
+  }
+  if (type === "watch_hit") {
+    return "Watch hit";
+  }
+  if (type === "low_catalog_stock") {
+    return "Low observed stock";
+  }
+  return "Exclude match";
+}
+
+function formatArtistTitle(signal: TodayInsight): string {
+  return [signal.item.artist, signal.item.title].filter(Boolean).join(" - ") || "N/A";
+}
+
+function formatLabelGenre(signal: TodayInsight): string {
+  return [signal.item.label, signal.item.genre].filter(Boolean).join(" / ") || "N/A";
+}
+
+const watchRuleTypeOptions: Array<{ value: WatchRuleType; label: string }> = [
+  { value: "artist", label: "Artist" },
+  { value: "label", label: "Label" },
+  { value: "genre", label: "Genre" },
+  { value: "keyword", label: "Keyword" },
+  { value: "exclude_keyword", label: "Exclude keyword" },
+];
+
+const watchRuleTypeLabels: Record<WatchRuleType, string> = {
+  artist: "Artist",
+  label: "Label",
+  genre: "Genre",
+  keyword: "Keyword",
+  exclude_keyword: "Exclude keyword",
+};
+
+function normalizeDraftWeight(value: number | string): number | null {
+  const parsed = value === "" ? Number.NaN : Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+function formatWatchRuleType(type: WatchRuleType): string {
+  return watchRuleTypeLabels[type];
 }
 
 function ingestStatusPresentation(status: GmailIngestState["lastQueryStatus"]): { label: string; color: string } {

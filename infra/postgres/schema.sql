@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 0d6c6c0676ac3382cf94d8a7d770b5be7d509267e4043f3247c010a5810597ad
+-- migration-manifest-sha256: 15c409d0f9e305b384a5bd0cfc754a69bd504f8e34da77883bb7177a93850a2d
 --
 -- PostgreSQL database dump
 --
@@ -99,6 +99,25 @@ CREATE TABLE public.auth_verification (
 
 
 --
+-- Name: catalog_item_identity; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_item_identity (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    supplier_id uuid NOT NULL,
+    identity_key text NOT NULL,
+    juno_id text,
+    barcode text,
+    artist_norm text,
+    title_norm text,
+    label_norm text,
+    cat_no_norm text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
 -- Name: catalog_item_raw; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -121,7 +140,8 @@ CREATE TABLE public.catalog_item_raw (
     release_date date,
     max_order integer,
     raw jsonb NOT NULL,
-    created_at timestamp with time zone DEFAULT now() NOT NULL
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    identity_id uuid
 );
 
 
@@ -394,6 +414,26 @@ CREATE TABLE public.service_setting (
 
 
 --
+-- Name: signal_event; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.signal_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    identity_id uuid NOT NULL,
+    catalog_item_raw_id uuid,
+    type text NOT NULL,
+    severity text DEFAULT 'info'::text NOT NULL,
+    score integer DEFAULT 0 NOT NULL,
+    title text NOT NULL,
+    detail text NOT NULL,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT signal_event_severity_check CHECK ((severity = ANY (ARRAY['info'::text, 'watch'::text, 'warning'::text, 'critical'::text]))),
+    CONSTRAINT signal_event_type_check CHECK ((type = ANY (ARRAY['new_arrival'::text, 'watch_hit'::text, 'low_catalog_stock'::text, 'exclude_match'::text])))
+);
+
+
+--
 -- Name: supplier; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -402,6 +442,41 @@ CREATE TABLE public.supplier (
     code text NOT NULL,
     name text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: watch_match; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.watch_match (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    watch_rule_id uuid NOT NULL,
+    identity_id uuid NOT NULL,
+    catalog_item_raw_id uuid,
+    matched_field text NOT NULL,
+    score integer NOT NULL,
+    reason text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: watch_rule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.watch_rule (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    type text NOT NULL,
+    pattern text NOT NULL,
+    pattern_norm text NOT NULL,
+    weight integer DEFAULT 10 NOT NULL,
+    enabled boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT watch_rule_pattern_norm_check CHECK ((length(pattern_norm) > 0)),
+    CONSTRAINT watch_rule_type_check CHECK ((type = ANY (ARRAY['artist'::text, 'label'::text, 'genre'::text, 'keyword'::text, 'exclude_keyword'::text]))),
+    CONSTRAINT watch_rule_weight_check CHECK (((weight >= '-100'::integer) AND (weight <= 100)))
 );
 
 
@@ -459,6 +534,22 @@ ALTER TABLE ONLY public.auth_user
 
 ALTER TABLE ONLY public.auth_verification
     ADD CONSTRAINT auth_verification_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_item_identity catalog_item_identity_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_identity
+    ADD CONSTRAINT catalog_item_identity_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_item_identity catalog_item_identity_supplier_id_identity_key_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_identity
+    ADD CONSTRAINT catalog_item_identity_supplier_id_identity_key_key UNIQUE (supplier_id, identity_key);
 
 
 --
@@ -606,6 +697,14 @@ ALTER TABLE ONLY public.service_setting
 
 
 --
+-- Name: signal_event signal_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_event
+    ADD CONSTRAINT signal_event_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: supplier supplier_code_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -619,6 +718,30 @@ ALTER TABLE ONLY public.supplier
 
 ALTER TABLE ONLY public.supplier
     ADD CONSTRAINT supplier_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: watch_match watch_match_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_match
+    ADD CONSTRAINT watch_match_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: watch_rule watch_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_rule
+    ADD CONSTRAINT watch_rule_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: watch_rule watch_rule_type_pattern_norm_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_rule
+    ADD CONSTRAINT watch_rule_type_pattern_norm_key UNIQUE (type, pattern_norm);
 
 
 --
@@ -643,6 +766,20 @@ CREATE INDEX idx_auth_verification_identifier ON public.auth_verification USING 
 
 
 --
+-- Name: idx_catalog_item_identity_barcode; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_identity_barcode ON public.catalog_item_identity USING btree (barcode) WHERE (barcode IS NOT NULL);
+
+
+--
+-- Name: idx_catalog_item_identity_juno_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_identity_juno_id ON public.catalog_item_identity USING btree (juno_id) WHERE (juno_id IS NOT NULL);
+
+
+--
 -- Name: idx_catalog_item_raw_barcode; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -654,6 +791,13 @@ CREATE INDEX idx_catalog_item_raw_barcode ON public.catalog_item_raw USING btree
 --
 
 CREATE INDEX idx_catalog_item_raw_genre ON public.catalog_item_raw USING btree (genre) WHERE (genre IS NOT NULL);
+
+
+--
+-- Name: idx_catalog_item_raw_identity_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_raw_identity_id ON public.catalog_item_raw USING btree (identity_id) WHERE (identity_id IS NOT NULL);
 
 
 --
@@ -783,6 +927,48 @@ CREATE INDEX idx_service_log_event_run ON public.service_log_event USING btree (
 
 
 --
+-- Name: idx_signal_event_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_event_created_at ON public.signal_event USING btree (created_at DESC);
+
+
+--
+-- Name: idx_signal_event_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_signal_event_identity ON public.signal_event USING btree (identity_id, created_at DESC);
+
+
+--
+-- Name: idx_signal_event_type_item; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_event_type_item ON public.signal_event USING btree (type, catalog_item_raw_id) WHERE (catalog_item_raw_id IS NOT NULL);
+
+
+--
+-- Name: idx_watch_match_identity; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_watch_match_identity ON public.watch_match USING btree (identity_id, created_at DESC);
+
+
+--
+-- Name: idx_watch_match_rule_item_field; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_watch_match_rule_item_field ON public.watch_match USING btree (watch_rule_id, catalog_item_raw_id, matched_field) WHERE (catalog_item_raw_id IS NOT NULL);
+
+
+--
+-- Name: idx_watch_rule_enabled_type; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_watch_rule_enabled_type ON public.watch_rule USING btree (enabled, type, pattern_norm);
+
+
+--
 -- Name: auth_account auth_account_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -796,6 +982,22 @@ ALTER TABLE ONLY public.auth_account
 
 ALTER TABLE ONLY public.auth_session
     ADD CONSTRAINT auth_session_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.auth_user(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_item_identity catalog_item_identity_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_identity
+    ADD CONSTRAINT catalog_item_identity_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_item_raw catalog_item_raw_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_raw
+    ADD CONSTRAINT catalog_item_raw_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.catalog_item_identity(id) ON DELETE SET NULL;
 
 
 --
@@ -868,6 +1070,46 @@ ALTER TABLE ONLY public.juno_live_observation
 
 ALTER TABLE ONLY public.mail_attachment
     ADD CONSTRAINT mail_attachment_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.mail_message(id) ON DELETE CASCADE;
+
+
+--
+-- Name: signal_event signal_event_catalog_item_raw_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_event
+    ADD CONSTRAINT signal_event_catalog_item_raw_id_fkey FOREIGN KEY (catalog_item_raw_id) REFERENCES public.catalog_item_raw(id) ON DELETE CASCADE;
+
+
+--
+-- Name: signal_event signal_event_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.signal_event
+    ADD CONSTRAINT signal_event_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.catalog_item_identity(id) ON DELETE CASCADE;
+
+
+--
+-- Name: watch_match watch_match_catalog_item_raw_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_match
+    ADD CONSTRAINT watch_match_catalog_item_raw_id_fkey FOREIGN KEY (catalog_item_raw_id) REFERENCES public.catalog_item_raw(id) ON DELETE CASCADE;
+
+
+--
+-- Name: watch_match watch_match_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_match
+    ADD CONSTRAINT watch_match_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.catalog_item_identity(id) ON DELETE CASCADE;
+
+
+--
+-- Name: watch_match watch_match_watch_rule_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.watch_match
+    ADD CONSTRAINT watch_match_watch_rule_id_fkey FOREIGN KEY (watch_rule_id) REFERENCES public.watch_rule(id) ON DELETE CASCADE;
 
 
 --

@@ -23,6 +23,7 @@ import {
   assertRunnableGmailIngestSettings,
   resolveGmailIngestSettings,
 } from "@/lib/ingest/settings";
+import { processInsightsForSnapshot } from "@/lib/insights/repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 
@@ -70,6 +71,9 @@ async function main() {
   let duplicateSnapshots = 0;
   let duplicateContent = 0;
   let liveLookupJobs = 0;
+  let insightIdentityUpserts = 0;
+  let insightWatchMatches = 0;
+  let insightSignals = 0;
   let lastSuccessfulMessageReceivedAt: string | null = ingestState?.lastSuccessfulMessageReceivedAt ?? null;
   let lastIngestedSnapshotId: string | null = null;
   let lastIngestedCatalogDate: string | null = null;
@@ -139,6 +143,18 @@ async function main() {
             lastIngestedSnapshotId = dbResult.snapshotId;
             lastIngestedCatalogDate = catalog.catalogDate;
             lastIngestedContentHash = catalog.contentHash;
+
+            const insightsResult = await processInsightsForSnapshot({
+              databaseUrl: env.DATABASE_URL,
+              snapshotId: dbResult.snapshotId,
+            });
+            insightIdentityUpserts += insightsResult.identityUpserts;
+            insightWatchMatches += insightsResult.watchMatches;
+            insightSignals += insightsResult.signals;
+            dbResult = {
+              ...dbResult,
+              insights: insightsResult,
+            };
           }
           if (liveSettings.enqueueOnIngest && !dbResult.duplicateContent && typeof dbResult.snapshotId === "string") {
             const enqueueResult = await enqueueLiveLookupJobs({
@@ -201,6 +217,11 @@ async function main() {
           duplicateSnapshots,
           duplicateContent,
           liveLookupJobs,
+          insights: {
+            identityUpserts: insightIdentityUpserts,
+            watchMatches: insightWatchMatches,
+            signals: insightSignals,
+          },
           lastSuccessfulMessageReceivedAt,
           lastIngestedSnapshotId,
           lastIngestedCatalogDate,

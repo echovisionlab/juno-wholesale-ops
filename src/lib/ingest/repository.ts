@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from "pg";
+import { upsertCatalogItemIdentitiesForSnapshotClient } from "@/lib/insights/repository";
 import type { GmailMessage } from "./gmail";
 import type { ParsedCatalog } from "./juno-parser";
 
@@ -48,6 +49,7 @@ export async function recordCatalogAttachment(options: {
 }): Promise<{
   snapshotId: string;
   insertedItems: number;
+  identityUpserts: number;
   duplicateSnapshot: boolean;
   duplicateContent: boolean;
 }> {
@@ -152,6 +154,7 @@ export async function recordCatalogAttachment(options: {
 
       const snapshotId = snapshot.rows[0].id;
       let insertedItems = 0;
+      let identityUpserts = 0;
       if (snapshot.rows[0].inserted) {
         for (const item of options.attachment.catalog.items) {
           await client.query(
@@ -200,11 +203,13 @@ export async function recordCatalogAttachment(options: {
           );
           insertedItems += 1;
         }
+        identityUpserts = await upsertCatalogItemIdentitiesForSnapshotClient(client, snapshotId);
       }
 
       return {
         snapshotId,
         insertedItems,
+        identityUpserts,
         duplicateSnapshot: !snapshot.rows[0].inserted,
         duplicateContent: !snapshot.rows[0].inserted,
       };

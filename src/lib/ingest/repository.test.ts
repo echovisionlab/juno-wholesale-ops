@@ -58,18 +58,25 @@ describe("recordCatalogAttachment", () => {
 
     const snapshots = await database.pool.query<{ count: string }>("SELECT count(*)::text FROM catalog_snapshot");
     const items = await database.pool.query<{ count: string }>("SELECT count(*)::text FROM catalog_item_raw");
+    const identities = await database.pool.query<{ count: string }>("SELECT count(*)::text FROM catalog_item_identity");
+    const itemsMissingIdentity = await database.pool.query<{ count: string }>(
+      "SELECT count(*)::text FROM catalog_item_raw WHERE identity_id IS NULL",
+    );
     const messages = await database.pool.query<{ count: string }>("SELECT count(*)::text FROM mail_message");
     const attachments = await database.pool.query<{ count: string }>("SELECT count(*)::text FROM mail_attachment");
 
-    expect(first).toMatchObject({ insertedItems: 1, duplicateSnapshot: false, duplicateContent: false });
+    expect(first).toMatchObject({ insertedItems: 1, identityUpserts: 1, duplicateSnapshot: false, duplicateContent: false });
     expect(second).toMatchObject({
       snapshotId: first.snapshotId,
       insertedItems: 0,
+      identityUpserts: 0,
       duplicateSnapshot: true,
       duplicateContent: true,
     });
     expect(snapshots.rows[0].count).toBe("1");
     expect(items.rows[0].count).toBe("1");
+    expect(identities.rows[0].count).toBe("1");
+    expect(itemsMissingIdentity.rows[0].count).toBe("0");
     expect(messages.rows[0].count).toBe("2");
     expect(attachments.rows[0].count).toBe("2");
   });

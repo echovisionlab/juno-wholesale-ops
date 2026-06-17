@@ -65,6 +65,53 @@ export type LiveWorkerStatus = {
   }>;
 };
 
+export type SignalEventType = "new_arrival" | "watch_hit" | "low_catalog_stock" | "exclude_match";
+
+export type SignalSeverity = "info" | "watch" | "warning" | "critical";
+
+export type TodayInsight = {
+  signalId: string;
+  type: SignalEventType;
+  severity: SignalSeverity;
+  score: number;
+  title: string;
+  detail: string;
+  createdAt: string;
+  item: {
+    identityId: string;
+    junoId: string | null;
+    artist: string | null;
+    title: string | null;
+    label: string | null;
+    catNo: string | null;
+    genre: string | null;
+    medium: string | null;
+    stock: number | null;
+    dealerPriceGbp: string | null;
+    releaseDate: string | null;
+  };
+  reasons: string[];
+};
+
+export type WatchRuleType = "artist" | "label" | "genre" | "keyword" | "exclude_keyword";
+
+export type WatchRule = {
+  id: string;
+  type: WatchRuleType;
+  pattern: string;
+  patternNorm: string;
+  weight: number;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WatchRuleDraft = {
+  type: WatchRuleType;
+  pattern: string;
+  weight?: number | null;
+};
+
 export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
 
 export type SetupSettingSource = "database" | "runtime" | "unset";

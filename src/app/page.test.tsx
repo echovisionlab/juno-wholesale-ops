@@ -11,8 +11,14 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
     liveSummary: unknown;
     workerStatus: unknown;
     setupStatus: unknown;
+    todaySignals: unknown;
+    watchRules: Array<{ id: string; enabled: boolean }> | null;
     workerActionPending: boolean;
+    watchRuleActionPending: boolean;
     onWorkerAction: (action: "start" | "stop" | "restart") => void;
+    onCreateWatchRule: (draft: { type: "artist"; pattern: string }) => void;
+    onToggleWatchRule: (rule: { id: string; enabled: boolean }) => void;
+    onDeleteWatchRule: (rule: { id: string; enabled: boolean }) => void;
   }) => (
     <div>
       <output data-testid="dashboard-props">{JSON.stringify(props)}</output>
@@ -21,6 +27,21 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
       </button>
       <button type="button" onClick={() => props.onWorkerAction("stop")}>
         stop
+      </button>
+      <button type="button" onClick={() => props.onCreateWatchRule({ type: "artist", pattern: "Lara Voss" })}>
+        create-rule
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onToggleWatchRule(props.watchRules?.[0] ?? { id: "fallback-rule", enabled: true })}
+      >
+        toggle-rule
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onDeleteWatchRule(props.watchRules?.[0] ?? { id: "fallback-rule", enabled: true })}
+      >
+        delete-rule
       </button>
     </div>
   ),
@@ -51,11 +72,23 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ summary: { queued: 1 } }))
       .mockResolvedValueOnce(jsonResponse({ worker: { state: "stopped" } }))
       .mockResolvedValueOnce(jsonResponse({ setup: { ready: false, steps: [] } }))
+      .mockResolvedValueOnce(jsonResponse({ signals: [{ signalId: "signal-1" }] }))
+      .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-1", enabled: true }] }))
       .mockResolvedValueOnce(jsonResponse({ state: { lastQueryStatus: "succeeded" } }))
       .mockResolvedValueOnce(jsonResponse({ summary: { queued: 2 } }))
       .mockResolvedValueOnce(jsonResponse({ worker: { state: "running" } }))
       .mockResolvedValueOnce(jsonResponse({ setup: { ready: true, steps: [] } }))
+      .mockResolvedValueOnce(jsonResponse({ signals: [{ signalId: "signal-2" }] }))
+      .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-2", enabled: false }] }))
       .mockResolvedValueOnce(jsonResponse({ worker: { state: "running", pid: 123 } }))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-3", enabled: true } }))
+      .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-2", enabled: true } }))
+      .mockResolvedValueOnce(jsonResponse({ deleted: true }))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({}))
       .mockResolvedValueOnce(new Response("nope", { status: 500 }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -66,6 +99,8 @@ describe("Home dashboard polling", () => {
 
     expect(readProps()).toContain('"lastQueryStatus":null');
     expect(readProps()).toContain('"queued":1');
+    expect(readProps()).toContain('"signalId":"signal-1"');
+    expect(readProps()).toContain('"id":"rule-1"');
 
     await act(async () => {
       vi.advanceTimersByTime(30000);
@@ -74,6 +109,8 @@ describe("Home dashboard polling", () => {
 
     expect(readProps()).toContain('"lastQueryStatus":"succeeded"');
     expect(readProps()).toContain('"queued":2');
+    expect(readProps()).toContain('"signalId":"signal-2"');
+    expect(readProps()).toContain('"id":"rule-2"');
 
     await act(async () => {
       clickButton("start");
@@ -93,6 +130,61 @@ describe("Home dashboard polling", () => {
     await act(async () => undefined);
 
     expect(readProps()).toContain('"workerStatus":null');
+
+    await act(async () => {
+      clickButton("create-rule");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/watch-rules", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ type: "artist", pattern: "Lara Voss" }),
+    });
+    expect(readProps()).toContain('"id":"rule-3"');
+
+    await act(async () => {
+      clickButton("toggle-rule");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/watch-rules", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "rule-3", enabled: false }),
+    });
+
+    await act(async () => {
+      clickButton("delete-rule");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/watch-rules", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "rule-3" }),
+    });
+
+    await act(async () => {
+      clickButton("create-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("create-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("toggle-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("toggle-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-rule");
+    });
+    await act(async () => undefined);
   });
 
   it("keeps state nullable when fetches fail or return non-OK responses", async () => {
@@ -102,7 +194,12 @@ describe("Home dashboard polling", () => {
         .mockRejectedValueOnce(new Error("network down"))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
-        .mockResolvedValueOnce(new Response("nope", { status: 503 })),
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ rule: { id: "fallback-rule", enabled: false } }))
+        .mockResolvedValueOnce(jsonResponse({ deleted: true }))
+        .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-from-null", enabled: true } })),
     );
 
     await act(async () => {
@@ -114,6 +211,73 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"liveSummary":null');
     expect(readProps()).toContain('"workerStatus":null');
     expect(readProps()).toContain('"setupStatus":null');
+    expect(readProps()).toContain('"todaySignals":null');
+    expect(readProps()).toContain('"watchRules":null');
+
+    await act(async () => {
+      clickButton("toggle-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-rule");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("create-rule");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"id":"rule-from-null"');
+  });
+
+  it("adds a watch rule when the current watch rule list is still nullable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ rule: { id: "created-from-null", enabled: true } })),
+    );
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("create-rule");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"id":"created-from-null"');
+  });
+
+  it("handles watch rule deletion while the current watch rule list is still nullable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ deleted: true })),
+    );
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-rule");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"watchRules":[]');
   });
 
   it("does not update state after unmounting while polling is in flight", async () => {
