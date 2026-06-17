@@ -1,0 +1,58 @@
+name: ${INVENTORY_STACK_PROJECT_NAME:-inventory}
+
+services:
+  web-prod:
+    image: ${INVENTORY_WEB_IMAGE:?set INVENTORY_WEB_IMAGE to an immutable image tag}
+    container_name: inventory-web-${INVENTORY_CONTAINER_SUFFIX:-prod}
+    ports:
+      - "${INVENTORY_WEB_PUBLIC_PORT:-3100}:3000"
+    environment:
+      NODE_ENV: production
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+      NEXT_TELEMETRY_DISABLED: "1"
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL}
+      DSUB_AUTH_ENABLED: ${DSUB_AUTH_ENABLED:-true}
+      DSUB_KRATOS_PUBLIC_URL: ${DSUB_KRATOS_PUBLIC_URL:-https://auth.dsub.io}
+      DSUB_LOGIN_URL: ${DSUB_LOGIN_URL:-https://www.dsub.io/auth/login}
+      DSUB_LOGIN_REDIRECT_PARAM: ${DSUB_LOGIN_REDIRECT_PARAM:-redirect}
+      DSUB_REQUIRED_ROLE: ${DSUB_REQUIRED_ROLE:-admin}
+      DSUB_SESSION_COOKIE_NAMES: ${DSUB_SESSION_COOKIE_NAMES:-dsub_session,dsub_session_dev}
+      GOOGLE_WORKSPACE_DELEGATED_USER: ${GOOGLE_WORKSPACE_DELEGATED_USER:-state303@dsub.io}
+      GOOGLE_SERVICE_ACCOUNT_KEY_JSON: ${GOOGLE_SERVICE_ACCOUNT_KEY_JSON:-/run/secrets/juno-mail-service-account.json}
+      GOOGLE_GMAIL_SCOPES: ${GOOGLE_GMAIL_SCOPES:-https://www.googleapis.com/auth/gmail.modify}
+      GMAIL_INGEST_QUERY: ${GMAIL_INGEST_QUERY:-to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d}
+      GMAIL_MAX_RESULTS: ${GMAIL_MAX_RESULTS:-25}
+      GMAIL_INGEST_LOOKBACK_MS: ${GMAIL_INGEST_LOOKBACK_MS:-604800000}
+      GMAIL_PROCESSED_LABEL: ${GMAIL_PROCESSED_LABEL:-Wholesale Processed}
+      GMAIL_STORAGE_DIR: ${GMAIL_STORAGE_DIR:-/var/lib/wholesale-ops/mail-attachments}
+      CATALOG_ATTACHMENT_PATTERN: ${CATALOG_ATTACHMENT_PATTERN:-New Preorders|New Releases In Stock}
+      SUPPLIER_CODE: ${SUPPLIER_CODE:-juno}
+      JUNO_LIVE_ENQUEUE_ON_INGEST: ${JUNO_LIVE_ENQUEUE_ON_INGEST:-false}
+      JUNO_LOGIN_EMAIL: ${JUNO_LOGIN_EMAIL:?set JUNO_LOGIN_EMAIL}
+      JUNO_LOGIN_PASSWORD: ${JUNO_LOGIN_PASSWORD:?set JUNO_LOGIN_PASSWORD}
+      JUNO_BROWSER_PROFILE_DIR: ${JUNO_BROWSER_PROFILE_DIR:-/var/lib/wholesale-ops/juno-browser-profile}
+      JUNO_BROWSER_HEADLESS: ${JUNO_BROWSER_HEADLESS:-true}
+      JUNO_LIVE_CONCURRENCY: ${JUNO_LIVE_CONCURRENCY:-6}
+      JUNO_LIVE_DELAY_MIN_MS: ${JUNO_LIVE_DELAY_MIN_MS:-15000}
+      JUNO_LIVE_DELAY_MAX_MS: ${JUNO_LIVE_DELAY_MAX_MS:-75000}
+      JUNO_LIVE_NAV_TIMEOUT_MS: ${JUNO_LIVE_NAV_TIMEOUT_MS:-45000}
+      JUNO_LIVE_MAX_ATTEMPTS: ${JUNO_LIVE_MAX_ATTEMPTS:-2}
+      JUNO_LIVE_POLL_INTERVAL_MS: ${JUNO_LIVE_POLL_INTERVAL_MS:-}
+      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: ${JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL:-true}
+      JUNO_LIVE_AUTO_ENQUEUE_LIMIT: ${JUNO_LIVE_AUTO_ENQUEUE_LIMIT:-1000}
+      JUNO_LIVE_WORKER_COMMAND: ${JUNO_LIVE_WORKER_COMMAND:-}
+      JUNO_LIVE_WORKER_ARGS: ${JUNO_LIVE_WORKER_ARGS:-}
+    volumes:
+      - inventory-mail-attachments:/var/lib/wholesale-ops/mail-attachments
+      - inventory-juno-browser-profile:/var/lib/wholesale-ops/juno-browser-profile
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+volumes:
+  inventory-mail-attachments:
+  inventory-juno-browser-profile:

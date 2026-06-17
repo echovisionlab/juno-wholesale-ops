@@ -1,0 +1,14 @@
+.data
+.env
+.env.*
+!.env.example
+.git
+.next
+coverage
+node_modules
+storybook-static
+secrets
+*.log
+dsub-io-*.json
+*service-account*.json
+Dockerfile

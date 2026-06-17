@@ -1,0 +1,662 @@
+-- migration-manifest-sha256: 2119a665d36bdb6f49651ebc46510e58b4b86ef0428f18591e05c94697416c3a
+--
+-- PostgreSQL database dump
+--
+
+\restrict wholesaleOpsSchemaDump
+
+-- Dumped from database version 16.14
+-- Dumped by pg_dump version 16.14
+
+SET statement_timeout = 0;
+SET lock_timeout = 0;
+SET idle_in_transaction_session_timeout = 0;
+SET client_encoding = 'UTF8';
+SET standard_conforming_strings = on;
+SELECT pg_catalog.set_config('search_path', '', false);
+SET check_function_bodies = false;
+SET xmloption = content;
+SET client_min_messages = warning;
+SET row_security = off;
+
+--
+-- Name: pgcrypto; Type: EXTENSION; Schema: -; Owner: -
+--
+
+CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA public;
+
+
+SET default_tablespace = '';
+
+SET default_table_access_method = heap;
+
+--
+-- Name: catalog_item_raw; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_item_raw (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    snapshot_id uuid NOT NULL,
+    row_number integer NOT NULL,
+    juno_id text,
+    barcode text,
+    artist text,
+    title text,
+    label text,
+    cat_no text,
+    medium text,
+    description text,
+    genre text,
+    dealer_ex_vat_text text,
+    dealer_price_gbp numeric(12,2),
+    stock integer,
+    release_date date,
+    max_order integer,
+    raw jsonb NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: catalog_snapshot; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.catalog_snapshot (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    supplier_id uuid NOT NULL,
+    catalog_kind text NOT NULL,
+    catalog_date date,
+    source_filename text NOT NULL,
+    source_attachment_id uuid NOT NULL,
+    content_hash text NOT NULL,
+    row_count integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT catalog_snapshot_catalog_kind_check CHECK ((catalog_kind = ANY (ARRAY['preorder'::text, 'in_stock'::text, 'unknown'::text])))
+);
+
+
+--
+-- Name: gmail_ingest_state; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.gmail_ingest_state (
+    id boolean DEFAULT true NOT NULL,
+    last_query text,
+    last_query_window_from timestamp with time zone,
+    last_query_window_to timestamp with time zone,
+    last_query_started_at timestamp with time zone,
+    last_query_finished_at timestamp with time zone,
+    last_query_status text,
+    last_query_error text,
+    last_query_message_count integer DEFAULT 0 NOT NULL,
+    last_query_attachment_count integer DEFAULT 0 NOT NULL,
+    last_successful_message_received_at timestamp with time zone,
+    last_ingested_snapshot_id uuid,
+    last_ingested_catalog_date date,
+    last_ingested_content_hash text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT gmail_ingest_state_id_check CHECK (id),
+    CONSTRAINT gmail_ingest_state_last_query_attachment_count_check CHECK ((last_query_attachment_count >= 0)),
+    CONSTRAINT gmail_ingest_state_last_query_message_count_check CHECK ((last_query_message_count >= 0)),
+    CONSTRAINT gmail_ingest_state_last_query_status_check CHECK ((last_query_status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: juno_live_lookup_job; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.juno_live_lookup_job (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    juno_id text NOT NULL,
+    catalog_item_raw_id uuid,
+    status text DEFAULT 'queued'::text NOT NULL,
+    priority integer DEFAULT 0 NOT NULL,
+    attempts integer DEFAULT 0 NOT NULL,
+    max_attempts integer DEFAULT 2 NOT NULL,
+    not_before timestamp with time zone DEFAULT now() NOT NULL,
+    locked_at timestamp with time zone,
+    locked_by text,
+    last_error text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT juno_live_lookup_job_status_check CHECK ((status = ANY (ARRAY['queued'::text, 'running'::text, 'succeeded'::text, 'failed'::text, 'blocked'::text, 'manual_required'::text])))
+);
+
+
+--
+-- Name: juno_live_lookup_run; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.juno_live_lookup_run (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    trigger_source text NOT NULL,
+    status text NOT NULL,
+    worker_id text NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    summary jsonb DEFAULT '{}'::jsonb NOT NULL,
+    error text,
+    CONSTRAINT juno_live_lookup_run_status_check CHECK ((status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: juno_live_observation; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.juno_live_observation (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    job_id uuid,
+    run_id uuid,
+    juno_id text NOT NULL,
+    catalog_item_raw_id uuid,
+    status text NOT NULL,
+    stock_quantity integer,
+    stock_text text,
+    display_stock text DEFAULT 'N/A'::text NOT NULL,
+    wholesale_price_gbp numeric(12,2),
+    product_url text NOT NULL,
+    final_url text,
+    parser_version text NOT NULL,
+    observed_at timestamp with time zone DEFAULT now() NOT NULL,
+    duration_ms integer,
+    error text,
+    metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    CONSTRAINT juno_live_observation_status_check CHECK ((status = ANY (ARRAY['in_stock'::text, 'out_of_stock'::text, 'preorder'::text, 'coming_soon'::text, 'unknown'::text, 'failed'::text, 'blocked'::text])))
+);
+
+
+--
+-- Name: mail_attachment; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_attachment (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    message_id uuid NOT NULL,
+    filename text NOT NULL,
+    mime_type text NOT NULL,
+    byte_size integer NOT NULL,
+    sha256 text NOT NULL,
+    storage_uri text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: mail_message; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_message (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    gmail_user_email text NOT NULL,
+    gmail_message_id text NOT NULL,
+    gmail_thread_id text,
+    rfc822_message_id text,
+    subject text,
+    from_address text,
+    to_addresses text[] DEFAULT '{}'::text[] NOT NULL,
+    delivered_to text[] DEFAULT '{}'::text[] NOT NULL,
+    received_at timestamp with time zone,
+    first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
+    payload jsonb NOT NULL
+);
+
+
+--
+-- Name: processing_run; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.processing_run (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    run_type text NOT NULL,
+    status text NOT NULL,
+    started_at timestamp with time zone DEFAULT now() NOT NULL,
+    finished_at timestamp with time zone,
+    summary jsonb DEFAULT '{}'::jsonb NOT NULL,
+    error text,
+    CONSTRAINT processing_run_status_check CHECK ((status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: schema_migration; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.schema_migration (
+    version integer NOT NULL,
+    filename text NOT NULL,
+    name text NOT NULL,
+    sha256 text NOT NULL,
+    applied_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT schema_migration_sha256_check CHECK ((length(sha256) = 64)),
+    CONSTRAINT schema_migration_version_check CHECK (((version >= 1) AND (version <= 9999999)))
+);
+
+
+--
+-- Name: service_log_event; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.service_log_event (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    correlation_id text,
+    run_id uuid,
+    job_id uuid,
+    component text NOT NULL,
+    level text NOT NULL,
+    event_name text NOT NULL,
+    message text,
+    context jsonb DEFAULT '{}'::jsonb NOT NULL,
+    occurred_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT service_log_event_level_check CHECK ((level = ANY (ARRAY['debug'::text, 'info'::text, 'warn'::text, 'error'::text])))
+);
+
+
+--
+-- Name: service_setting; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.service_setting (
+    id boolean DEFAULT true NOT NULL,
+    juno_live_enqueue_on_ingest boolean,
+    juno_login_email text,
+    juno_login_password text,
+    juno_browser_profile_dir text,
+    juno_browser_headless boolean,
+    juno_live_concurrency integer,
+    juno_live_delay_min_ms integer,
+    juno_live_delay_max_ms integer,
+    juno_live_nav_timeout_ms integer,
+    juno_live_max_attempts integer,
+    juno_live_poll_interval_ms integer,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    gmail_ingest_lookback_ms integer,
+    juno_live_auto_enqueue_on_interval boolean,
+    juno_live_auto_enqueue_limit integer,
+    CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
+    CONSTRAINT service_setting_id_check CHECK (id),
+    CONSTRAINT service_setting_juno_live_auto_enqueue_limit_check CHECK ((juno_live_auto_enqueue_limit > 0)),
+    CONSTRAINT service_setting_juno_live_concurrency_check CHECK (((juno_live_concurrency >= 1) AND (juno_live_concurrency <= 10))),
+    CONSTRAINT service_setting_juno_live_delay_max_ms_check CHECK ((juno_live_delay_max_ms >= 0)),
+    CONSTRAINT service_setting_juno_live_delay_min_ms_check CHECK ((juno_live_delay_min_ms >= 0)),
+    CONSTRAINT service_setting_juno_live_max_attempts_check CHECK ((juno_live_max_attempts > 0)),
+    CONSTRAINT service_setting_juno_live_nav_timeout_ms_check CHECK ((juno_live_nav_timeout_ms > 0)),
+    CONSTRAINT service_setting_juno_live_poll_interval_ms_check CHECK ((juno_live_poll_interval_ms > 0))
+);
+
+
+--
+-- Name: supplier; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.supplier (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    code text NOT NULL,
+    name text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: catalog_item_raw catalog_item_raw_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_raw
+    ADD CONSTRAINT catalog_item_raw_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_item_raw catalog_item_raw_snapshot_id_row_number_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_raw
+    ADD CONSTRAINT catalog_item_raw_snapshot_id_row_number_key UNIQUE (snapshot_id, row_number);
+
+
+--
+-- Name: catalog_snapshot catalog_snapshot_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_snapshot
+    ADD CONSTRAINT catalog_snapshot_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: catalog_snapshot catalog_snapshot_supplier_id_catalog_kind_catalog_date_cont_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_snapshot
+    ADD CONSTRAINT catalog_snapshot_supplier_id_catalog_kind_catalog_date_cont_key UNIQUE (supplier_id, catalog_kind, catalog_date, content_hash);
+
+
+--
+-- Name: gmail_ingest_state gmail_ingest_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.gmail_ingest_state
+    ADD CONSTRAINT gmail_ingest_state_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: juno_live_lookup_job juno_live_lookup_job_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_lookup_job
+    ADD CONSTRAINT juno_live_lookup_job_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: juno_live_lookup_run juno_live_lookup_run_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_lookup_run
+    ADD CONSTRAINT juno_live_lookup_run_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: juno_live_observation juno_live_observation_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_observation
+    ADD CONSTRAINT juno_live_observation_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mail_attachment mail_attachment_message_id_sha256_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_attachment
+    ADD CONSTRAINT mail_attachment_message_id_sha256_key UNIQUE (message_id, sha256);
+
+
+--
+-- Name: mail_attachment mail_attachment_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_attachment
+    ADD CONSTRAINT mail_attachment_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mail_message mail_message_gmail_user_email_gmail_message_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_message
+    ADD CONSTRAINT mail_message_gmail_user_email_gmail_message_id_key UNIQUE (gmail_user_email, gmail_message_id);
+
+
+--
+-- Name: mail_message mail_message_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_message
+    ADD CONSTRAINT mail_message_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: processing_run processing_run_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.processing_run
+    ADD CONSTRAINT processing_run_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: schema_migration schema_migration_filename_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schema_migration
+    ADD CONSTRAINT schema_migration_filename_key UNIQUE (filename);
+
+
+--
+-- Name: schema_migration schema_migration_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.schema_migration
+    ADD CONSTRAINT schema_migration_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: service_log_event service_log_event_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.service_log_event
+    ADD CONSTRAINT service_log_event_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: service_setting service_setting_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.service_setting
+    ADD CONSTRAINT service_setting_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: supplier supplier_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier
+    ADD CONSTRAINT supplier_code_key UNIQUE (code);
+
+
+--
+-- Name: supplier supplier_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.supplier
+    ADD CONSTRAINT supplier_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: idx_catalog_item_raw_barcode; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_raw_barcode ON public.catalog_item_raw USING btree (barcode) WHERE (barcode IS NOT NULL);
+
+
+--
+-- Name: idx_catalog_item_raw_genre; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_raw_genre ON public.catalog_item_raw USING btree (genre) WHERE (genre IS NOT NULL);
+
+
+--
+-- Name: idx_catalog_item_raw_juno_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_item_raw_juno_id ON public.catalog_item_raw USING btree (juno_id) WHERE (juno_id IS NOT NULL);
+
+
+--
+-- Name: idx_catalog_snapshot_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_snapshot_created_at ON public.catalog_snapshot USING btree (created_at DESC);
+
+
+--
+-- Name: idx_catalog_snapshot_kind_date; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_catalog_snapshot_kind_date ON public.catalog_snapshot USING btree (catalog_kind, catalog_date DESC);
+
+
+--
+-- Name: idx_catalog_snapshot_supplier_content_hash_unique; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_catalog_snapshot_supplier_content_hash_unique ON public.catalog_snapshot USING btree (supplier_id, content_hash);
+
+
+--
+-- Name: idx_juno_live_lookup_job_active_juno_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_juno_live_lookup_job_active_juno_id ON public.juno_live_lookup_job USING btree (juno_id) WHERE (status = ANY (ARRAY['queued'::text, 'running'::text]));
+
+
+--
+-- Name: idx_juno_live_lookup_job_juno_id; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_lookup_job_juno_id ON public.juno_live_lookup_job USING btree (juno_id);
+
+
+--
+-- Name: idx_juno_live_lookup_job_status_not_before; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_lookup_job_status_not_before ON public.juno_live_lookup_job USING btree (status, not_before, priority DESC, created_at);
+
+
+--
+-- Name: idx_juno_live_lookup_run_started_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_lookup_run_started_at ON public.juno_live_lookup_run USING btree (started_at DESC);
+
+
+--
+-- Name: idx_juno_live_observation_juno_observed; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_observation_juno_observed ON public.juno_live_observation USING btree (juno_id, observed_at DESC);
+
+
+--
+-- Name: idx_juno_live_observation_status; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_observation_status ON public.juno_live_observation USING btree (status, observed_at DESC);
+
+
+--
+-- Name: idx_mail_attachment_sha256; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mail_attachment_sha256 ON public.mail_attachment USING btree (sha256);
+
+
+--
+-- Name: idx_mail_message_received_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mail_message_received_at ON public.mail_message USING btree (received_at DESC);
+
+
+--
+-- Name: idx_mail_message_rfc822; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mail_message_rfc822 ON public.mail_message USING btree (rfc822_message_id) WHERE (rfc822_message_id IS NOT NULL);
+
+
+--
+-- Name: idx_service_log_event_component; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_service_log_event_component ON public.service_log_event USING btree (component, occurred_at DESC);
+
+
+--
+-- Name: idx_service_log_event_correlation; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_service_log_event_correlation ON public.service_log_event USING btree (correlation_id, occurred_at DESC) WHERE (correlation_id IS NOT NULL);
+
+
+--
+-- Name: idx_service_log_event_job; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_service_log_event_job ON public.service_log_event USING btree (job_id, occurred_at DESC) WHERE (job_id IS NOT NULL);
+
+
+--
+-- Name: idx_service_log_event_run; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_service_log_event_run ON public.service_log_event USING btree (run_id, occurred_at DESC) WHERE (run_id IS NOT NULL);
+
+
+--
+-- Name: catalog_item_raw catalog_item_raw_snapshot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_item_raw
+    ADD CONSTRAINT catalog_item_raw_snapshot_id_fkey FOREIGN KEY (snapshot_id) REFERENCES public.catalog_snapshot(id) ON DELETE CASCADE;
+
+
+--
+-- Name: catalog_snapshot catalog_snapshot_source_attachment_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_snapshot
+    ADD CONSTRAINT catalog_snapshot_source_attachment_id_fkey FOREIGN KEY (source_attachment_id) REFERENCES public.mail_attachment(id);
+
+
+--
+-- Name: catalog_snapshot catalog_snapshot_supplier_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.catalog_snapshot
+    ADD CONSTRAINT catalog_snapshot_supplier_id_fkey FOREIGN KEY (supplier_id) REFERENCES public.supplier(id);
+
+
+--
+-- Name: gmail_ingest_state gmail_ingest_state_last_ingested_snapshot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.gmail_ingest_state
+    ADD CONSTRAINT gmail_ingest_state_last_ingested_snapshot_id_fkey FOREIGN KEY (last_ingested_snapshot_id) REFERENCES public.catalog_snapshot(id) ON DELETE SET NULL;
+
+
+--
+-- Name: juno_live_lookup_job juno_live_lookup_job_catalog_item_raw_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_lookup_job
+    ADD CONSTRAINT juno_live_lookup_job_catalog_item_raw_id_fkey FOREIGN KEY (catalog_item_raw_id) REFERENCES public.catalog_item_raw(id) ON DELETE SET NULL;
+
+
+--
+-- Name: juno_live_observation juno_live_observation_catalog_item_raw_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_observation
+    ADD CONSTRAINT juno_live_observation_catalog_item_raw_id_fkey FOREIGN KEY (catalog_item_raw_id) REFERENCES public.catalog_item_raw(id) ON DELETE SET NULL;
+
+
+--
+-- Name: juno_live_observation juno_live_observation_job_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_observation
+    ADD CONSTRAINT juno_live_observation_job_id_fkey FOREIGN KEY (job_id) REFERENCES public.juno_live_lookup_job(id) ON DELETE SET NULL;
+
+
+--
+-- Name: juno_live_observation juno_live_observation_run_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_observation
+    ADD CONSTRAINT juno_live_observation_run_id_fkey FOREIGN KEY (run_id) REFERENCES public.juno_live_lookup_run(id) ON DELETE SET NULL;
+
+
+--
+-- Name: mail_attachment mail_attachment_message_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_attachment
+    ADD CONSTRAINT mail_attachment_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.mail_message(id) ON DELETE CASCADE;
+
+
+--
+-- PostgreSQL database dump complete
+--
+
+\unrestrict wholesaleOpsSchemaDump

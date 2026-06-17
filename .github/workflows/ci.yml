@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+
+      - name: Set up pnpm
+        run: |
+          corepack enable
+          corepack prepare pnpm@10.34.1 --activate
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Check database migrations
+        run: pnpm db:migrations:check
+
+      - name: Test coverage
+        run: pnpm test:coverage
+
+      - name: Unused code check
+        run: pnpm unused
+
+      - name: Build Next.js app
+        run: pnpm build
+
+      - name: Build Docker image
+        run: docker build -t wholesale-ops:ci .

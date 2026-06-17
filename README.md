@@ -1,36 +1,278 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wholesale Ops
 
-## Getting Started
+Internal catalog-ingestion and purchasing operations service for Juno wholesale emails.
 
-First, run the development server:
+The MVP keeps the service compact:
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+- Next.js app for the operator UI and lightweight API routes
+- Mantine components with shared theme settings in `src/theme.ts`
+- Node worker scripts in the same repo for Gmail polling and XLSX ingestion
+- Postgres migrations under `infra/postgres/migrations`
+- Raw XLSX attachments stored outside git for replayable parsing
+
+## Runtime Shape
+
+```text
+Gmail state303@dsub.io
+  -> query inventory@dsub.io Juno XLSX mail
+  -> save raw XLSX by sha256
+  -> parse Juno catalog rows
+  -> write catalog snapshot and raw item rows to Postgres
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Use a separate `wholesale` database when possible. If this must share the dsub
+Postgres server, keep it outside dsub's `public` application schema.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Copy `.env.example` to `.env.local` for local development.
 
-## Learn More
+```bash
+cp .env.example .env.local
+```
 
-To learn more about Next.js, take a look at the following resources:
+Set `GOOGLE_SERVICE_ACCOUNT_KEY_JSON` to the local service account JSON path or
+to the mounted secret path in production. Never commit the JSON key.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Current delegated mailbox:
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+```text
+GOOGLE_WORKSPACE_DELEGATED_USER=state303@dsub.io
+```
 
-## Deploy on Vercel
+Default Gmail search:
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+```text
+to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d
+```
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+The worker then filters XLSX attachments by filename:
+
+```text
+CATALOG_ATTACHMENT_PATTERN=New Preorders|New Releases In Stock
+```
+
+That keeps large `Full Stock List` and `Bestselling Titles` files out of the
+daily MVP path unless we intentionally broaden the model.
+
+## Commands
+
+```bash
+pnpm dev
+pnpm lint
+pnpm typecheck
+pnpm test:coverage
+pnpm build
+pnpm storybook
+pnpm build-storybook
+```
+
+`pnpm test:coverage` enforces 100% statements, branches, functions, and lines
+for the pure ingestion logic. Storybook runs on port `6008`.
+
+The UI loads Noto font families through the DSUB CDN font proxy at
+`https://cdn.dsub.io/fonts/css2?...`; app and Storybook use the same Mantine
+theme object.
+
+## DSUB Auth Gate
+
+Production protects the app with the existing DSUB Kratos session cookie.
+
+```text
+dsub_session / dsub_session_dev
+  -> https://auth.dsub.io/sessions/whoami
+  -> active session
+  -> identity.metadata_public.role=admin
+```
+
+`DSUB_AUTH_ENABLED` defaults to `true` only under `NODE_ENV=production`, so
+local development stays open unless you explicitly enable it. Komodo production
+sets `DSUB_AUTH_ENABLED=true`.
+
+Browser requests without a valid admin session redirect to:
+
+```text
+https://www.dsub.io/auth/login?redirect=<current inventory URL>
+```
+
+API requests receive JSON `401`, `403`, or `503`. `/api/health` stays public
+for Komodo health checks.
+
+Gmail checks:
+
+```bash
+pnpm gmail:smoke
+pnpm gmail:ingest
+pnpm gmail:ingest:write
+pnpm juno:live:enqueue
+pnpm juno:live:worker
+```
+
+`pnpm gmail:ingest` is dry-run by default. It downloads and parses attachments
+into `.data/mail-attachments` but does not write Postgres rows. Use
+`pnpm gmail:ingest:write` only after applying all migrations.
+
+Write mode records every run in the singleton `gmail_ingest_state` row:
+
+- last Gmail query and query window
+- last query start/finish/status/error
+- last successful Gmail message received time
+- last unique catalog snapshot id, catalog date, and content hash inserted into DB
+
+After the first successful write, Gmail search becomes incremental. The worker
+removes any date filters from `GMAIL_INGEST_QUERY` and adds an `after:YYYY/MM/DD`
+filter based on `last_successful_message_received_at - GMAIL_INGEST_LOOKBACK_MS`.
+The default lookback is seven days to absorb Gmail date granularity and delayed
+group delivery. Duplicate group/direct deliveries are still rejected by message,
+attachment, and catalog content hashes.
+
+The current ingest cursor is exposed read-only:
+
+```http
+GET /api/ingest/status
+```
+
+Add `--label` when you want the worker to create/apply `GMAIL_PROCESSED_LABEL`
+in Gmail after processing.
+
+```bash
+pnpm gmail:ingest -- --label
+```
+
+## Database Migrations
+
+Migration files live in `infra/postgres/migrations` and are append-only. Never
+edit an existing migration after it has been applied. Add the next sequential
+file instead.
+
+Rules enforced by `pnpm db:migrations:check`:
+
+- filenames use `<version>_<name>.sql`
+- versions are parsed numerically and must be gapless from `1`
+- versions can run through `9999999`, so more than 1000 migrations are supported
+- every applied migration is recorded in `schema_migration` with a SHA-256 hash
+- changed historical migration SQL fails validation through the hash ledger
+- `infra/postgres/schema.sql` must match a fresh `pg_dump --schema-only` from a Testcontainers PostgreSQL database after applying all migrations
+
+Use these commands:
+
+```bash
+pnpm db:migrate
+pnpm db:schema:dump
+pnpm db:migrations:check
+```
+
+`schema.sql` is generated, not hand-edited. After adding a migration, run
+`pnpm db:schema:dump` and commit both the new migration and the regenerated
+master schema.
+
+## Juno Live Stock Lookup
+
+Apply all migrations before running live lookups. The live worker never calls
+cart, wishlist, or alert endpoints. It opens read-only product pages in a
+persistent Playwright Chromium profile and parses the server-rendered
+`product-availability` text.
+
+Queue jobs from the latest catalog snapshot:
+
+```bash
+pnpm juno:live:enqueue
+```
+
+Run one batch locally:
+
+```bash
+pnpm juno:live:worker
+```
+
+Run as a polling worker from the shell:
+
+```bash
+pnpm juno:live:worker -- --loop
+```
+
+In production the Next.js server can also manage that same loop as a child
+process:
+
+```http
+GET  /api/live-lookups/worker
+POST /api/live-lookups/worker {"action":"start"}
+POST /api/live-lookups/worker {"action":"stop"}
+POST /api/live-lookups/worker {"action":"restart"}
+```
+
+The dashboard uses these endpoints for manual start/stop control. The default
+child command is `node_modules/.bin/tsx -r tsconfig-paths/register
+scripts/juno-live-worker.ts --loop`; override it with
+`JUNO_LIVE_WORKER_COMMAND` and `JUNO_LIVE_WORKER_ARGS` only when the runtime
+layout changes.
+
+Set these as secrets or private runtime env values:
+
+```text
+JUNO_LOGIN_EMAIL
+JUNO_LOGIN_PASSWORD
+```
+
+Juno runtime settings resolve from the singleton `service_setting` row first
+and fall back to typed env values when a DB column is `NULL`. Leave
+`service_setting.juno_live_poll_interval_ms` and `JUNO_LIVE_POLL_INTERVAL_MS`
+empty to disable automatic idle polling; the worker will process already queued
+jobs and then exit instead of sleeping on a schedule.
+
+When `juno_live_poll_interval_ms` or `JUNO_LIVE_POLL_INTERVAL_MS` is set, loop
+mode stays alive. If credentials are configured and
+`juno_live_auto_enqueue_on_interval` / `JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL` is
+true, each interval enqueues unique Juno IDs from the latest catalog snapshot
+before claiming jobs. Start conservatively with one to two hours, for example:
+
+```text
+JUNO_LIVE_POLL_INTERVAL_MS=7200000
+```
+
+Per-product navigation still uses the configured randomized delay window, so the
+interval controls how often new batches are queued, not a fixed request cadence.
+
+The worker logs every major action through `AppLogger`. The default production
+worker uses both JSON console logs and the `service_log_event` Postgres audit
+table. Log context is sanitized before writing; credentials, cookies, auth
+headers, and full HTML bodies are not stored.
+
+## Dedupe Contract
+
+The worker treats duplicates at multiple levels:
+
+- Gmail message: `gmail_user_email + gmail_message_id`
+- Mail identity: `rfc822_message_id`
+- Attachment identity: `sha256`
+- Catalog identity: `supplier + sheet content_hash`
+
+This handles group-delivery duplicates, direct + group duplicate delivery, and
+the same XLSX content being resent under a different email, filename, or date.
+
+## Current Limits
+
+- Local filesystem storage is the first raw-attachment backend. Replace
+  `GMAIL_STORAGE_DIR` with MinIO/S3 storage before running this as a multi-host
+  production worker.
+- The first parser targets the observed Juno XLSX columns only.
+- No purchasing analysis or insight surface is included in this slice; the
+  persisted model stores ingestion source data only.
+
+## Production Skeleton
+
+Deployment files:
+
+- `Dockerfile`: Next standalone image
+- `compose/app.yml`: production web service with a managed worker child process
+- `deploy/prod/app.stack.yml`: Komodo stack skeleton
+- `deploy/prod/README.md`: proxy, secret, and smoke-check notes
+
+Target route:
+
+```text
+inventory.dsub.io -> dsub-app-vm.intra.io:3100
+```
+
+Do not commit production secrets. `DATABASE_URL` and Google service account
+material belong in the Komodo stack environment or secret mount.

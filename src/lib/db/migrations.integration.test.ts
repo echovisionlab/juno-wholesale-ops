@@ -1,0 +1,67 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { applyMigrations, assertMasterSchemaSqlMatchesGenerated, loadAppliedMigrations } from "./migrations";
+import { dumpMigratedMasterSchema } from "../../../scripts/lib/dump-migrated-schema";
+import {
+  startMigratedPostgresTestDatabase,
+  type StartedPostgresTestDatabase,
+} from "@/test/postgres";
+
+describe("PostgreSQL migrations", () => {
+  let database: StartedPostgresTestDatabase;
+
+  beforeAll(async () => {
+    database = await startMigratedPostgresTestDatabase();
+  });
+
+  afterAll(async () => {
+    await database.stop();
+  });
+
+  it("applies every migration to a real PostgreSQL database and records hashes", async () => {
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(5);
+    await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
+      expect.objectContaining({
+        version: 1,
+        filename: "0001_init.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 2,
+        filename: "0002_juno_live_lookup.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 3,
+        filename: "0003_service_setting.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 4,
+        filename: "0004_catalog_content_hash_unique.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 5,
+        filename: "0005_ingest_cursor_and_auto_stock.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+    ]);
+  });
+
+  it("detects edited historical migrations through the applied hash ledger", async () => {
+    await database.pool.query("UPDATE schema_migration SET sha256 = $1 WHERE version = 1", ["b".repeat(64)]);
+
+    await expect(applyMigrations(database.pool, database.migrationsDir)).rejects.toThrow(
+      "hash mismatch",
+    );
+  });
+
+  it("keeps master schema SQL in sync with a migrated database dump", async () => {
+    const masterSchemaSql = await fs.readFile(path.join(process.cwd(), "infra/postgres/schema.sql"), "utf8");
+    const generatedSchemaSql = await dumpMigratedMasterSchema({ migrationsDir: database.migrationsDir });
+
+    expect(() => assertMasterSchemaSqlMatchesGenerated(masterSchemaSql, generatedSchemaSql)).not.toThrow();
+  });
+});

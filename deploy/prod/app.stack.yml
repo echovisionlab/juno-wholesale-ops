@@ -1,0 +1,47 @@
+stackName: inventory-app-stack
+runDirectory: /home/state303/services/inventory
+projectName: inventory
+filePaths:
+  - compose/app.yml
+environment:
+  INVENTORY_STACK_PROJECT_NAME: inventory
+  INVENTORY_WEB_IMAGE: harbor.dsub.io/dsub/inventory-web:sha-REPLACE_ME
+  INVENTORY_CONTAINER_SUFFIX: prod
+  INVENTORY_WEB_PUBLIC_PORT: "3100"
+  DSUB_AUTH_ENABLED: "true"
+  DSUB_KRATOS_PUBLIC_URL: https://auth.dsub.io
+  DSUB_LOGIN_URL: https://www.dsub.io/auth/login
+  DSUB_LOGIN_REDIRECT_PARAM: redirect
+  DSUB_REQUIRED_ROLE: admin
+  DSUB_SESSION_COOKIE_NAMES: dsub_session,dsub_session_dev
+  GOOGLE_WORKSPACE_DELEGATED_USER: state303@dsub.io
+  GOOGLE_GMAIL_SCOPES: https://www.googleapis.com/auth/gmail.modify
+  GMAIL_INGEST_QUERY: "to:inventory@dsub.io has:attachment filename:xlsx newer_than:30d"
+  GMAIL_MAX_RESULTS: "25"
+  GMAIL_INGEST_LOOKBACK_MS: "604800000"
+  GMAIL_PROCESSED_LABEL: Wholesale Processed
+  GMAIL_STORAGE_DIR: /var/lib/wholesale-ops/mail-attachments
+  CATALOG_ATTACHMENT_PATTERN: "New Preorders|New Releases In Stock"
+  SUPPLIER_CODE: juno
+  JUNO_LIVE_ENQUEUE_ON_INGEST: "false"
+  JUNO_BROWSER_PROFILE_DIR: /var/lib/wholesale-ops/juno-browser-profile
+  JUNO_BROWSER_HEADLESS: "true"
+  JUNO_LIVE_CONCURRENCY: "6"
+  JUNO_LIVE_DELAY_MIN_MS: "15000"
+  JUNO_LIVE_DELAY_MAX_MS: "75000"
+  JUNO_LIVE_NAV_TIMEOUT_MS: "45000"
+  JUNO_LIVE_MAX_ATTEMPTS: "2"
+  JUNO_LIVE_POLL_INTERVAL_MS: ""
+  JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true"
+  JUNO_LIVE_AUTO_ENQUEUE_LIMIT: "1000"
+  JUNO_LIVE_WORKER_COMMAND: ""
+  JUNO_LIVE_WORKER_ARGS: ""
+syncFiles:
+  - source: compose/app.yml
+    target: compose/app.yml
+wait:
+  timeoutSeconds: 300
+  intervalSeconds: 10
+  services:
+    - name: web-prod
+      healthy: true
