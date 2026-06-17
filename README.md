@@ -1,14 +1,14 @@
 # Juno Wholesale Ops
 
-Local-first catalog ingestion, stock observation, and buying-intelligence
-dashboard for Juno wholesale catalog emails.
+Local-first catalog ingestion, stock observation, and operator dashboard for
+Juno wholesale catalog emails.
 
 This project is read-only by design:
 
 - No cart actions
 - No auto-ordering
 - No checkout automation
-- No resale or sales-volume claims without observed evidence
+- No resale or demand claims beyond observed data
 
 The MVP keeps the service compact:
 
@@ -288,6 +288,52 @@ worker uses both JSON console logs and the `service_log_event` Postgres audit
 table. Log context is sanitized before writing; credentials, cookies, auth
 headers, and full HTML bodies are not stored.
 
+## Insights
+
+The insights layer is read-only and observation-based. It uses stored XLSX
+catalog snapshots, watch rules, generated signal events, and live stock
+observations. It does not place orders, prepare carts, update wishlists, or
+perform checkout actions.
+
+Watch rules can match exact normalized artist, label, and genre values, plus
+normalized keyword or exclude-keyword substrings across catalog text fields.
+Exclude matches create negative observed signals; they do not delete or hide
+catalog rows.
+
+Movement signals are generated from observed catalog snapshots and live stock
+lookups:
+
+- `observed_restock`
+- `observed_stock_drop`
+- `observed_live_low_stock`
+- `observed_status_change`
+- `observed_price_change`
+- `fast_mover_candidate`
+
+`fast_mover_candidate` is a proxy candidate based only on observed stock or
+status changes. It is not an actual demand measurement.
+
+Trend summaries compare the current catalog window with the previous catalog
+window for top genres, top labels, and watch-rule overlap. Trend spike signals
+use deterministic event keys so refreshes are idempotent.
+
+Run insight processors manually:
+
+```bash
+pnpm insights:movement
+pnpm insights:trends
+pnpm insights:refresh
+```
+
+Read-only admin APIs:
+
+```http
+GET /api/insights/today
+GET /api/insights/movement?limit=100
+GET /api/insights/trends?windowDays=7&previousWindowDays=7&limit=20
+GET /api/insights/digest
+```
+
 ## Dedupe Contract
 
 The worker treats duplicates at multiple levels:
@@ -306,8 +352,9 @@ the same XLSX content being resent under a different email, filename, or date.
   `GMAIL_STORAGE_DIR` with MinIO/S3 storage before running this as a multi-host
   production worker.
 - The first parser targets the observed Juno XLSX columns only.
-- No buying-intelligence or insight surface is included in this slice; the
-  persisted model stores ingestion source data only.
+- The insight surface is limited to observed catalog, watch-rule, and live
+  stock movement signals. It does not include external adapters or any ordering
+  automation.
 
 ## Production Skeleton
 

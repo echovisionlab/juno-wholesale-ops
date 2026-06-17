@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 15c409d0f9e305b384a5bd0cfc754a69bd504f8e34da77883bb7177a93850a2d
+-- migration-manifest-sha256: c3e290aefc75e8e3e59b5ce8cb1465c27d3df28d55a6ad0cfe0aa9a360de6715
 --
 -- PostgreSQL database dump
 --
@@ -268,6 +268,7 @@ CREATE TABLE public.juno_live_observation (
     duration_ms integer,
     error text,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
+    identity_id uuid,
     CONSTRAINT juno_live_observation_status_check CHECK ((status = ANY (ARRAY['in_stock'::text, 'out_of_stock'::text, 'preorder'::text, 'coming_soon'::text, 'unknown'::text, 'failed'::text, 'blocked'::text])))
 );
 
@@ -419,7 +420,7 @@ CREATE TABLE public.service_setting (
 
 CREATE TABLE public.signal_event (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    identity_id uuid NOT NULL,
+    identity_id uuid,
     catalog_item_raw_id uuid,
     type text NOT NULL,
     severity text DEFAULT 'info'::text NOT NULL,
@@ -428,8 +429,9 @@ CREATE TABLE public.signal_event (
     detail text NOT NULL,
     metadata jsonb DEFAULT '{}'::jsonb NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
+    event_key text,
     CONSTRAINT signal_event_severity_check CHECK ((severity = ANY (ARRAY['info'::text, 'watch'::text, 'warning'::text, 'critical'::text]))),
-    CONSTRAINT signal_event_type_check CHECK ((type = ANY (ARRAY['new_arrival'::text, 'watch_hit'::text, 'low_catalog_stock'::text, 'exclude_match'::text])))
+    CONSTRAINT signal_event_type_check CHECK ((type = ANY (ARRAY['new_arrival'::text, 'watch_hit'::text, 'low_catalog_stock'::text, 'exclude_match'::text, 'observed_restock'::text, 'observed_stock_drop'::text, 'observed_live_low_stock'::text, 'observed_status_change'::text, 'observed_price_change'::text, 'fast_mover_candidate'::text, 'trend_spike'::text])))
 );
 
 
@@ -864,6 +866,13 @@ CREATE INDEX idx_juno_live_lookup_run_started_at ON public.juno_live_lookup_run 
 
 
 --
+-- Name: idx_juno_live_observation_identity_observed_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_juno_live_observation_identity_observed_at ON public.juno_live_observation USING btree (identity_id, observed_at DESC) WHERE (identity_id IS NOT NULL);
+
+
+--
 -- Name: idx_juno_live_observation_juno_observed; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -931,6 +940,13 @@ CREATE INDEX idx_service_log_event_run ON public.service_log_event USING btree (
 --
 
 CREATE INDEX idx_signal_event_created_at ON public.signal_event USING btree (created_at DESC);
+
+
+--
+-- Name: idx_signal_event_event_key; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX idx_signal_event_event_key ON public.signal_event USING btree (event_key) WHERE (event_key IS NOT NULL);
 
 
 --
@@ -1046,6 +1062,14 @@ ALTER TABLE ONLY public.juno_live_lookup_job
 
 ALTER TABLE ONLY public.juno_live_observation
     ADD CONSTRAINT juno_live_observation_catalog_item_raw_id_fkey FOREIGN KEY (catalog_item_raw_id) REFERENCES public.catalog_item_raw(id) ON DELETE SET NULL;
+
+
+--
+-- Name: juno_live_observation juno_live_observation_identity_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.juno_live_observation
+    ADD CONSTRAINT juno_live_observation_identity_id_fkey FOREIGN KEY (identity_id) REFERENCES public.catalog_item_identity(id) ON DELETE SET NULL;
 
 
 --

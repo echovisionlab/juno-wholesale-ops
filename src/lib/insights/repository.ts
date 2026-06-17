@@ -12,7 +12,18 @@ import {
   type WatchRuleType,
 } from "./watch-matcher";
 
-export type SignalEventType = "new_arrival" | "watch_hit" | "low_catalog_stock" | "exclude_match";
+export type SignalEventType =
+  | "new_arrival"
+  | "watch_hit"
+  | "low_catalog_stock"
+  | "exclude_match"
+  | "observed_restock"
+  | "observed_stock_drop"
+  | "observed_live_low_stock"
+  | "observed_status_change"
+  | "observed_price_change"
+  | "fast_mover_candidate"
+  | "trend_spike";
 export type SignalSeverity = "info" | "watch" | "warning" | "critical";
 
 export type WatchRuleInput = {
@@ -39,7 +50,7 @@ export type TodayInsight = {
   detail: string;
   createdAt: string;
   item: {
-    identityId: string;
+    identityId: string | null;
     junoId: string | null;
     artist: string | null;
     title: string | null;
@@ -411,6 +422,7 @@ export async function getTodaySignals(databaseUrl: string, limit: number): Promi
         LEFT JOIN catalog_item_raw ON catalog_item_raw.id = signal_event.catalog_item_raw_id
         LEFT JOIN watch_match ON watch_match.catalog_item_raw_id = signal_event.catalog_item_raw_id
         WHERE signal_event.created_at >= date_trunc('day', now())
+          AND signal_event.type IN ('new_arrival', 'watch_hit', 'low_catalog_stock', 'exclude_match')
         GROUP BY
           signal_event.id,
           catalog_item_identity.id,

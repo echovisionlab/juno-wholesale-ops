@@ -27,7 +27,10 @@
     "gmail:ingest": "tsx -r tsconfig-paths/register scripts/gmail-ingest.ts",
     "gmail:ingest:write": "tsx -r tsconfig-paths/register scripts/gmail-ingest.ts --write",
     "juno:live:enqueue": "tsx -r tsconfig-paths/register scripts/juno-live-enqueue.ts",
-    "juno:live:worker": "tsx -r tsconfig-paths/register scripts/juno-live-worker.ts"
+    "juno:live:worker": "tsx -r tsconfig-paths/register scripts/juno-live-worker.ts",
+    "insights:movement": "tsx -r tsconfig-paths/register scripts/insights-movement.ts",
+    "insights:trends": "tsx -r tsconfig-paths/register scripts/insights-trends.ts",
+    "insights:refresh": "tsx -r tsconfig-paths/register scripts/insights-refresh.ts"
   },
   "dependencies": {
     "@mantine/core": "^9.3.2",

@@ -5,6 +5,7 @@ import {
   startMigratedPostgresTestDatabase,
   type StartedPostgresTestDatabase,
 } from "@/test/postgres";
+import { upsertCatalogItemIdentitiesForSnapshot } from "@/lib/insights/repository";
 import { enqueueLiveLookupJobs, JunoLiveRepository } from "./repository";
 
 describe("JunoLiveRepository", () => {
@@ -25,7 +26,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(9);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(10);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -36,6 +37,7 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 7, filename: "0007_auth_and_email_settings.sql" }),
       expect.objectContaining({ version: 8, filename: "0008_service_setting_guardrails.sql" }),
       expect.objectContaining({ version: 9, filename: "0009_insights_foundation.sql" }),
+      expect.objectContaining({ version: 10, filename: "0010_stock_movement_insights.sql" }),
     ]);
   });
 
@@ -190,6 +192,62 @@ describe("JunoLiveRepository", () => {
       display_stock: "N/A",
       final_url: "https://www.juno.co.uk/products/9ms-lunch-vinyl/1148569-01/",
     });
+  });
+
+  it("stores resolved item identity on live observations", async () => {
+    const snapshotId = await seedCatalogSnapshot([{ rowNumber: 1, junoId: "1148569-01" }]);
+    await upsertCatalogItemIdentitiesForSnapshot({
+      databaseUrl: database.container.getConnectionUri(),
+      snapshotId,
+    });
+    const raw = await database.pool.query<{ id: string; identity_id: string }>(
+      "SELECT id::text, identity_id::text FROM catalog_item_raw WHERE snapshot_id = $1 LIMIT 1",
+      [snapshotId],
+    );
+    const runId = await repository.createRun("manual", "worker-1");
+    const rawJobId = await insertLookupJob("1148569-01");
+
+    await repository.recordObservationAndComplete(runId, {
+      jobId: rawJobId,
+      junoId: "1148569-01",
+      catalogItemRawId: raw.rows[0].id,
+      status: "in_stock",
+      stockQuantity: 4,
+      stockText: "4 in stock",
+      displayStock: "4 in stock",
+      wholesalePriceGbp: 20.63,
+      productUrl: "https://www.juno.co.uk/products/1148569-01/",
+      finalUrl: "https://www.juno.co.uk/products/1148569-01/",
+      parserVersion: "v1",
+      durationMs: 25,
+      error: null,
+      metadata: {},
+    });
+    const fallbackJobId = await insertLookupJob("1148569-01");
+    await repository.recordObservationAndComplete(runId, {
+      jobId: fallbackJobId,
+      junoId: "1148569-01",
+      catalogItemRawId: null,
+      status: "in_stock",
+      stockQuantity: 3,
+      stockText: "3 in stock",
+      displayStock: "3 in stock",
+      wholesalePriceGbp: 20.63,
+      productUrl: "https://www.juno.co.uk/products/1148569-01/",
+      finalUrl: "https://www.juno.co.uk/products/1148569-01/",
+      parserVersion: "v1",
+      durationMs: 25,
+      error: null,
+      metadata: {},
+    });
+
+    const observations = await database.pool.query<{ identity_id: string }>(
+      "SELECT identity_id::text FROM juno_live_observation ORDER BY observed_at, id",
+    );
+    expect(observations.rows.map((row) => row.identity_id)).toEqual([
+      raw.rows[0].identity_id,
+      raw.rows[0].identity_id,
+    ]);
   });
 
   it("updates retry, failed, blocked, and summary states", async () => {

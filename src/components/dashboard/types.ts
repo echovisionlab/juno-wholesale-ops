@@ -65,7 +65,18 @@ export type LiveWorkerStatus = {
   }>;
 };
 
-export type SignalEventType = "new_arrival" | "watch_hit" | "low_catalog_stock" | "exclude_match";
+export type SignalEventType =
+  | "new_arrival"
+  | "watch_hit"
+  | "low_catalog_stock"
+  | "exclude_match"
+  | "observed_restock"
+  | "observed_stock_drop"
+  | "observed_live_low_stock"
+  | "observed_status_change"
+  | "observed_price_change"
+  | "fast_mover_candidate"
+  | "trend_spike";
 
 export type SignalSeverity = "info" | "watch" | "warning" | "critical";
 
@@ -78,7 +89,7 @@ export type TodayInsight = {
   detail: string;
   createdAt: string;
   item: {
-    identityId: string;
+    identityId: string | null;
     junoId: string | null;
     artist: string | null;
     title: string | null;
@@ -91,6 +102,44 @@ export type TodayInsight = {
     releaseDate: string | null;
   };
   reasons: string[];
+};
+
+export type MovementSignal = TodayInsight;
+
+export type TrendBucket = {
+  key: string;
+  label: string;
+  currentCount: number;
+  previousCount: number;
+  delta: number;
+  percentChange: number | null;
+  watchHitCount: number;
+};
+
+export type CatalogTrendSummary = {
+  window: {
+    currentFrom: string;
+    currentTo: string;
+    previousFrom: string;
+    previousTo: string;
+  };
+  genres: TrendBucket[];
+  labels: TrendBucket[];
+  watchOverlap: TrendBucket[];
+};
+
+export type InsightDigest = {
+  generatedAt: string;
+  counts: {
+    watchHitsToday: number;
+    lowCatalogStockToday: number;
+    lowLiveStockToday: number;
+    restocksToday: number;
+    fastMoverCandidatesToday: number;
+  };
+  topSignals: TodayInsight[];
+  topGenres: TrendBucket[];
+  topLabels: TrendBucket[];
 };
 
 export type WatchRuleType = "artist" | "label" | "genre" | "keyword" | "exclude_keyword";

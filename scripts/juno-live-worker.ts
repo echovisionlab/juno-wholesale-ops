@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { Pool } from "pg";
 import { loadRuntimeEnv } from "@/lib/env";
+import { processMovementSignalsForRecentObservations } from "@/lib/insights/movement-repository";
 import { PlaywrightJunoBrowser } from "@/lib/juno-live/playwright-browser";
 import { enqueueLiveLookupJobs, JunoLiveRepository } from "@/lib/juno-live/repository";
 import { ensureJunoSession, processLiveLookupJob, type LiveLookupRunnerResult } from "@/lib/juno-live/lookup-runner";
@@ -62,6 +63,7 @@ async function main() {
         repository,
         browser,
         logger,
+        databaseUrl: env.DATABASE_URL,
         workerId,
         triggerSource: loopMode ? "loop" : "manual",
         concurrency: settings.concurrency,
@@ -97,6 +99,7 @@ async function runWorkerIteration(options: {
   repository: JunoLiveRepository;
   browser: PlaywrightJunoBrowser;
   logger: AppLogger;
+  databaseUrl: string;
   workerId: string;
   triggerSource: string;
   concurrency: number;
@@ -140,13 +143,33 @@ async function runWorkerIteration(options: {
       }),
     ),
   );
-  await options.repository.finishRun(runId, "succeeded", summarizeResults(results), null);
+  const summary = summarizeResults(results);
+  if ((summary.succeeded ?? 0) > 0) {
+    try {
+      const movementResult = await processMovementSignalsForRecentObservations({
+        databaseUrl: options.databaseUrl,
+      });
+      summary.movement = movementResult;
+      await runLogger.info("insights.movement/succeeded", movementResult);
+    } catch (error) {
+      summary.movementError = error instanceof Error ? error.message : "movement processing failed";
+      await runLogger.error("insights.movement/failed", { error: summary.movementError });
+    }
+  }
+  await options.repository.finishRun(runId, "succeeded", summary, null);
   return jobs.length;
 }
 
-function summarizeResults(results: LiveLookupRunnerResult[]): Record<string, number> {
-  return results.reduce<Record<string, number>>((summary, result) => {
-    summary[result.status] = (summary[result.status] ?? 0) + 1;
+type RunSummary = Record<string, unknown> & {
+  succeeded?: number;
+  movement?: unknown;
+  movementError?: string;
+};
+
+function summarizeResults(results: LiveLookupRunnerResult[]): RunSummary {
+  return results.reduce<RunSummary>((summary, result) => {
+    const currentCount = typeof summary[result.status] === "number" ? (summary[result.status] as number) : 0;
+    summary[result.status] = currentCount + 1;
     return summary;
   }, {});
 }

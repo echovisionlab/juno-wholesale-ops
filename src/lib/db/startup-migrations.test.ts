@@ -47,8 +47,8 @@ describe("runStartupMigrations", () => {
       }),
     ).resolves.toEqual({
       status: "applied",
-      migrationCount: 9,
-      latestVersion: 9,
+      migrationCount: 10,
+      latestVersion: 10,
     });
 
     const pool = new Pool({ connectionString: container.getConnectionUri(), max: 1 });
@@ -60,7 +60,7 @@ describe("runStartupMigrations", () => {
       await pool.end();
     }
     expect(logger.infoMessages).toEqual([
-      JSON.stringify({ event: "database_migrations_ready", migrationCount: 9, latestVersion: 9 }),
+      JSON.stringify({ event: "database_migrations_ready", migrationCount: 10, latestVersion: 10 }),
     ]);
   });
 

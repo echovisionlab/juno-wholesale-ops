@@ -1,4 +1,5 @@
 import { Pool, type PoolClient } from "pg";
+import { resolveLiveObservationIdentityIdClient } from "@/lib/insights/movement-repository";
 import type { LiveLookupJob, LiveLookupObservationInput } from "./lookup-runner";
 import type { JunoLiveServiceSettingsRow } from "./settings";
 
@@ -192,6 +193,10 @@ export class JunoLiveRepository {
     const client = await this.pool.connect();
     try {
       await withTransaction(client, async () => {
+        const identityId = await resolveLiveObservationIdentityIdClient(client, {
+          catalogItemRawId: observation.catalogItemRawId,
+          junoId: observation.junoId,
+        });
         await client.query(
           `
             INSERT INTO juno_live_observation (
@@ -209,9 +214,10 @@ export class JunoLiveRepository {
               parser_version,
               duration_ms,
               error,
-              metadata
+              metadata,
+              identity_id
             )
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
           `,
           [
             observation.jobId,
@@ -229,6 +235,7 @@ export class JunoLiveRepository {
             observation.durationMs,
             observation.error,
             JSON.stringify(observation.metadata),
+            identityId,
           ],
         );
         await client.query(

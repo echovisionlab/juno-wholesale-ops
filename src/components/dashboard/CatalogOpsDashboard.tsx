@@ -26,6 +26,8 @@ import {
 } from "@mantine/core";
 import {
   AlertTriangle,
+  Activity,
+  BarChart3,
   Boxes,
   CheckCircle2,
   Clock3,
@@ -47,16 +49,20 @@ import { SectionHeader } from "./SectionHeader";
 import { StatCard } from "./StatCard";
 import type {
   AppSetupStatus,
+  CatalogTrendSummary,
   GmailIngestState,
+  InsightDigest,
   LiveLookupDashboardSummary,
   LiveWorkerAction,
   LiveWorkerStatus,
+  MovementSignal,
   PipelineItem,
   SetupGuardrail,
   SetupSetting,
   SetupStep,
   StatCardData,
   TodayInsight,
+  TrendBucket,
   WatchRule,
   WatchRuleDraft,
   WatchRuleType,
@@ -71,6 +77,9 @@ export type CatalogOpsDashboardProps = {
   workerStatus?: LiveWorkerStatus | null;
   setupStatus?: AppSetupStatus | null;
   todaySignals?: TodayInsight[] | null;
+  movementSignals?: MovementSignal[] | null;
+  catalogTrends?: CatalogTrendSummary | null;
+  operatorDigest?: InsightDigest | null;
   watchRules?: WatchRule[] | null;
   workerActionPending?: boolean;
   watchRuleActionPending?: boolean;
@@ -89,6 +98,9 @@ export function CatalogOpsDashboard({
   workerStatus,
   setupStatus,
   todaySignals,
+  movementSignals,
+  catalogTrends,
+  operatorDigest,
   watchRules,
   workerActionPending = false,
   watchRuleActionPending = false,
@@ -169,6 +181,21 @@ export function CatalogOpsDashboard({
               onToggle={onToggleWatchRule}
               onDelete={onDeleteWatchRule}
             />
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 7 }}>
+            <SectionHeader icon={Activity}>Movement Signals</SectionHeader>
+            <MovementSignalsPanel signals={movementSignals} />
+          </Grid.Col>
+
+          <Grid.Col span={{ base: 12, lg: 5 }}>
+            <SectionHeader icon={ClipboardCheck}>Operator Digest</SectionHeader>
+            <OperatorDigestPanel digest={operatorDigest} />
+          </Grid.Col>
+
+          <Grid.Col span={12}>
+            <SectionHeader icon={BarChart3}>Catalog Trends</SectionHeader>
+            <CatalogTrendsPanel trends={catalogTrends} />
           </Grid.Col>
 
           <Grid.Col span={12}>
@@ -279,6 +306,189 @@ function TodaySignalsPanel({ signals }: { signals?: TodayInsight[] | null }) {
         ))}
       </Stack>
     </Card>
+  );
+}
+
+function MovementSignalsPanel({ signals }: { signals?: MovementSignal[] | null }) {
+  if (!signals) {
+    return (
+      <Card>
+        <Text fw={700}>Movement signals unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable observed movement signal data.
+        </Text>
+      </Card>
+    );
+  }
+
+  if (signals.length === 0) {
+    return (
+      <Card>
+        <Text fw={700}>No movement signals recorded</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          Observed stock changes, restock observations, and fast mover candidates will appear here.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Stack gap="sm">
+        {signals.map((signal) => (
+          <SignalRow key={signal.signalId} signal={signal} />
+        ))}
+      </Stack>
+    </Card>
+  );
+}
+
+function OperatorDigestPanel({ digest }: { digest?: InsightDigest | null }) {
+  if (!digest) {
+    return (
+      <Card>
+        <Text fw={700}>Operator digest unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable digest data.
+        </Text>
+      </Card>
+    );
+  }
+
+  const stats = [
+    { label: "Watch hits today", value: digest.counts.watchHitsToday },
+    { label: "Low catalog stock", value: digest.counts.lowCatalogStockToday },
+    { label: "Low live stock", value: digest.counts.lowLiveStockToday },
+    { label: "Restock observations", value: digest.counts.restocksToday },
+    { label: "Fast mover candidates", value: digest.counts.fastMoverCandidatesToday },
+  ];
+
+  return (
+    <Card>
+      <Stack gap="md">
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+          {stats.map((stat) => (
+            <Box key={stat.label}>
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+                {stat.label}
+              </Text>
+              <Text fw={700}>{stat.value}</Text>
+            </Box>
+          ))}
+        </SimpleGrid>
+        <Text size="sm" c="dimmed">
+          Generated {formatOptionalDate(digest.generatedAt)} from observed catalog and live lookup data.
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+function CatalogTrendsPanel({ trends }: { trends?: CatalogTrendSummary | null }) {
+  if (!trends) {
+    return (
+      <Card>
+        <Text fw={700}>Catalog trends unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return readable catalog trend data.
+        </Text>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <Stack gap="md">
+        <Text size="sm" c="dimmed">
+          Current window {formatOptionalDate(trends.window.currentFrom)} to {formatOptionalDate(trends.window.currentTo)} compared with the previous observed window.
+        </Text>
+        <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
+          <TrendBucketTable title="Top Genres" buckets={trends.genres} />
+          <TrendBucketTable title="Top Labels" buckets={trends.labels} />
+          <TrendBucketTable title="Watch Overlap" buckets={trends.watchOverlap} />
+        </SimpleGrid>
+      </Stack>
+    </Card>
+  );
+}
+
+function SignalRow({ signal }: { signal: TodayInsight }) {
+  return (
+    <Box>
+      <Group justify="space-between" align="flex-start" gap="sm">
+        <Stack gap={4}>
+          <Group gap={6}>
+            <Badge color={signalSeverityColor(signal.severity)} variant="light">
+              {formatSignalType(signal.type)}
+            </Badge>
+            <Badge color="gray" variant="outline">
+              score {signal.score}
+            </Badge>
+          </Group>
+          <Text fw={700}>{signal.title}</Text>
+          <Text size="sm" c="dimmed">
+            {signal.detail}
+          </Text>
+        </Stack>
+        <Text size="sm" c="dimmed" ta="right">
+          {formatOptionalDate(signal.createdAt)}
+        </Text>
+      </Group>
+
+      <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="sm">
+        <SignalFact label="Artist / Title" value={formatArtistTitle(signal)} />
+        <SignalFact label="Label / Genre" value={formatLabelGenre(signal)} />
+        <SignalFact label="Catalog stock" value={signal.item.stock === null ? "not reported" : String(signal.item.stock)} />
+        <SignalFact label="Juno ID" value={signal.item.junoId ?? "N/A"} />
+      </SimpleGrid>
+
+      {signal.reasons.length > 0 ? (
+        <Text size="sm" c="dimmed" mt="sm">
+          {signal.reasons.join(" ")}
+        </Text>
+      ) : null}
+      <Divider mt="sm" />
+    </Box>
+  );
+}
+
+function TrendBucketTable({ title, buckets }: { title: string; buckets: TrendBucket[] }) {
+  return (
+    <Box>
+      <Text fw={700} mb="xs">
+        {title}
+      </Text>
+      {buckets.length === 0 ? (
+        <Text size="sm" c="dimmed">
+          No observed catalog trend rows in this window.
+        </Text>
+      ) : (
+        <Table.ScrollContainer minWidth={360}>
+          <Table verticalSpacing="xs">
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Name</Table.Th>
+                <Table.Th>Current</Table.Th>
+                <Table.Th>Previous</Table.Th>
+                <Table.Th>Delta</Table.Th>
+                <Table.Th>Watch hits</Table.Th>
+              </Table.Tr>
+            </Table.Thead>
+            <Table.Tbody>
+              {buckets.map((bucket) => (
+                <Table.Tr key={bucket.key}>
+                  <Table.Td>{bucket.label}</Table.Td>
+                  <Table.Td>{bucket.currentCount}</Table.Td>
+                  <Table.Td>{bucket.previousCount}</Table.Td>
+                  <Table.Td>{formatDelta(bucket.delta)}</Table.Td>
+                  <Table.Td>{bucket.watchHitCount}</Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </Table.ScrollContainer>
+      )}
+    </Box>
   );
 }
 
@@ -553,7 +763,28 @@ function formatSignalType(type: TodayInsight["type"]): string {
   if (type === "low_catalog_stock") {
     return "Low observed stock";
   }
-  return "Exclude match";
+  if (type === "exclude_match") {
+    return "Exclude match";
+  }
+  if (type === "observed_restock") {
+    return "Observed restock";
+  }
+  if (type === "observed_stock_drop") {
+    return "Observed stock change";
+  }
+  if (type === "observed_live_low_stock") {
+    return "Low live stock";
+  }
+  if (type === "observed_status_change") {
+    return "Observed status change";
+  }
+  if (type === "observed_price_change") {
+    return "Observed price change";
+  }
+  if (type === "fast_mover_candidate") {
+    return "Fast mover candidate";
+  }
+  return "Catalog trend spike";
 }
 
 function formatArtistTitle(signal: TodayInsight): string {
@@ -587,6 +818,13 @@ function normalizeDraftWeight(value: number | string): number | null {
 
 function formatWatchRuleType(type: WatchRuleType): string {
   return watchRuleTypeLabels[type];
+}
+
+function formatDelta(value: number): string {
+  if (value > 0) {
+    return `+${value}`;
+  }
+  return String(value);
 }
 
 function ingestStatusPresentation(status: GmailIngestState["lastQueryStatus"]): { label: string; color: string } {

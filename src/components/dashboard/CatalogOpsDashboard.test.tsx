@@ -50,6 +50,9 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Setup status unavailable");
     expect(pageText()).toContain("Gmail ingest status unavailable");
     expect(pageText()).toContain("Today signals unavailable");
+    expect(pageText()).toContain("Movement signals unavailable");
+    expect(pageText()).toContain("Catalog trends unavailable");
+    expect(pageText()).toContain("Operator digest unavailable");
     expect(pageText()).toContain("Watch rules unavailable");
     expect(pageText()).toContain("Queued / Running");
     expect(pageText()).toContain("N/A");
@@ -69,6 +72,14 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Migration ledger");
     expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
     expect(pageText()).toContain("Low observed stock");
+    expect(pageText()).toContain("Movement Signals");
+    expect(pageText()).toContain("Observed stock change");
+    expect(pageText()).toContain("Fast mover candidate");
+    expect(pageText()).toContain("Catalog Trends");
+    expect(pageText()).toContain("Top Genres");
+    expect(pageText()).toContain("Watch Overlap");
+    expect(pageText()).toContain("Operator Digest");
+    expect(pageText()).toContain("Restock observations");
     expect(pageText()).toContain("Blue Note");
     expect(pageText()).toContain("Exclude keyword");
   });
@@ -81,6 +92,18 @@ describe("CatalogOpsDashboard", () => {
     renderDashboard({
       ...dashboardFixture,
       todaySignals: [],
+      movementSignals: [],
+      catalogTrends: {
+        window: {
+          currentFrom: "2026-06-11T00:00:00.000Z",
+          currentTo: "2026-06-18T00:00:00.000Z",
+          previousFrom: "2026-06-04T00:00:00.000Z",
+          previousTo: "2026-06-11T00:00:00.000Z",
+        },
+        genres: [],
+        labels: [],
+        watchOverlap: [],
+      },
       watchRules: [],
       onCreateWatchRule,
       onToggleWatchRule,
@@ -88,6 +111,8 @@ describe("CatalogOpsDashboard", () => {
     });
 
     expect(pageText()).toContain("No observed signals today");
+    expect(pageText()).toContain("No movement signals recorded");
+    expect(pageText()).toContain("No observed catalog trend rows in this window");
     expect(pageText()).toContain("No watch rules configured");
     setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Impulse");
     clickButton("Add rule");
@@ -141,6 +166,43 @@ describe("CatalogOpsDashboard", () => {
           reasons: [],
         },
       ],
+      movementSignals: [
+        {
+          ...dashboardFixture.movementSignals![0],
+          signalId: "movement-restock",
+          type: "observed_restock",
+          detail: "Live lookup changed from out_of_stock to in_stock for this item.",
+        },
+        {
+          ...dashboardFixture.movementSignals![0],
+          signalId: "movement-low",
+          type: "observed_live_low_stock",
+          detail: "Live lookup observed 2 units in stock.",
+          item: {
+            ...dashboardFixture.movementSignals![0].item,
+            stock: null,
+            junoId: null,
+          },
+        },
+        {
+          ...dashboardFixture.movementSignals![0],
+          signalId: "movement-status",
+          type: "observed_status_change",
+          detail: "Live lookup status changed from preorder to in_stock.",
+        },
+        {
+          ...dashboardFixture.movementSignals![0],
+          signalId: "movement-price",
+          type: "observed_price_change",
+          detail: "Observed wholesale price changed from GBP 10.00 to GBP 11.00.",
+        },
+        {
+          ...dashboardFixture.movementSignals![0],
+          signalId: "movement-trend",
+          type: "trend_spike",
+          detail: "Catalog trend spike: Jazz appeared 9 times in the current window.",
+        },
+      ],
       watchRules: [
         {
           ...dashboardFixture.watchRules![0],
@@ -161,6 +223,11 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("not reported");
     expect(pageText()).toContain("New arrival");
     expect(pageText()).toContain("Exclude match");
+    expect(pageText()).toContain("Observed restock");
+    expect(pageText()).toContain("Low live stock");
+    expect(pageText()).toContain("Observed status change");
+    expect(pageText()).toContain("Observed price change");
+    expect(pageText()).toContain("Catalog trend spike");
     expect(pageText()).toContain("Warehouse Find");
     expect(pageText()).toContain("Disabled");
   });

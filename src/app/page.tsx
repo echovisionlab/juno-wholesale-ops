@@ -5,10 +5,13 @@ import { CatalogOpsDashboard } from "@/components/dashboard/CatalogOpsDashboard"
 import { dashboardFixture } from "@/components/dashboard/dashboard.fixtures";
 import type {
   AppSetupStatus,
+  CatalogTrendSummary,
   GmailIngestState,
+  InsightDigest,
   LiveLookupDashboardSummary,
   LiveWorkerAction,
   LiveWorkerStatus,
+  MovementSignal,
   TodayInsight,
   WatchRule,
   WatchRuleDraft,
@@ -20,6 +23,9 @@ export default function Home() {
   const [workerStatus, setWorkerStatus] = useState<LiveWorkerStatus | null>(null);
   const [setupStatus, setSetupStatus] = useState<AppSetupStatus | null>(null);
   const [todaySignals, setTodaySignals] = useState<TodayInsight[] | null>(null);
+  const [movementSignals, setMovementSignals] = useState<MovementSignal[] | null>(null);
+  const [catalogTrends, setCatalogTrends] = useState<CatalogTrendSummary | null>(null);
+  const [operatorDigest, setOperatorDigest] = useState<InsightDigest | null>(null);
   const [watchRules, setWatchRules] = useState<WatchRule[] | null>(null);
   const [workerActionPending, setWorkerActionPending] = useState(false);
   const [watchRuleActionPending, setWatchRuleActionPending] = useState(false);
@@ -33,6 +39,9 @@ export default function Home() {
       setWorkerStatus,
       setSetupStatus,
       setTodaySignals,
+      setMovementSignals,
+      setCatalogTrends,
+      setOperatorDigest,
       setWatchRules,
     );
     const intervalId = window.setInterval(() => {
@@ -43,6 +52,9 @@ export default function Home() {
         setWorkerStatus,
         setSetupStatus,
         setTodaySignals,
+        setMovementSignals,
+        setCatalogTrends,
+        setOperatorDigest,
         setWatchRules,
       );
     }, 30000);
@@ -127,6 +139,9 @@ export default function Home() {
       workerStatus={workerStatus}
       setupStatus={setupStatus}
       todaySignals={todaySignals}
+      movementSignals={movementSignals}
+      catalogTrends={catalogTrends}
+      operatorDigest={operatorDigest}
       watchRules={watchRules}
       workerActionPending={workerActionPending}
       watchRuleActionPending={watchRuleActionPending}
@@ -145,14 +160,30 @@ async function refreshDashboardState(
   setWorkerStatus: (status: LiveWorkerStatus | null) => void,
   setSetupStatus: (status: AppSetupStatus | null) => void,
   setTodaySignals: (signals: TodayInsight[] | null) => void,
+  setMovementSignals: (signals: MovementSignal[] | null) => void,
+  setCatalogTrends: (trends: CatalogTrendSummary | null) => void,
+  setOperatorDigest: (digest: InsightDigest | null) => void,
   setWatchRules: (rules: WatchRule[] | null) => void,
 ) {
-  const [ingestPayload, summaryPayload, workerPayload, setupPayload, signalsPayload, watchRulesPayload] = await Promise.all([
+  const [
+    ingestPayload,
+    summaryPayload,
+    workerPayload,
+    setupPayload,
+    signalsPayload,
+    movementPayload,
+    trendsPayload,
+    digestPayload,
+    watchRulesPayload,
+  ] = await Promise.all([
     fetchJson<{ state?: GmailIngestState }>("/api/ingest/status"),
     fetchJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status"),
     fetchJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker"),
     fetchJson<{ setup?: AppSetupStatus }>("/api/settings/status"),
     fetchJson<{ signals?: TodayInsight[] }>("/api/insights/today?limit=100"),
+    fetchJson<{ signals?: MovementSignal[] }>("/api/insights/movement?limit=100"),
+    fetchJson<{ trends?: CatalogTrendSummary }>("/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20"),
+    fetchJson<{ digest?: InsightDigest }>("/api/insights/digest"),
     fetchJson<{ rules?: WatchRule[] }>("/api/watch-rules"),
   ]);
 
@@ -162,6 +193,9 @@ async function refreshDashboardState(
     setWorkerStatus(workerPayload?.worker ?? null);
     setSetupStatus(setupPayload?.setup ?? null);
     setTodaySignals(signalsPayload?.signals ?? null);
+    setMovementSignals(movementPayload?.signals ?? null);
+    setCatalogTrends(trendsPayload?.trends ?? null);
+    setOperatorDigest(digestPayload?.digest ?? null);
     setWatchRules(watchRulesPayload?.rules ?? null);
   }
 }
