@@ -14,10 +14,14 @@ export default defineConfig({
     coverage: {
       provider: "v8",
       include: [
+        "src/app/page.tsx",
+        "src/components/dashboard/CatalogOpsDashboard.tsx",
+        "src/instrumentation.ts",
         "src/lib/auth/initial-admin.ts",
         "src/lib/auth/schema.ts",
         "src/lib/auth/settings.ts",
         "src/lib/db/migrations.ts",
+        "src/lib/db/startup-migrations.ts",
         "src/lib/email/adapter.ts",
         "src/lib/env.ts",
         "src/lib/ingest/gmail-query.ts",

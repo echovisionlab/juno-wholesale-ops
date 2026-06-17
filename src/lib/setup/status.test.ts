@@ -16,15 +16,17 @@ describe("buildAppSetupStatus", () => {
         id: "database",
         state: "missing",
         missing: ["DATABASE_URL"],
-        settings: [
+        settings: expect.arrayContaining([
           expect.objectContaining({
             key: "DATABASE_URL",
             source: "unset",
             state: "missing",
             value: "not set",
           }),
-        ],
-        guardrails: [expect.objectContaining({ label: "Persistent state", state: "blocked" })],
+        ]),
+        guardrails: expect.arrayContaining([
+          expect.objectContaining({ label: "Persistent state", state: "blocked" }),
+        ]),
       }),
       expect.objectContaining({
         id: "gmail",
@@ -324,6 +326,32 @@ describe("buildAppSetupStatus", () => {
           state: "missing",
         }),
       ]),
+    );
+  });
+
+  it("surfaces the migration ledger as the database guardrail", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
+        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        JUNO_LOGIN_EMAIL: "buyer@example.com",
+        JUNO_LOGIN_PASSWORD: "secret",
+      }),
+      settingsRow: emptyRow(),
+    });
+
+    expect(status.steps.find((step) => step.id === "database")).toEqual(
+      expect.objectContaining({
+        state: "complete",
+        guardrails: [
+          expect.objectContaining({
+            label: "Migration ledger",
+            state: "ok",
+            detail: "Next.js startup applied migrations and the service_setting row is available.",
+          }),
+        ],
+      }),
     );
   });
 });

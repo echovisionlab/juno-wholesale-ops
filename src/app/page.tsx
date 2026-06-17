@@ -5,12 +5,14 @@ import { CatalogOpsDashboard } from "@/components/dashboard/CatalogOpsDashboard"
 import { dashboardFixture } from "@/components/dashboard/dashboard.fixtures";
 import type {
   AppSetupStatus,
+  GmailIngestState,
   LiveLookupDashboardSummary,
   LiveWorkerAction,
   LiveWorkerStatus,
 } from "@/components/dashboard/types";
 
 export default function Home() {
+  const [ingestState, setIngestState] = useState<GmailIngestState | null>(null);
   const [liveSummary, setLiveSummary] = useState<LiveLookupDashboardSummary | null>(null);
   const [workerStatus, setWorkerStatus] = useState<LiveWorkerStatus | null>(null);
   const [setupStatus, setSetupStatus] = useState<AppSetupStatus | null>(null);
@@ -18,9 +20,9 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus, setSetupStatus);
+    void refreshDashboardState(() => cancelled, setIngestState, setLiveSummary, setWorkerStatus, setSetupStatus);
     const intervalId = window.setInterval(() => {
-      void refreshLiveState(() => cancelled, setLiveSummary, setWorkerStatus, setSetupStatus);
+      void refreshDashboardState(() => cancelled, setIngestState, setLiveSummary, setWorkerStatus, setSetupStatus);
     }, 30000);
     return () => {
       cancelled = true;
@@ -46,6 +48,7 @@ export default function Home() {
   return (
     <CatalogOpsDashboard
       {...dashboardFixture}
+      ingestState={ingestState}
       liveSummary={liveSummary}
       workerStatus={workerStatus}
       setupStatus={setupStatus}
@@ -55,19 +58,22 @@ export default function Home() {
   );
 }
 
-async function refreshLiveState(
+async function refreshDashboardState(
   isCancelled: () => boolean,
+  setIngestState: (state: GmailIngestState | null) => void,
   setLiveSummary: (summary: LiveLookupDashboardSummary | null) => void,
   setWorkerStatus: (status: LiveWorkerStatus | null) => void,
   setSetupStatus: (status: AppSetupStatus | null) => void,
 ) {
-  const [summaryPayload, workerPayload, setupPayload] = await Promise.all([
+  const [ingestPayload, summaryPayload, workerPayload, setupPayload] = await Promise.all([
+    fetchJson<{ state?: GmailIngestState }>("/api/ingest/status"),
     fetchJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status"),
     fetchJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker"),
     fetchJson<{ setup?: AppSetupStatus }>("/api/settings/status"),
   ]);
 
   if (!isCancelled()) {
+    setIngestState(ingestPayload?.state ?? null);
     setLiveSummary(summaryPayload?.summary ?? null);
     setWorkerStatus(workerPayload?.worker ?? null);
     setSetupStatus(setupPayload?.setup ?? null);

@@ -87,11 +87,11 @@ export function buildAppSetupStatus(options: {
       guardrails: [
         options.env.DATABASE_URL
           ? {
-              label: "Service settings row",
+              label: "Migration ledger",
               state: options.settingsRow ? "ok" : "warning",
               detail: options.settingsRow
-                ? "Database overrides can be applied through the singleton service_setting row."
-                : "Runtime fallback values are in use until the singleton service_setting row exists.",
+                ? "Next.js startup applied migrations and the service_setting row is available."
+                : "Startup migrations run automatically, but the singleton service_setting row is not available yet.",
             }
           : {
               label: "Persistent state",

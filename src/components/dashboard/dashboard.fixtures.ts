@@ -37,6 +37,21 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
     "pnpm juno:live:enqueue",
     "pnpm juno:live:worker",
   ],
+  ingestState: {
+    lastQuery: "has:attachment filename:xlsx newer_than:30d",
+    lastQueryWindowFrom: "2026-06-16 00:00:00+00",
+    lastQueryWindowTo: "2026-06-17 00:00:00+00",
+    lastQueryStartedAt: "2026-06-17 01:00:00+00",
+    lastQueryFinishedAt: "2026-06-17 01:00:07+00",
+    lastQueryStatus: "succeeded",
+    lastQueryError: null,
+    lastQueryMessageCount: 2,
+    lastQueryAttachmentCount: 1,
+    lastSuccessfulMessageReceivedAt: "2026-06-17 01:00:00+00",
+    lastIngestedSnapshotId: "4e02b7c8-ab7e-4305-b702-423a9287917f",
+    lastIngestedCatalogDate: "2026-06-17",
+    lastIngestedContentHash: "75fba5fd45de865441cf9d0899dc7a4f5f531a79fd4557c9d9b68f2f7b5d2a7a",
+  },
   setupStatus: {
     ready: false,
     steps: [
@@ -59,9 +74,9 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
         ],
         guardrails: [
           {
-            label: "Service settings row",
+            label: "Migration ledger",
             state: "ok",
-            detail: "Database overrides can be applied through the singleton service_setting row.",
+            detail: "Next.js startup applied migrations and the service_setting row is available.",
           },
         ],
       },

@@ -19,6 +19,22 @@ export type PipelineItem = {
   status: string;
 };
 
+export type GmailIngestState = {
+  lastQuery: string | null;
+  lastQueryWindowFrom: string | null;
+  lastQueryWindowTo: string | null;
+  lastQueryStartedAt: string | null;
+  lastQueryFinishedAt: string | null;
+  lastQueryStatus: "running" | "succeeded" | "failed" | null;
+  lastQueryError: string | null;
+  lastQueryMessageCount: number;
+  lastQueryAttachmentCount: number;
+  lastSuccessfulMessageReceivedAt: string | null;
+  lastIngestedSnapshotId: string | null;
+  lastIngestedCatalogDate: string | null;
+  lastIngestedContentHash: string | null;
+};
+
 export type LiveLookupDashboardSummary = {
   queued: number;
   running: number;

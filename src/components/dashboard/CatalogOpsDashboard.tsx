@@ -22,6 +22,7 @@ import {
   CheckCircle2,
   Clock3,
   ClipboardCheck,
+  MailSearch,
   PackageCheck,
   PackageSearch,
   Play,
@@ -34,6 +35,7 @@ import { SectionHeader } from "./SectionHeader";
 import { StatCard } from "./StatCard";
 import type {
   AppSetupStatus,
+  GmailIngestState,
   LiveLookupDashboardSummary,
   LiveWorkerAction,
   LiveWorkerStatus,
@@ -48,6 +50,7 @@ export type CatalogOpsDashboardProps = {
   stats: StatCardData[];
   pipeline: PipelineItem[];
   commands: string[];
+  ingestState?: GmailIngestState | null;
   liveSummary?: LiveLookupDashboardSummary | null;
   workerStatus?: LiveWorkerStatus | null;
   setupStatus?: AppSetupStatus | null;
@@ -59,6 +62,7 @@ export function CatalogOpsDashboard({
   stats,
   pipeline,
   commands,
+  ingestState,
   liveSummary,
   workerStatus,
   setupStatus,
@@ -119,6 +123,11 @@ export function CatalogOpsDashboard({
           </Grid.Col>
 
           <Grid.Col span={12}>
+            <SectionHeader icon={MailSearch}>Gmail Ingest State</SectionHeader>
+            <GmailIngestStatusPanel state={ingestState} />
+          </Grid.Col>
+
+          <Grid.Col span={12}>
             <SectionHeader icon={PackageSearch}>Live Stock Watch</SectionHeader>
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
               <StatCard
@@ -159,6 +168,150 @@ export function CatalogOpsDashboard({
       </Container>
     </Box>
   );
+}
+
+function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) {
+  if (!state) {
+    return (
+      <Card>
+        <Text fw={700}>Gmail ingest status unavailable</Text>
+        <Text size="sm" c="dimmed" mt={4}>
+          The server did not return a readable ingest state.
+        </Text>
+      </Card>
+    );
+  }
+
+  const status = ingestStatusPresentation(state.lastQueryStatus);
+
+  return (
+    <Card>
+      <Group justify="space-between" align="flex-start">
+        <Stack gap={4}>
+          <Text fw={700}>Last Gmail run</Text>
+          <Text size="sm" c="dimmed">
+            {formatIngestRunDetail(state)}
+          </Text>
+        </Stack>
+        <Badge color={status.color} variant="light">
+          {status.label}
+        </Badge>
+      </Group>
+
+      {state.lastQueryError ? (
+        <Alert
+          mt="md"
+          color="red"
+          icon={<AlertTriangle size={18} aria-hidden="true" />}
+          title="Last run failed"
+        >
+          {state.lastQueryError}
+        </Alert>
+      ) : null}
+
+      <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm" mt="md">
+        <IngestFact
+          label="Messages / Attachments"
+          value={`${state.lastQueryMessageCount} / ${state.lastQueryAttachmentCount}`}
+          detail="latest run totals"
+        />
+        <IngestFact
+          label="Last Successful Mail"
+          value={formatOptionalDate(state.lastSuccessfulMessageReceivedAt)}
+          detail="stored success cursor"
+        />
+        <IngestFact
+          label="Latest Catalog Date"
+          value={state.lastIngestedCatalogDate ?? "N/A"}
+          detail={formatSnapshotDetail(state.lastIngestedSnapshotId)}
+        />
+        <IngestFact
+          label="Sheet Content Hash"
+          value={formatHash(state.lastIngestedContentHash)}
+          detail="latest stored sheet hash"
+        />
+      </SimpleGrid>
+
+      <Divider my="md" />
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
+        <Stack gap={4}>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+            Query window
+          </Text>
+          <Text size="sm">{formatQueryWindow(state)}</Text>
+        </Stack>
+        <Stack gap={4}>
+          <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+            Gmail query
+          </Text>
+          <Code block>{state.lastQuery ?? "N/A"}</Code>
+        </Stack>
+      </SimpleGrid>
+    </Card>
+  );
+}
+
+function IngestFact({ label, value, detail }: { label: string; value: string; detail: string }) {
+  return (
+    <Box>
+      <Text size="sm" c="dimmed">
+        {label}
+      </Text>
+      <Text mt={4} fw={700}>
+        {value}
+      </Text>
+      <Text mt={2} size="sm" c="dimmed">
+        {detail}
+      </Text>
+    </Box>
+  );
+}
+
+function ingestStatusPresentation(status: GmailIngestState["lastQueryStatus"]): { label: string; color: string } {
+  if (status === "succeeded") {
+    return { label: "Succeeded", color: "green" };
+  }
+  if (status === "running") {
+    return { label: "Running", color: "blue" };
+  }
+  if (status === "failed") {
+    return { label: "Failed", color: "red" };
+  }
+  return { label: "Not run", color: "gray" };
+}
+
+function formatIngestRunDetail(state: GmailIngestState): string {
+  if (state.lastQueryStatus === "running") {
+    return `started ${formatOptionalDate(state.lastQueryStartedAt)}`;
+  }
+  if (state.lastQueryFinishedAt) {
+    return `finished ${formatOptionalDate(state.lastQueryFinishedAt)}`;
+  }
+  return "no recorded Gmail ingest run";
+}
+
+function formatSnapshotDetail(snapshotId: string | null): string {
+  if (!snapshotId) {
+    return "no stored snapshot yet";
+  }
+  return `snapshot ${snapshotId.slice(0, 8)}`;
+}
+
+function formatHash(hash: string | null): string {
+  if (!hash) {
+    return "N/A";
+  }
+  if (hash.length <= 18) {
+    return hash;
+  }
+  return `${hash.slice(0, 10)}...${hash.slice(-6)}`;
+}
+
+function formatQueryWindow(state: GmailIngestState): string {
+  if (!state.lastQueryWindowFrom && !state.lastQueryWindowTo) {
+    return "N/A";
+  }
+  return `${formatOptionalDate(state.lastQueryWindowFrom)} -> ${formatOptionalDate(state.lastQueryWindowTo)}`;
 }
 
 function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }) {

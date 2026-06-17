@@ -54,6 +54,7 @@ daily MVP path unless we intentionally broaden the model.
 ## Commands
 
 ```bash
+pnpm db:dev:up # local Postgres on localhost:5437
 pnpm dev # http://localhost:3006
 pnpm lint
 pnpm typecheck
@@ -65,6 +66,10 @@ pnpm build-storybook
 
 `pnpm test:coverage` enforces 100% statements, branches, functions, and lines
 for the pure ingestion logic. Storybook runs on port `6008`.
+
+Local Postgres is defined in `compose/dev.yml` and intentionally maps to host
+port `5437` so it can coexist with other development databases on `5432`.
+`pnpm db:dev:down` stops it without removing the persistent Docker volume.
 
 Set `NEXT_PUBLIC_FONT_STYLESHEET_URL` when you want the app to load a hosted
 font stylesheet. If unset, the UI uses the same Mantine theme with local font
@@ -172,6 +177,11 @@ pnpm db:migrate
 pnpm db:schema:dump
 pnpm db:migrations:check
 ```
+
+Next.js also applies pending migrations once during server startup when
+`DATABASE_URL` is configured. The migration runner uses the same Postgres
+advisory lock and hash ledger as `pnpm db:migrate`, so concurrent server
+instances serialize migration work instead of applying the same file twice.
 
 `schema.sql` is generated, not hand-edited. After adding a migration, run
 `pnpm db:schema:dump` and commit both the new migration and the regenerated
