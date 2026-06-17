@@ -67,6 +67,7 @@ describe("buildAppSetupStatus", () => {
         juno_login_email: "buyer@example.com",
         juno_login_password: "secret",
         juno_live_poll_interval_ms: 3600000,
+        juno_live_auto_enqueue_on_interval: true,
       },
     });
 
@@ -179,6 +180,7 @@ describe("buildAppSetupStatus", () => {
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
         JUNO_LIVE_POLL_INTERVAL_MS: "3600000",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
       settingsRow: null,
     });
@@ -188,7 +190,31 @@ describe("buildAppSetupStatus", () => {
         expect.objectContaining({
           label: "Scheduled polling",
           state: "blocked",
-          detail: "Polling interval is set, but credentials are missing.",
+          detail: "Automatic enqueue is enabled, but credentials are missing.",
+        }),
+      ]),
+    );
+  });
+
+  it("warns when polling loop is scheduled but automatic enqueue is disabled", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
+        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        JUNO_LOGIN_EMAIL: "buyer@example.com",
+        JUNO_LOGIN_PASSWORD: "secret",
+        JUNO_LIVE_POLL_INTERVAL_MS: "7200000",
+      }),
+      settingsRow: null,
+    });
+
+    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Scheduled polling",
+          state: "warning",
+          detail: "Polling loop can stay alive every 2 hours for queued jobs; automatic enqueue is disabled.",
         }),
       ]),
     );
@@ -222,6 +248,7 @@ describe("buildAppSetupStatus", () => {
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "120000",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
       settingsRow: null,
     });
@@ -246,6 +273,7 @@ describe("buildAppSetupStatus", () => {
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "60000",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
       settingsRow: null,
     });
@@ -270,6 +298,7 @@ describe("buildAppSetupStatus", () => {
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "7200000",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
       settingsRow: null,
     });
@@ -294,6 +323,7 @@ describe("buildAppSetupStatus", () => {
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "1500",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
       settingsRow: null,
     });

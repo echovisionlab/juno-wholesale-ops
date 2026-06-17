@@ -67,6 +67,7 @@ export function buildAppSetupStatus(options: {
   ].filter((value): value is string => Boolean(value));
   const authSettings = resolveAppAuthSettings(options.env, options.settingsRow);
   const authMissing = getMissingAppAuthSettings(authSettings);
+  const pollingGuardrail = scheduledPollingGuardrail(liveSettings);
 
   const steps: SetupStep[] = [
     setupStep({
@@ -151,6 +152,12 @@ export function buildAppSetupStatus(options: {
           required: true,
         }),
         rowBackedSetting({
+          key: "google_gmail_scopes",
+          label: "Gmail scopes",
+          rowValue: options.settingsRow?.google_gmail_scopes,
+          runtimeValue: options.env.GOOGLE_GMAIL_SCOPES,
+        }),
+        rowBackedSetting({
           key: "gmail_max_results",
           label: "Max messages per run",
           rowValue: options.settingsRow?.gmail_max_results,
@@ -232,16 +239,8 @@ export function buildAppSetupStatus(options: {
         },
         {
           label: "Scheduled polling",
-          state: shouldAutoEnqueueLiveLookups(liveSettings)
-            ? "ok"
-            : shouldContinueAutomaticLookup(liveSettings)
-              ? "blocked"
-              : "warning",
-          detail: shouldAutoEnqueueLiveLookups(liveSettings)
-            ? `Automatic lookup is enabled every ${formatDuration(liveSettings.pollIntervalMs)}.`
-            : shouldContinueAutomaticLookup(liveSettings)
-              ? "Polling interval is set, but credentials are missing."
-              : "No polling interval is set; lookups stay manual.",
+          state: pollingGuardrail.state,
+          detail: pollingGuardrail.detail,
         },
       ],
     }),
@@ -362,6 +361,38 @@ function guardrailStepState(guardrails: SetupGuardrail[]): SetupStepState {
     return "missing";
   }
   return guardrails.some((guardrail) => guardrail.state === "warning") ? "warning" : "complete";
+}
+
+function scheduledPollingGuardrail(
+  liveSettings: ReturnType<typeof resolveJunoLiveSettings>,
+): Pick<SetupGuardrail, "state" | "detail"> {
+  if (!shouldContinueAutomaticLookup(liveSettings)) {
+    return {
+      state: "warning",
+      detail: "No polling interval is set; lookups stay manual.",
+    };
+  }
+
+  if (!liveSettings.autoEnqueueOnInterval) {
+    return {
+      state: "warning",
+      detail: `Polling loop can stay alive every ${formatDuration(
+        liveSettings.pollIntervalMs,
+      )} for queued jobs; automatic enqueue is disabled.`,
+    };
+  }
+
+  if (!shouldAutoEnqueueLiveLookups(liveSettings)) {
+    return {
+      state: "blocked",
+      detail: "Automatic enqueue is enabled, but credentials are missing.",
+    };
+  }
+
+  return {
+    state: "ok",
+    detail: `Automatic lookup is enabled every ${formatDuration(liveSettings.pollIntervalMs)}.`,
+  };
 }
 
 function rowBackedSetting(options: {

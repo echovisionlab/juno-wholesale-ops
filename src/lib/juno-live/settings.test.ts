@@ -30,17 +30,31 @@ describe("resolveJunoLiveSettings", () => {
       loginPassword: "secret",
       browserProfileDir: ".data/juno-browser-profile",
       browserHeadless: true,
-      concurrency: 6,
-      delayMinMs: 15000,
-      delayMaxMs: 75000,
+      concurrency: 1,
+      delayMinMs: 30000,
+      delayMaxMs: 180000,
       navTimeoutMs: 45000,
       maxAttempts: 2,
       pollIntervalMs: 300000,
       retryDelayMs: 300000,
-      autoEnqueueOnInterval: true,
+      autoEnqueueOnInterval: false,
       autoEnqueueLimit: 1000,
       gmailIngestLookbackMs: 604800000,
     });
+    expect(shouldContinueAutomaticLookup(settings)).toBe(true);
+    expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
+  });
+
+  it("enables interval enqueue only when explicitly configured with credentials", () => {
+    const env = loadRuntimeEnv({
+      ...requiredEnv,
+      JUNO_LOGIN_EMAIL: "catalog@example.com",
+      JUNO_LOGIN_PASSWORD: "secret",
+      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
+      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
+    });
+    const settings = resolveJunoLiveSettings(env, emptyRow());
+
     expect(shouldContinueAutomaticLookup(settings)).toBe(true);
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(true);
   });

@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth/admin";
 import { getJunoLiveWorkerProcessManager } from "@/lib/juno-live/worker-process";
 
 export const dynamic = "force-dynamic";
@@ -7,11 +8,21 @@ type WorkerActionRequest = {
   action?: unknown;
 };
 
-export function GET() {
+export async function GET(request: Request) {
+  const authorization = await requireAdmin(request);
+  if (!authorization.authorized) {
+    return authorization.response;
+  }
+
   return Response.json({ worker: getJunoLiveWorkerProcessManager().getStatus() });
 }
 
 export async function POST(request: Request) {
+  const authorization = await requireAdmin(request);
+  if (!authorization.authorized) {
+    return authorization.response;
+  }
+
   const body = (await request.json().catch(() => ({}))) as WorkerActionRequest;
   const manager = getJunoLiveWorkerProcessManager();
 

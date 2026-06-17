@@ -1,3 +1,4 @@
+import { requireAdmin } from "@/lib/auth/admin";
 import { loadRuntimeEnv } from "@/lib/env";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
@@ -5,6 +6,11 @@ import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const authorization = await requireAdmin(request);
+  if (!authorization.authorized) {
+    return authorization.response;
+  }
+
   const databaseUrl = process.env.DATABASE_URL;
   if (!databaseUrl) {
     return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });

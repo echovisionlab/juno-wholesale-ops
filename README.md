@@ -1,6 +1,14 @@
 # Juno Wholesale Ops
 
-Internal catalog-ingestion and purchasing operations service for Juno wholesale emails.
+Local-first catalog ingestion, stock observation, and buying-intelligence
+dashboard for Juno wholesale catalog emails.
+
+This project is read-only by design:
+
+- No cart actions
+- No auto-ordering
+- No checkout automation
+- No resale or sales-volume claims without observed evidence
 
 The MVP keeps the service compact:
 
@@ -155,6 +163,18 @@ in Gmail after processing.
 pnpm gmail:ingest -- --label
 ```
 
+The default Gmail scope is read-only:
+
+```text
+GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly
+```
+
+Label mode mutates Gmail labels, so it requires:
+
+```text
+GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.modify
+```
+
 ## Database Migrations
 
 Migration files live in `infra/postgres/migrations` and are append-only. Never
@@ -251,6 +271,15 @@ before claiming jobs. Start conservatively with one to two hours, for example:
 JUNO_LIVE_POLL_INTERVAL_MS=7200000
 ```
 
+The example and container defaults are intentionally manual and conservative:
+
+```text
+JUNO_LIVE_CONCURRENCY=1
+JUNO_LIVE_DELAY_MIN_MS=30000
+JUNO_LIVE_DELAY_MAX_MS=180000
+JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL=false
+```
+
 Per-product navigation still uses the configured randomized delay window, so the
 interval controls how often new batches are queued, not a fixed request cadence.
 
@@ -277,7 +306,7 @@ the same XLSX content being resent under a different email, filename, or date.
   `GMAIL_STORAGE_DIR` with MinIO/S3 storage before running this as a multi-host
   production worker.
 - The first parser targets the observed Juno XLSX columns only.
-- No purchasing analysis or insight surface is included in this slice; the
+- No buying-intelligence or insight surface is included in this slice; the
   persisted model stores ingestion source data only.
 
 ## Production Skeleton

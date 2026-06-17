@@ -1,6 +1,9 @@
 import { createEnv } from "@t3-oss/env-nextjs";
 import { z } from "zod";
 
+export const GOOGLE_GMAIL_READONLY_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
+export const GOOGLE_GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
+
 const stringBoolean = z.preprocess((value) => {
   if (typeof value === "string") {
     if (value.toLowerCase() === "true") {
@@ -33,7 +36,7 @@ const serverEnvSchema = {
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: z.string().min(1).optional(),
   GOOGLE_GMAIL_SCOPES: z
     .string()
-    .default("https://www.googleapis.com/auth/gmail.modify"),
+    .default(GOOGLE_GMAIL_READONLY_SCOPE),
   GMAIL_INGEST_QUERY: z
     .string()
     .default("has:attachment filename:xlsx newer_than:30d"),
@@ -48,13 +51,13 @@ const serverEnvSchema = {
   JUNO_LOGIN_PASSWORD: z.string().min(1).optional(),
   JUNO_BROWSER_PROFILE_DIR: z.string().min(1).default(".data/juno-browser-profile"),
   JUNO_BROWSER_HEADLESS: stringBoolean.default(true),
-  JUNO_LIVE_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(6),
-  JUNO_LIVE_DELAY_MIN_MS: z.coerce.number().int().nonnegative().default(15000),
-  JUNO_LIVE_DELAY_MAX_MS: z.coerce.number().int().nonnegative().default(75000),
+  JUNO_LIVE_CONCURRENCY: z.coerce.number().int().min(1).max(10).default(1),
+  JUNO_LIVE_DELAY_MIN_MS: z.coerce.number().int().nonnegative().default(30000),
+  JUNO_LIVE_DELAY_MAX_MS: z.coerce.number().int().nonnegative().default(180000),
   JUNO_LIVE_NAV_TIMEOUT_MS: z.coerce.number().int().positive().default(45000),
   JUNO_LIVE_MAX_ATTEMPTS: z.coerce.number().int().positive().default(2),
   JUNO_LIVE_POLL_INTERVAL_MS: z.coerce.number().int().positive().optional(),
-  JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: stringBoolean.default(true),
+  JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: stringBoolean.default(false),
   JUNO_LIVE_AUTO_ENQUEUE_LIMIT: z.coerce.number().int().positive().default(1000),
   JUNO_LIVE_WORKER_COMMAND: z.string().min(1).optional(),
   JUNO_LIVE_WORKER_ARGS: z.string().min(1).optional(),
@@ -76,6 +79,10 @@ export function parseScopes(scopes: string): string[] {
     .split(/[,\s]+/)
     .map((scope) => scope.trim())
     .filter(Boolean);
+}
+
+export function hasGmailModifyScope(scopes: string): boolean {
+  return parseScopes(scopes).includes(GOOGLE_GMAIL_MODIFY_SCOPE);
 }
 
 function createRuntimeEnv(runtimeEnv: StrictRuntimeEnvInput) {

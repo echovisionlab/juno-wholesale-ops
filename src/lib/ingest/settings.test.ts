@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { loadRuntimeEnv } from "@/lib/env";
+import { GOOGLE_GMAIL_READONLY_SCOPE, loadRuntimeEnv } from "@/lib/env";
 import {
   assertRunnableGmailIngestSettings,
   getMissingGmailIngestSettings,
@@ -18,7 +18,7 @@ describe("resolveGmailIngestSettings", () => {
     expect(resolveGmailIngestSettings(env, emptyRow())).toMatchObject({
       delegatedUser: "operator@example.com",
       serviceAccountKeyJson: "/run/secrets/google.json",
-      scopes: "https://www.googleapis.com/auth/gmail.modify",
+      scopes: GOOGLE_GMAIL_READONLY_SCOPE,
       query: "from:supplier@example.com filename:xlsx",
       maxResults: 25,
       lookbackMs: 604800000,

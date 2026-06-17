@@ -7,7 +7,7 @@ import { fontStylesheetUrl } from "@/lib/fonts";
 
 export const metadata: Metadata = {
   title: "Juno Wholesale Ops",
-  description: "Juno wholesale catalog ingestion and purchasing operations",
+  description: "Juno wholesale catalog ingestion and read-only stock observation",
 };
 
 export default function RootLayout({

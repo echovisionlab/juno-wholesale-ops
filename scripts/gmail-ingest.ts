@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { loadRuntimeEnv, parseScopes } from "@/lib/env";
+import { GOOGLE_GMAIL_MODIFY_SCOPE, hasGmailModifyScope, loadRuntimeEnv, parseScopes } from "@/lib/env";
 import {
   decodeBase64Url,
   findXlsxAttachments,
@@ -40,6 +40,9 @@ async function main() {
       : resolveJunoLiveSettings(env, null);
   const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
   assertRunnableGmailIngestSettings(gmailSettings);
+  if (labelMode && !hasGmailModifyScope(gmailSettings.scopes)) {
+    throw new Error(`Gmail label mode requires ${GOOGLE_GMAIL_MODIFY_SCOPE}`);
+  }
   if (writeMode && !env.DATABASE_URL) {
     throw new Error("DATABASE_URL is required when using --write");
   }

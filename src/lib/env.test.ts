@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { loadRuntimeEnv, parseScopes } from "./env";
+import {
+  GOOGLE_GMAIL_MODIFY_SCOPE,
+  GOOGLE_GMAIL_READONLY_SCOPE,
+  hasGmailModifyScope,
+  loadRuntimeEnv,
+  parseScopes,
+} from "./env";
 
 const configuredEnv = {
   GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
@@ -11,7 +17,7 @@ describe("loadRuntimeEnv", () => {
     const env = loadRuntimeEnv({});
 
     expect(env).toMatchObject({
-      GOOGLE_GMAIL_SCOPES: "https://www.googleapis.com/auth/gmail.modify",
+      GOOGLE_GMAIL_SCOPES: GOOGLE_GMAIL_READONLY_SCOPE,
       GMAIL_INGEST_QUERY: "has:attachment filename:xlsx newer_than:30d",
       GMAIL_MAX_RESULTS: 25,
       GMAIL_INGEST_LOOKBACK_MS: 604800000,
@@ -26,12 +32,12 @@ describe("loadRuntimeEnv", () => {
       AUTH_INITIAL_ADMIN_NAME: "Initial Admin",
       JUNO_BROWSER_PROFILE_DIR: ".data/juno-browser-profile",
       JUNO_BROWSER_HEADLESS: true,
-      JUNO_LIVE_CONCURRENCY: 6,
-      JUNO_LIVE_DELAY_MIN_MS: 15000,
-      JUNO_LIVE_DELAY_MAX_MS: 75000,
+      JUNO_LIVE_CONCURRENCY: 1,
+      JUNO_LIVE_DELAY_MIN_MS: 30000,
+      JUNO_LIVE_DELAY_MAX_MS: 180000,
       JUNO_LIVE_NAV_TIMEOUT_MS: 45000,
       JUNO_LIVE_MAX_ATTEMPTS: 2,
-      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: true,
+      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: false,
       JUNO_LIVE_AUTO_ENQUEUE_LIMIT: 1000,
     });
     expect(env.GOOGLE_WORKSPACE_DELEGATED_USER).toBeUndefined();
@@ -171,5 +177,10 @@ describe("parseScopes", () => {
       "scope-b",
       "scope-c",
     ]);
+  });
+
+  it("detects Gmail modify scope for label mode", () => {
+    expect(hasGmailModifyScope(GOOGLE_GMAIL_READONLY_SCOPE)).toBe(false);
+    expect(hasGmailModifyScope(`${GOOGLE_GMAIL_READONLY_SCOPE} ${GOOGLE_GMAIL_MODIFY_SCOPE}`)).toBe(true);
   });
 });
