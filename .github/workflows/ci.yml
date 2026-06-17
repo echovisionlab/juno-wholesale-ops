@@ -105,8 +105,8 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          load: true
-          push: false
-          tags: juno-wholesale-ops:ci
+          outputs: type=cacheonly
           cache-from: type=gha
-          cache-to: type=gha,mode=max
+          cache-to: type=gha,mode=min
+          provenance: false
+          sbom: false
