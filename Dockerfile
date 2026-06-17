@@ -26,7 +26,7 @@ WORKDIR /app
 ENV HOSTNAME=0.0.0.0
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3006
 
 RUN install -d -o pwuser -g pwuser /app /var/lib/juno-wholesale-ops/mail-attachments /var/lib/juno-wholesale-ops/juno-browser-profile
 
@@ -40,6 +40,6 @@ COPY --from=builder --chown=pwuser:pwuser /app/src ./src
 
 USER pwuser
 
-EXPOSE 3000
+EXPOSE 3006
 
 CMD ["node", "server.js"]

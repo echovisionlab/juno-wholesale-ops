@@ -4,9 +4,9 @@
   "private": true,
   "packageManager": "pnpm@10.34.1",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3006",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3006",
     "validate": "pnpm lint && pnpm typecheck && pnpm db:migrations:check && pnpm test:coverage && pnpm unused",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",

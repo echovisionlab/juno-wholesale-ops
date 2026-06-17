@@ -3,7 +3,7 @@
 Target hostname:
 
 ```text
-catalog.example.com -> app-host.example.com:3100
+catalog.example.com -> app-host.example.com:3006
 ```
 
 The repository owns the canonical Compose and stack files, while the deployment
@@ -46,7 +46,7 @@ The external Caddy/proxy layer must add:
 
 ```caddyfile
 catalog.example.com {
-    reverse_proxy app-host.example.com:3100
+    reverse_proxy app-host.example.com:3006
 }
 ```
 

@@ -49,14 +49,38 @@ export type LiveWorkerStatus = {
   }>;
 };
 
-export type SetupStepState = "complete" | "missing" | "disabled";
+export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
+
+export type SetupSettingSource = "database" | "runtime" | "unset";
+
+export type SetupSettingState = "configured" | "missing" | "disabled";
+
+export type SetupSetting = {
+  key: string;
+  label: string;
+  source: SetupSettingSource;
+  state: SetupSettingState;
+  value: string;
+  secret?: boolean;
+};
+
+export type SetupGuardrailState = "ok" | "warning" | "blocked";
+
+export type SetupGuardrail = {
+  label: string;
+  state: SetupGuardrailState;
+  detail: string;
+};
 
 export type SetupStep = {
   id: "database" | "gmail" | "juno" | "auth";
   label: string;
   state: SetupStepState;
   detail: string;
+  action: string | null;
   missing: string[];
+  settings: SetupSetting[];
+  guardrails: SetupGuardrail[];
 };
 
 export type AppSetupStatus = {

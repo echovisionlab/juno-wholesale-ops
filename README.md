@@ -54,7 +54,7 @@ daily MVP path unless we intentionally broaden the model.
 ## Commands
 
 ```bash
-pnpm dev
+pnpm dev # http://localhost:3006
 pnpm lint
 pnpm typecheck
 pnpm test:coverage
@@ -282,7 +282,7 @@ Deployment files:
 Target route example:
 
 ```text
-catalog.example.com -> app-host.example.com:3100
+catalog.example.com -> app-host.example.com:3006
 ```
 
 Do not commit production secrets. `DATABASE_URL` and Google service account

@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 61b9ca93c6cf4878eb2c3f549fda6f77edfdec766c9a63876e9164fe79fd32a4
+-- migration-manifest-sha256: 0d6c6c0676ac3382cf94d8a7d770b5be7d509267e4043f3247c010a5810597ad
 --
 -- PostgreSQL database dump
 --
@@ -378,6 +378,7 @@ CREATE TABLE public.service_setting (
     auth_external_discovery_url text,
     auth_external_client_id text,
     auth_external_client_secret text,
+    CONSTRAINT service_setting_auth_sign_in_method_check CHECK (((auth_enabled IS DISTINCT FROM true) OR (auth_email_password_enabled IS DISTINCT FROM false) OR (auth_external_provider_enabled IS DISTINCT FROM false))),
     CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
     CONSTRAINT service_setting_gmail_max_results_check CHECK (((gmail_max_results > 0) AND (gmail_max_results <= 500))),
     CONSTRAINT service_setting_id_check CHECK (id),
@@ -385,6 +386,7 @@ CREATE TABLE public.service_setting (
     CONSTRAINT service_setting_juno_live_concurrency_check CHECK (((juno_live_concurrency >= 1) AND (juno_live_concurrency <= 10))),
     CONSTRAINT service_setting_juno_live_delay_max_ms_check CHECK ((juno_live_delay_max_ms >= 0)),
     CONSTRAINT service_setting_juno_live_delay_min_ms_check CHECK ((juno_live_delay_min_ms >= 0)),
+    CONSTRAINT service_setting_juno_live_delay_range_check CHECK (((juno_live_delay_min_ms IS NULL) OR (juno_live_delay_max_ms IS NULL) OR (juno_live_delay_min_ms <= juno_live_delay_max_ms))),
     CONSTRAINT service_setting_juno_live_max_attempts_check CHECK ((juno_live_max_attempts > 0)),
     CONSTRAINT service_setting_juno_live_nav_timeout_ms_check CHECK ((juno_live_nav_timeout_ms > 0)),
     CONSTRAINT service_setting_juno_live_poll_interval_ms_check CHECK ((juno_live_poll_interval_ms > 0))

@@ -1,6 +1,21 @@
 "use client";
 
-import { Badge, Box, Button, Card, Code, Container, Grid, Group, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import {
+  Alert,
+  Badge,
+  Box,
+  Button,
+  Card,
+  Code,
+  Container,
+  Divider,
+  Grid,
+  Group,
+  SimpleGrid,
+  Stack,
+  Text,
+  Title,
+} from "@mantine/core";
 import {
   AlertTriangle,
   Boxes,
@@ -23,6 +38,8 @@ import type {
   LiveWorkerAction,
   LiveWorkerStatus,
   PipelineItem,
+  SetupGuardrail,
+  SetupSetting,
   SetupStep,
   StatCardData,
 } from "./types";
@@ -84,7 +101,7 @@ export function CatalogOpsDashboard({
       <Container py="xl">
         <Grid gap="lg">
           <Grid.Col span={12}>
-            <SectionHeader icon={ClipboardCheck}>Setup</SectionHeader>
+            <SectionHeader icon={ClipboardCheck}>Configuration</SectionHeader>
             <SetupChecklist setupStatus={setupStatus} />
           </Grid.Col>
 
@@ -159,11 +176,22 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
   }
 
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
-      {steps.map((step) => (
-        <SetupStepCard key={step.id} step={step} />
-      ))}
-    </SimpleGrid>
+    <Stack gap="sm">
+      <Alert
+        color={setupStatus?.ready ? "green" : "red"}
+        icon={setupStatus?.ready ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
+        title={setupStatus?.ready ? "Runtime configuration is usable" : "Configuration action required"}
+      >
+        {setupStatus?.ready
+          ? "Required settings are present. Review warnings before enabling unattended automation."
+          : "One or more required settings are missing or unsafe. The affected feature should remain disabled until fixed."}
+      </Alert>
+      <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
+        {steps.map((step) => (
+          <SetupStepCard key={step.id} step={step} />
+        ))}
+      </SimpleGrid>
+    </Stack>
   );
 }
 
@@ -183,9 +211,43 @@ function SetupStepCard({ step }: { step: SetupStep }) {
         </Badge>
       </Group>
       {step.missing.length > 0 ? (
-        <Code mt="md" block>
-          {step.missing.join("\n")}
-        </Code>
+        <Stack gap={6} mt="md">
+          <Text size="xs" fw={700} tt="uppercase" c="red.7">
+            Required before use
+          </Text>
+          <Group gap={6}>
+            {step.missing.map((item) => (
+              <Code key={item}>{item}</Code>
+            ))}
+          </Group>
+        </Stack>
+      ) : null}
+      {step.action ? (
+        <Text size="sm" c={step.state === "disabled" ? "dimmed" : "red.7"} mt="md">
+          {step.action}
+        </Text>
+      ) : null}
+      <Divider my="md" />
+      <Stack gap="xs">
+        <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+          Resolved settings
+        </Text>
+        {step.settings.map((setting) => (
+          <SetupSettingRow key={setting.key} setting={setting} />
+        ))}
+      </Stack>
+      {step.guardrails.length > 0 ? (
+        <>
+          <Divider my="md" />
+          <Stack gap="xs">
+            <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+              Guardrails
+            </Text>
+            {step.guardrails.map((guardrail) => (
+              <SetupGuardrailRow key={guardrail.label} guardrail={guardrail} />
+            ))}
+          </Stack>
+        </>
       ) : null}
     </Card>
   );
@@ -198,7 +260,89 @@ function setupStepPresentation(step: SetupStep): { label: string; color: string 
   if (step.state === "disabled") {
     return { label: "Disabled", color: "gray" };
   }
+  if (step.state === "warning") {
+    return { label: "Review", color: "yellow" };
+  }
   return { label: "Missing", color: "red" };
+}
+
+function SetupSettingRow({ setting }: { setting: SetupSetting }) {
+  const source = setupSettingSourcePresentation(setting);
+  const state = setupSettingStatePresentation(setting);
+
+  return (
+    <Box>
+      <Group justify="space-between" gap="xs" align="flex-start">
+        <Stack gap={2}>
+          <Text size="sm" fw={600}>
+            {setting.label}
+          </Text>
+          <Group gap={4}>
+            <Badge color={source.color} size="xs" variant="light">
+              {source.label}
+            </Badge>
+            <Badge color={state.color} size="xs" variant="light">
+              {state.label}
+            </Badge>
+          </Group>
+        </Stack>
+        <Text size="sm" ta="right" c={setting.state === "missing" ? "red.7" : "gray.8"} lineClamp={2}>
+          {setting.value}
+        </Text>
+      </Group>
+    </Box>
+  );
+}
+
+function SetupGuardrailRow({ guardrail }: { guardrail: SetupGuardrail }) {
+  const presentation = setupGuardrailPresentation(guardrail);
+  return (
+    <Box>
+      <Group justify="space-between" gap="xs" align="flex-start">
+        <Stack gap={2}>
+          <Text size="sm" fw={600}>
+            {guardrail.label}
+          </Text>
+          <Text size="sm" c="dimmed">
+            {guardrail.detail}
+          </Text>
+        </Stack>
+        <Badge color={presentation.color} size="xs" variant="light">
+          {presentation.label}
+        </Badge>
+      </Group>
+    </Box>
+  );
+}
+
+function setupSettingSourcePresentation(setting: SetupSetting): { label: string; color: string } {
+  if (setting.source === "database") {
+    return { label: "DB override", color: "blue" };
+  }
+  if (setting.source === "runtime") {
+    return { label: "Env/default", color: "grape" };
+  }
+  return { label: "Unset", color: "red" };
+}
+
+function setupSettingStatePresentation(setting: SetupSetting): { label: string; color: string } {
+  if (setting.state === "configured") {
+    return { label: setting.secret ? "Secret set" : "Set", color: "green" };
+  }
+  if (setting.state === "disabled") {
+    return { label: "Optional", color: "gray" };
+  }
+  return { label: "Missing", color: "red" };
+}
+
+function setupGuardrailPresentation(guardrail: SetupGuardrail): { label: string; color: string } {
+  if (guardrail.state === "ok") {
+    return { label: "OK", color: "green" };
+  }
+  if (guardrail.state === "warning") {
+    return { label: "Review", color: "yellow" };
+  }
+  return { label: "Blocked", color: "red" };
 }
 
 function formatObservedAt(value: string | null | undefined): string {
