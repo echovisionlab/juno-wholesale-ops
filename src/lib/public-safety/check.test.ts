@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { describe, expect, it } from "vitest";
 import type { DemoCatalogFixture } from "@/lib/demo/fixtures";
 import {
@@ -78,17 +79,25 @@ describe("public safety check", () => {
       "PRIVACY.md",
       "CONTRIBUTING.md",
       "CODE_OF_CONDUCT.md",
+      "CHANGELOG.md",
       "docs/PROJECT_BOUNDARIES.md",
       "docs/LOCAL_FIRST.md",
       "docs/DEMO_DATA.md",
       "docs/SELF_HOSTING.md",
       "docs/OPERATIONS.md",
       "docs/RELEASE_CHECKLIST.md",
+      "docs/RELEASE_NOTES_v0.1.0.md",
+      "docs/PUBLIC_REPOSITORY_CHECKLIST.md",
+      "docs/ROADMAP.md",
       "docs/ADAPTER_GUIDE.md",
       "docs/SCREENSHOTS.md",
       ".github/ISSUE_TEMPLATE/bug_report.md",
       ".github/ISSUE_TEMPLATE/feature_request.md",
       ".github/pull_request_template.md",
+      "demo/fixtures/README.md",
+      "scripts/demo-seed.ts",
+      "scripts/demo-reset.ts",
+      "scripts/check-public-safety.ts",
       "demo/fixtures/catalog/preorders-demo.xlsx",
       "demo/fixtures/catalog/in-stock-demo.xlsx",
     ];
@@ -106,9 +115,15 @@ describe("public safety check", () => {
       "## Insights",
       "## Notifications",
       "## Self-hosting",
+      "## Release docs",
       "## Privacy and security",
       "## Contributing",
       "## License",
+      "[CHANGELOG.md](CHANGELOG.md)",
+      "[docs/RELEASE_NOTES_v0.1.0.md](docs/RELEASE_NOTES_v0.1.0.md)",
+      "[docs/PUBLIC_REPOSITORY_CHECKLIST.md](docs/PUBLIC_REPOSITORY_CHECKLIST.md)",
+      "[docs/ROADMAP.md](docs/ROADMAP.md)",
+      "This repository is a self-hosted application. It is not intended to be",
     ].join("\n");
     const issues = runPublicSafetyCheck({
       trackedFiles: ["README.md", ...requiredFiles],
@@ -121,6 +136,57 @@ describe("public safety check", () => {
             "does not call cart, wishlist, checkout, or ordering endpoints",
             "observed stock or status changes are not evidence of actual sales volume",
           ].join("\n"),
+        },
+        {
+          path: "CHANGELOG.md",
+          content: [
+            "## 0.1.0",
+            "No cart actions.",
+            "No auto-ordering.",
+            "No checkout automation.",
+            "No sales-volume claims without observed evidence.",
+          ].join("\n"),
+        },
+        {
+          path: "docs/RELEASE_NOTES_v0.1.0.md",
+          content: [
+            "This release does not automate ordering, cart actions, wishlist actions, checkout flows, or purchase decisions.",
+            "이 릴리즈는 자동 주문, 장바구니 조작, 위시리스트 조작, 체크아웃 흐름, 구매 결정을 자동화하지 않습니다.",
+          ].join("\n"),
+        },
+        {
+          path: "docs/PUBLIC_REPOSITORY_CHECKLIST.md",
+          content: [
+            "Required status checks: Quality, Tests, Build",
+            "Secret scanning is enabled",
+            "Dependabot alerts are enabled",
+            "GitHub Actions permissions are minimal",
+            "No production secrets in repository",
+            "No real wholesale data in repository",
+            "Demo fixtures synthetic-only",
+          ].join("\n"),
+        },
+        {
+          path: "docs/ROADMAP.md",
+          content: [
+            "## Not planned",
+            "Auto-ordering",
+            "Cart automation",
+            "Checkout automation",
+            "Wishlist mutation",
+            "Sales-volume inference",
+          ].join("\n"),
+        },
+        {
+          path: "package.json",
+          content: JSON.stringify({
+            version: "0.1.0",
+            scripts: { validate: "pnpm lint && pnpm public:safety" },
+          }),
+        },
+        {
+          path: ".github/workflows/ci.yml",
+          content: "name: CI\n\n- name: Public safety check\n  run: pnpm public:safety\n",
         },
         {
           path: ".github/pull_request_template.md",
@@ -138,6 +204,43 @@ describe("public safety check", () => {
     });
 
     expect(issues).toEqual([]);
+  });
+
+  it("validates current release candidate documents and workflow wiring", () => {
+    const read = (path: string) => fs.readFileSync(path, "utf8");
+    const readme = read("README.md");
+    const changelog = read("CHANGELOG.md");
+    const releaseNotes = read("docs/RELEASE_NOTES_v0.1.0.md");
+    const repositoryChecklist = read("docs/PUBLIC_REPOSITORY_CHECKLIST.md");
+    const roadmap = read("docs/ROADMAP.md");
+    const packageJson = JSON.parse(read("package.json")) as {
+      version?: string;
+      scripts?: Record<string, string>;
+    };
+    const ciWorkflow = read(".github/workflows/ci.yml");
+
+    expect(readme).toContain("[CHANGELOG.md](CHANGELOG.md)");
+    expect(readme).toContain("[docs/RELEASE_NOTES_v0.1.0.md](docs/RELEASE_NOTES_v0.1.0.md)");
+    expect(readme).toContain("[docs/ROADMAP.md](docs/ROADMAP.md)");
+    expect(changelog).toContain("## 0.1.0");
+    expect(changelog).toContain("No cart actions.");
+    expect(changelog).toContain("No auto-ordering.");
+    expect(changelog).toContain("No checkout automation.");
+    expect(changelog).toContain("No sales-volume claims without observed evidence.");
+    expect(releaseNotes).toContain(
+      "This release does not automate ordering, cart actions, wishlist actions, checkout flows, or purchase decisions.",
+    );
+    expect(repositoryChecklist).toContain("Secret scanning is enabled");
+    expect(repositoryChecklist).toContain("No production secrets in repository");
+    expect(repositoryChecklist).toContain("No real wholesale data in repository");
+    expect(roadmap).toContain("## Not planned");
+    expect(roadmap).toContain("Auto-ordering");
+    expect(roadmap).toContain("Cart automation");
+    expect(roadmap).toContain("Checkout automation");
+    expect(packageJson.version).toBe("0.1.0");
+    expect(packageJson.scripts?.validate).toContain("pnpm public:safety");
+    expect(ciWorkflow).toContain("Public safety check");
+    expect(ciWorkflow).toContain("pnpm public:safety");
   });
 
   it("reports missing document content when markdown files are absent", () => {

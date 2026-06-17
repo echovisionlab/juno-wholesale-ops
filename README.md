@@ -257,6 +257,18 @@ Production recommendations:
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
 - Run `pnpm validate`, `pnpm build`, and Docker build before release.
 
+This repository is a self-hosted application. It is not intended to be
+published as an npm package. `private: true` remains in `package.json` to reduce
+the chance of accidental package publishing.
+
+## Release docs
+
+- [CHANGELOG.md](CHANGELOG.md)
+- [docs/RELEASE_NOTES_v0.1.0.md](docs/RELEASE_NOTES_v0.1.0.md)
+- [docs/PUBLIC_REPOSITORY_CHECKLIST.md](docs/PUBLIC_REPOSITORY_CHECKLIST.md)
+- [docs/ROADMAP.md](docs/ROADMAP.md)
+- [docs/RELEASE_CHECKLIST.md](docs/RELEASE_CHECKLIST.md)
+
 ## Privacy and security
 
 See [PRIVACY.md](PRIVACY.md) and [SECURITY.md](SECURITY.md).

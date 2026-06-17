@@ -38,17 +38,25 @@ const requiredFiles = [
   "PRIVACY.md",
   "CONTRIBUTING.md",
   "CODE_OF_CONDUCT.md",
+  "CHANGELOG.md",
   "docs/PROJECT_BOUNDARIES.md",
   "docs/LOCAL_FIRST.md",
   "docs/DEMO_DATA.md",
   "docs/SELF_HOSTING.md",
   "docs/OPERATIONS.md",
   "docs/RELEASE_CHECKLIST.md",
+  "docs/RELEASE_NOTES_v0.1.0.md",
+  "docs/PUBLIC_REPOSITORY_CHECKLIST.md",
+  "docs/ROADMAP.md",
   "docs/ADAPTER_GUIDE.md",
   "docs/SCREENSHOTS.md",
   ".github/ISSUE_TEMPLATE/bug_report.md",
   ".github/ISSUE_TEMPLATE/feature_request.md",
   ".github/pull_request_template.md",
+  "demo/fixtures/README.md",
+  "scripts/demo-seed.ts",
+  "scripts/demo-reset.ts",
+  "scripts/check-public-safety.ts",
   ...demoFixtureRelativePaths,
 ] as const;
 
@@ -66,15 +74,55 @@ const requiredReadmeSections = [
   "## Insights",
   "## Notifications",
   "## Self-hosting",
+  "## Release docs",
   "## Privacy and security",
   "## Contributing",
   "## License",
+] as const;
+
+const requiredReadmeReleaseLinks = [
+  "[CHANGELOG.md](CHANGELOG.md)",
+  "[docs/RELEASE_NOTES_v0.1.0.md](docs/RELEASE_NOTES_v0.1.0.md)",
+  "[docs/PUBLIC_REPOSITORY_CHECKLIST.md](docs/PUBLIC_REPOSITORY_CHECKLIST.md)",
+  "[docs/ROADMAP.md](docs/ROADMAP.md)",
 ] as const;
 
 const requiredProjectBoundaryPhrases = [
   "read-only catalog intelligence",
   "does not call cart, wishlist, checkout, or ordering endpoints",
   "observed stock or status changes are not evidence of actual sales volume",
+] as const;
+
+const requiredChangelogPhrases = [
+  "## 0.1.0",
+  "No cart actions.",
+  "No auto-ordering.",
+  "No checkout automation.",
+  "No sales-volume claims without observed evidence.",
+] as const;
+
+const requiredReleaseNotesPhrases = [
+  "This release does not automate ordering, cart actions, wishlist actions, checkout flows, or purchase decisions.",
+  "이 릴리즈는 자동 주문, 장바구니 조작, 위시리스트 조작, 체크아웃 흐름, 구매 결정을 자동화하지 않습니다.",
+] as const;
+
+const requiredPublicRepositoryChecklistPhrases = [
+  "Required status checks: Quality, Tests, Build",
+  "Secret scanning is enabled",
+  "Dependabot alerts are enabled",
+  "GitHub Actions permissions are minimal",
+  "No production secrets in repository",
+  "No real wholesale data in repository",
+  "Demo fixtures synthetic-only",
+] as const;
+
+const requiredRoadmapPhrases = [
+  "## Not planned",
+  "Auto-ordering",
+  "Cart automation",
+  "Checkout automation",
+  "Wishlist mutation",
+  "Sales-volume inference",
 ] as const;
 
 const requiredPullRequestChecklist = [
@@ -198,6 +246,18 @@ function checkRequiredDocumentSections(textFiles: PublicSafetyTextFile[]): Publi
       issues.push({ code: "missing-required-section", path: "README.md", message: `missing section ${section}` });
     }
   }
+  for (const link of requiredReadmeReleaseLinks) {
+    if (!readme.includes(link)) {
+      issues.push({ code: "missing-required-section", path: "README.md", message: `missing release link ${link}` });
+    }
+  }
+  if (!readme.includes("This repository is a self-hosted application. It is not intended to be")) {
+    issues.push({
+      code: "missing-required-section",
+      path: "README.md",
+      message: "missing self-hosted application packaging note",
+    });
+  }
   const boundaries = byPath.get("docs/PROJECT_BOUNDARIES.md") ?? "";
   for (const phrase of requiredProjectBoundaryPhrases) {
     if (!boundaries.toLowerCase().includes(phrase)) {
@@ -207,6 +267,42 @@ function checkRequiredDocumentSections(textFiles: PublicSafetyTextFile[]): Publi
         message: `missing required boundary phrase: ${phrase}`,
       });
     }
+  }
+  issues.push(
+    ...missingPhrases("CHANGELOG.md", byPath.get("CHANGELOG.md") ?? "", requiredChangelogPhrases),
+    ...missingPhrases(
+      "docs/RELEASE_NOTES_v0.1.0.md",
+      byPath.get("docs/RELEASE_NOTES_v0.1.0.md") ?? "",
+      requiredReleaseNotesPhrases,
+    ),
+    ...missingPhrases(
+      "docs/PUBLIC_REPOSITORY_CHECKLIST.md",
+      byPath.get("docs/PUBLIC_REPOSITORY_CHECKLIST.md") ?? "",
+      requiredPublicRepositoryChecklistPhrases,
+    ),
+    ...missingPhrases("docs/ROADMAP.md", byPath.get("docs/ROADMAP.md") ?? "", requiredRoadmapPhrases),
+  );
+  const packageJson = byPath.get("package.json") ?? "";
+  if (!/"version"\s*:\s*"0\.1\.0"/.test(packageJson)) {
+    issues.push({ code: "missing-required-section", path: "package.json", message: "package version must remain 0.1.0" });
+  }
+  if (!/"validate"\s*:\s*"[^"]*pnpm public:safety/.test(packageJson)) {
+    issues.push({ code: "missing-required-section", path: "package.json", message: "validate script must include pnpm public:safety" });
+  }
+  const ciWorkflow = byPath.get(".github/workflows/ci.yml") ?? "";
+  if (!ciWorkflow.includes("Public safety check")) {
+    issues.push({
+      code: "missing-required-section",
+      path: ".github/workflows/ci.yml",
+      message: "CI Quality job must include public safety check step",
+    });
+  }
+  if (!ciWorkflow.includes("pnpm public:safety")) {
+    issues.push({
+      code: "missing-required-section",
+      path: ".github/workflows/ci.yml",
+      message: "CI Quality job must run pnpm public:safety",
+    });
   }
   const prTemplate = byPath.get(".github/pull_request_template.md") ?? "";
   for (const checklist of requiredPullRequestChecklist) {
@@ -219,6 +315,20 @@ function checkRequiredDocumentSections(textFiles: PublicSafetyTextFile[]): Publi
     }
   }
   return issues;
+}
+
+function missingPhrases(
+  path: string,
+  content: string,
+  phrases: readonly string[],
+): PublicSafetyIssue[] {
+  return phrases
+    .filter((phrase) => !content.includes(phrase))
+    .map((phrase) => ({
+      code: "missing-required-section" as const,
+      path,
+      message: `missing required release phrase: ${phrase}`,
+    }));
 }
 
 export function checkProhibitedCopy(textFiles: PublicSafetyTextFile[]): PublicSafetyIssue[] {
