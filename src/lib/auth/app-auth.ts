@@ -129,7 +129,4 @@ async function closeCachedAppAuth(): Promise<void> {
   }
 
   await previous.database.db.destroy();
-  if (previous.database.ownsPool) {
-    await previous.database.pool.end();
-  }
 }

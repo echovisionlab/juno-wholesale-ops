@@ -8,15 +8,19 @@ import {
 } from "./env";
 
 const configuredEnv = {
+  DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
   GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
 };
 
 describe("loadRuntimeEnv", () => {
   it("loads required values and applies defaults", () => {
-    const env = loadRuntimeEnv({});
+    const env = loadRuntimeEnv({
+      DATABASE_URL: configuredEnv.DATABASE_URL,
+    });
 
     expect(env).toMatchObject({
+      DATABASE_URL: configuredEnv.DATABASE_URL,
       GOOGLE_GMAIL_SCOPES: GOOGLE_GMAIL_READONLY_SCOPE,
       GMAIL_INGEST_QUERY: "has:attachment filename:xlsx newer_than:30d",
       GMAIL_MAX_RESULTS: 25,
@@ -53,10 +57,9 @@ describe("loadRuntimeEnv", () => {
     expect(env.JUNO_LIVE_POLL_INTERVAL_MS).toBeUndefined();
   });
 
-  it("coerces numeric env values and accepts optional database URL", () => {
+  it("coerces numeric env values and accepts required database URL", () => {
     const env = loadRuntimeEnv({
       ...configuredEnv,
-      DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://app.example.com",
       AUTH_TRUSTED_ORIGINS: "https://app.example.com,https://admin.example.com",
@@ -91,7 +94,7 @@ describe("loadRuntimeEnv", () => {
       JUNO_LIVE_WORKER_ARGS: "--loop",
     });
 
-    expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/juno_wholesale_ops");
+    expect(env.DATABASE_URL).toBe(configuredEnv.DATABASE_URL);
     expect(env.AUTH_SECRET).toBe("a".repeat(32));
     expect(env.AUTH_BASE_URL).toBe("https://app.example.com");
     expect(env.AUTH_TRUSTED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
@@ -135,6 +138,10 @@ describe("loadRuntimeEnv", () => {
 
     expect(env.JUNO_LOGIN_EMAIL).toBeUndefined();
     expect(env.JUNO_LOGIN_PASSWORD).toBeUndefined();
+  });
+
+  it("rejects missing database URLs", () => {
+    expect(() => loadRuntimeEnv({})).toThrow();
   });
 
   it("accepts non-string boolean values from programmatic overrides", () => {

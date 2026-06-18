@@ -13,10 +13,8 @@ export async function GET(request: Request) {
   }
 
   const env = loadRuntimeEnv(process.env);
-  const settingsRow = env.DATABASE_URL
-    ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
-    : null;
-  const adminUserCount = env.DATABASE_URL ? await countAdminUsers(env.DATABASE_URL).catch(() => null) : null;
+  const settingsRow = await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow());
+  const adminUserCount = await countAdminUsers(env.DATABASE_URL).catch(() => null);
 
   return Response.json({
     setup: buildAppSetupStatus({

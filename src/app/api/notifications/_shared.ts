@@ -1,16 +1,13 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { getDatabaseUrl } from "@/lib/env";
 
 export async function authorizeNotificationRequest(request: Request): Promise<Response | null> {
   const authorization = await requireAdmin(request);
   return authorization.authorized ? null : authorization.response;
 }
 
-export function databaseUrlResponse(): { databaseUrl: string } | { response: Response } {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return { response: Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 }) };
-  }
-  return { databaseUrl };
+export function databaseUrlResponse(): { databaseUrl: string } {
+  return { databaseUrl: getDatabaseUrl() };
 }
 
 export async function parseJson(request: Request): Promise<unknown> {

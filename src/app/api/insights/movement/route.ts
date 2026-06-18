@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { getDatabaseUrl } from "@/lib/env";
 import { getMovementSignals } from "@/lib/insights/movement-repository";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +10,7 @@ export async function GET(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
-
+  const databaseUrl = getDatabaseUrl();
   const limit = parseNumber(new URL(request.url).searchParams.get("limit"), 100, 1, 200);
   const signals = await getMovementSignals(databaseUrl, limit);
   return Response.json({ signals });

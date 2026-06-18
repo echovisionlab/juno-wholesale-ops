@@ -19,9 +19,6 @@ export async function GET(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
@@ -45,9 +42,6 @@ export async function PATCH(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const input = await parseOptionalJson(request);

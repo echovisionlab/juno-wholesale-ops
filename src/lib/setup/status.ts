@@ -56,7 +56,6 @@ export function buildAppSetupStatus(options: {
   settingsRow: JunoLiveServiceSettingsRow | null;
   adminUserCount?: number | null;
 }): AppSetupStatus {
-  const databaseMissing = options.env.DATABASE_URL ? [] : ["DATABASE_URL"];
   const dataMode = resolveDataMode(options.env, options.settingsRow);
   const gmailSettings = resolveGmailIngestSettings(options.env, options.settingsRow);
   const gmailMissing = dataMode === "real_mailbox" ? getMissingGmailIngestSettings(gmailSettings) : [];
@@ -77,9 +76,9 @@ export function buildAppSetupStatus(options: {
     setupStep({
       id: "database",
       label: "Database",
-      missing: databaseMissing,
+      missing: [],
       detail: "required for persistence and worker state",
-      action: databaseMissing.length > 0 ? "Set DATABASE_URL before enabling ingestion or live lookup." : null,
+      action: null,
       settings: [
         runtimeSetting({
           key: "DATABASE_URL",
@@ -90,19 +89,13 @@ export function buildAppSetupStatus(options: {
         }),
       ],
       guardrails: [
-        options.env.DATABASE_URL
-          ? {
-              label: "Migration ledger",
-              state: options.settingsRow ? "ok" : "warning",
-              detail: options.settingsRow
-                ? "Next.js startup applied migrations and the service_setting row is available."
-                : "Startup migrations run automatically, but the singleton service_setting row is not available yet.",
-            }
-          : {
-              label: "Persistent state",
-              state: "blocked",
-              detail: "No database connection is configured.",
-            },
+        {
+          label: "Migration ledger",
+          state: options.settingsRow ? "ok" : "warning",
+          detail: options.settingsRow
+            ? "Next.js startup applied migrations and the service_setting row is available."
+            : "Startup migrations run automatically, but the singleton service_setting row is not available yet.",
+        },
       ],
     }),
     setupStep({
@@ -196,12 +189,10 @@ export function buildAppSetupStatus(options: {
       guardrails: [
         {
           label: "Cursored Gmail search",
-          state: dataMode === "demo" ? "warning" : options.env.DATABASE_URL ? "ok" : "blocked",
+          state: dataMode === "demo" ? "warning" : "ok",
           detail: dataMode === "demo"
             ? "Gmail ingest is optional in demo mode."
-            : options.env.DATABASE_URL
-              ? "Ingest can use stored cursor state and content hashes to avoid duplicate sheets."
-              : "Database state is required before ingest can dedupe safely.",
+            : "Ingest can use stored cursor state and content hashes to avoid duplicate sheets.",
         },
       ],
     }),
@@ -475,7 +466,7 @@ function runtimeSetting(options: {
   return buildSetting({
     key: options.key,
     label: options.label,
-    source: hasSettingValue(options.value) ? "runtime" : "unset",
+    source: "runtime",
     value: options.value,
     required: options.required,
     secret: options.secret,

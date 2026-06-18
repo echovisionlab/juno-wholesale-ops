@@ -9,9 +9,6 @@ import { ensureDatabaseAuthSecretClient } from "@/lib/settings/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
 
   const pool = new Pool({ connectionString: env.DATABASE_URL, max: 1 });
   try {

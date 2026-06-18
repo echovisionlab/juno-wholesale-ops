@@ -1,6 +1,7 @@
 import { Box, Center } from "@mantine/core";
 import { LoginForm } from "@/components/auth/LoginForm";
 import { normalizeLoginLogoUrl } from "@/lib/auth/login-logo";
+import { getDatabaseUrl } from "@/lib/env";
 import { getServiceSettings } from "@/lib/settings/repository";
 
 export const dynamic = "force-dynamic";
@@ -37,12 +38,8 @@ function normalizeRedirect(value: string | undefined): string {
 }
 
 async function loadLoginLogoUrl(): Promise<string | null> {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return null;
-  }
-
   try {
+    const databaseUrl = getDatabaseUrl();
     const row = await getServiceSettings(databaseUrl);
     return normalizeLoginLogoUrl(row?.auth_login_logo_url);
   } catch {

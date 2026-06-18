@@ -94,8 +94,12 @@ Core directories:
 ```bash
 pnpm install
 pnpm db:dev:up
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm db:migrate
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+cp .env.example .env
+set -a
+. ./.env
+set +a
+pnpm db:migrate
+pnpm demo:seed
 pnpm dev
 ```
 
@@ -113,7 +117,7 @@ cp infra/cloudflared/dev.template.yml .data/cloudflared/config.yml
 # Keep .data/cloudflared/credentials.json private.
 # Set JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN=http://127.0.0.1:3006
 # and JUNO_WHOLESALE_OPS_DEV_ALLOWED_ORIGINS=<your-dev-hostname>
-# in .env.local if the tunneled hostname is used for the dashboard.
+# in .env if the tunneled hostname is used for the dashboard.
 pnpm tunnel:dev:up
 pnpm dev
 ```
@@ -134,13 +138,19 @@ Demo mode uses only synthetic catalog workbooks:
 Seed the demo:
 
 ```bash
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+set -a
+. ./.env
+set +a
+pnpm demo:seed
 ```
 
 Reset demo rows only:
 
 ```bash
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:reset -- --confirm-demo-reset
+set -a
+. ./.env
+set +a
+pnpm demo:reset -- --confirm-demo-reset
 ```
 
 `demo:reset` refuses to run in `NODE_ENV=production`. See
@@ -148,8 +158,9 @@ DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_who
 
 ## Configuration
 
-Copy `.env.example` to `.env.local` for local development. Do not commit
-`.env.local`.
+Copy `.env.example` to `.env` for local development. Do not commit
+`.env`. `DATABASE_URL` is required at process start; the service fails fast
+instead of falling back to database settings when it is missing.
 
 Important values:
 
@@ -176,7 +187,9 @@ effective value = database override ?? runtime env fallback ?? default value
 ```
 
 `DATABASE_URL` remains runtime-only and cannot be persisted through the Settings
-Center. The public app URL is the DB-primary `Site address` setting;
+Center. Export `.env` into the current shell before running local CLI scripts
+such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`. The public
+app URL is the DB-primary `Site address` setting;
 `AUTH_BASE_URL` is only a bootstrap fallback before that row is saved. Auth is
 always enabled. If `AUTH_SECRET` is absent, startup creates an internal random
 Better Auth secret in the database; it is not an operator-facing setting. At

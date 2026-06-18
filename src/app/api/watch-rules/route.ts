@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { getDatabaseUrl } from "@/lib/env";
 import {
   createWatchRule,
   deleteWatchRule,
@@ -16,10 +17,7 @@ export async function GET(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
+  const databaseUrl = getDatabaseUrl();
 
   const rules = await listWatchRules(databaseUrl);
   return Response.json({ rules });
@@ -31,10 +29,7 @@ export async function POST(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
+  const databaseUrl = getDatabaseUrl();
 
   try {
     const rule = await createWatchRule(databaseUrl, (await parseJson(request)) as WatchRuleInput);
@@ -50,10 +45,7 @@ export async function PATCH(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
+  const databaseUrl = getDatabaseUrl();
 
   try {
     const rule = await updateWatchRule(databaseUrl, (await parseJson(request)) as WatchRulePatch);
@@ -72,10 +64,7 @@ export async function DELETE(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
+  const databaseUrl = getDatabaseUrl();
 
   try {
     const id = readId(await parseJson(request));

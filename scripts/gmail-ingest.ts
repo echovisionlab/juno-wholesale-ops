@@ -31,12 +31,13 @@ async function main() {
   const writeMode = process.argv.includes("--write");
   const labelMode = process.argv.includes("--label");
   const env = loadRuntimeEnv();
+  const databaseUrl = env.DATABASE_URL;
   const settingsRow =
-    writeMode && env.DATABASE_URL
-      ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
+    writeMode
+      ? await withJunoLiveRepository(databaseUrl, (repository) => repository.getServiceSettingsRow())
       : null;
   const liveSettings =
-    writeMode && env.DATABASE_URL
+    writeMode
       ? resolveJunoLiveSettings(env, settingsRow)
       : resolveJunoLiveSettings(env, null);
   const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
@@ -44,20 +45,16 @@ async function main() {
   if (labelMode && !hasGmailModifyScope(gmailSettings.scopes)) {
     throw new Error(`Gmail label mode requires ${GOOGLE_GMAIL_MODIFY_SCOPE}`);
   }
-  if (writeMode && !env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required when using --write");
-  }
-
-  const ingestState = writeMode && env.DATABASE_URL ? await getGmailIngestState(env.DATABASE_URL) : null;
+  const ingestState = writeMode ? await getGmailIngestState(databaseUrl) : null;
   const queryPlan = buildGmailIngestQueryPlan({
     baseQuery: gmailSettings.query,
     lastSuccessfulMessageReceivedAt: ingestState?.lastSuccessfulMessageReceivedAt,
     lookbackMs: gmailSettings.lookbackMs,
   });
 
-  if (writeMode && env.DATABASE_URL) {
+  if (writeMode) {
     await recordGmailIngestStarted({
-      databaseUrl: env.DATABASE_URL,
+      databaseUrl,
       query: queryPlan.query,
       windowFrom: queryPlan.windowFrom,
       windowTo: queryPlan.windowTo,
@@ -119,9 +116,9 @@ async function main() {
         parsedRows += catalog.rowCount;
 
         let dbResult: Record<string, unknown> | null = null;
-        if (writeMode && env.DATABASE_URL) {
+        if (writeMode) {
           dbResult = await recordCatalogAttachment({
-            databaseUrl: env.DATABASE_URL,
+            databaseUrl,
             supplierCode: gmailSettings.supplierCode,
             message: buildMessageRecord(gmailSettings.delegatedUser, message),
             attachment: {
@@ -145,7 +142,7 @@ async function main() {
             lastIngestedContentHash = catalog.contentHash;
 
             const insightsResult = await processInsightsForSnapshot({
-              databaseUrl: env.DATABASE_URL,
+              databaseUrl,
               snapshotId: dbResult.snapshotId,
             });
             insightIdentityUpserts += insightsResult.identityUpserts;
@@ -158,7 +155,7 @@ async function main() {
           }
           if (liveSettings.enqueueOnIngest && !dbResult.duplicateContent && typeof dbResult.snapshotId === "string") {
             const enqueueResult = await enqueueLiveLookupJobs({
-              databaseUrl: env.DATABASE_URL,
+              databaseUrl,
               snapshotId: dbResult.snapshotId,
               maxAttempts: liveSettings.maxAttempts,
             });
@@ -187,9 +184,9 @@ async function main() {
       }
     }
 
-    if (writeMode && env.DATABASE_URL) {
+    if (writeMode) {
       await recordGmailIngestFinished({
-        databaseUrl: env.DATABASE_URL,
+        databaseUrl,
         status: "succeeded",
         error: null,
         messageCount: messages.length,
@@ -233,9 +230,9 @@ async function main() {
       ),
     );
   } catch (error) {
-    if (writeMode && env.DATABASE_URL) {
+    if (writeMode) {
       await recordGmailIngestFinished({
-        databaseUrl: env.DATABASE_URL,
+        databaseUrl,
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
         messageCount: messages.length,

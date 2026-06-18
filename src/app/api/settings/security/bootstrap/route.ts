@@ -13,9 +13,6 @@ export async function GET(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const settings = await loadSettingsResponse(database.databaseUrl, request);
   return Response.json(settings.security.authBootstrap);

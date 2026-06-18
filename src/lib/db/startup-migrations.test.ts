@@ -20,20 +20,14 @@ describe("runStartupMigrations", () => {
     vi.unstubAllEnvs();
   });
 
-  it("reads process env by default", async () => {
+  it("requires DATABASE_URL from process env by default", async () => {
     vi.stubEnv("DATABASE_URL", "");
 
-    await expect(runStartupMigrations({ logger: createLogger() })).resolves.toEqual({
-      status: "skipped",
-      reason: "missing_database_url",
-    });
+    await expect(runStartupMigrations({ logger: createLogger() })).rejects.toThrow();
   });
 
-  it("skips when the database URL is not configured", async () => {
-    await expect(runStartupMigrations({ env: {}, logger: createLogger() })).resolves.toEqual({
-      status: "skipped",
-      reason: "missing_database_url",
-    });
+  it("rejects explicit env overrides without a database URL", async () => {
+    await expect(runStartupMigrations({ env: {}, logger: createLogger() })).rejects.toThrow();
   });
 
   it("applies all migrations against Postgres", async () => {

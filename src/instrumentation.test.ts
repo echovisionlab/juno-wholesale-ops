@@ -12,10 +12,10 @@ describe("instrumentation register", () => {
     await expect(register()).resolves.toBeUndefined();
   });
 
-  it("runs startup migration registration for Node runtimes", async () => {
+  it("fails Node runtime registration when required env is missing", async () => {
     vi.stubEnv("NEXT_RUNTIME", "nodejs");
     vi.stubEnv("DATABASE_URL", "");
 
-    await expect(register()).resolves.toBeUndefined();
+    await expect(register()).rejects.toThrow();
   });
 });

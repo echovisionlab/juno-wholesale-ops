@@ -4,9 +4,16 @@ import { serviceSettingColumns, settingDefinitions, type ServiceSettingsRow } fr
 import { buildSettingsResponse } from "./response";
 import { validateSettingsPatch } from "./validation";
 
+function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
+  return loadRuntimeEnv({
+    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+    ...overrides,
+  });
+}
+
 describe("settings response and validation", () => {
   it("resolves database overrides, runtime fallback, defaults, unset values, and masked secrets", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
       AUTH_BASE_URL: "https://runtime.example.test",
@@ -61,7 +68,7 @@ describe("settings response and validation", () => {
   });
 
   it("derives the auth provider callback URL from the configured site address and masks provider secrets", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
       AUTH_BASE_URL: "https://runtime.example.test",
@@ -113,7 +120,7 @@ describe("settings response and validation", () => {
   });
 
   it("treats Gmail as optional in demo mode and required in real mailbox mode", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
     });
 
@@ -144,7 +151,7 @@ describe("settings response and validation", () => {
 
   it("blocks auth bootstrap when no admin access path exists", () => {
     const blocked = buildSettingsResponse({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://app.example.test",
       }),
@@ -159,7 +166,7 @@ describe("settings response and validation", () => {
     });
 
     const existingAdmin = buildSettingsResponse({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://app.example.test",
       }),
@@ -174,7 +181,7 @@ describe("settings response and validation", () => {
     });
 
     const allowlist = buildSettingsResponse({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://app.example.test",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
@@ -193,7 +200,7 @@ describe("settings response and validation", () => {
 
   it("warns when configured site address or trusted origins do not match the current origin", () => {
     const response = buildSettingsResponse({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://configured.example.test",
         AUTH_TRUSTED_ORIGINS: "https://configured.example.test",
@@ -214,7 +221,7 @@ describe("settings response and validation", () => {
   });
 
   it("validates patch semantics and unsafe settings", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
     });

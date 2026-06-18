@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
-import { loadRuntimeEnv } from "@/lib/env";
+import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
@@ -9,12 +9,8 @@ export async function authorizeSettingsRequest(request: Request): Promise<Respon
   return authorization.authorized ? null : authorization.response;
 }
 
-export function databaseUrlResponse(): { databaseUrl: string } | { response: Response } {
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return { response: Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 }) };
-  }
-  return { databaseUrl };
+export function databaseUrlResponse(): { databaseUrl: string } {
+  return { databaseUrl: getDatabaseUrl() };
 }
 
 export async function loadSettingsResponse(databaseUrl: string, request?: Request): Promise<SettingsResponse> {

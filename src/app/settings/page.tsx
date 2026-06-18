@@ -1,6 +1,6 @@
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { requireAdmin } from "@/lib/auth/admin";
-import { loadRuntimeEnv } from "@/lib/env";
+import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
@@ -21,12 +21,8 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
     return { settings: null, error: await describeAuthorizationFailure(authorization.response) };
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return { settings: null, error: "DATABASE_URL is not configured. Add it to .env.local or the runtime environment, then restart Next dev." };
-  }
-
   try {
+    const databaseUrl = getDatabaseUrl();
     const env = loadRuntimeEnv(process.env);
     const settingsRow = await ensureServiceSettingsRow(databaseUrl);
     const request = new Request("http://localhost/settings", { headers: requestHeaders });

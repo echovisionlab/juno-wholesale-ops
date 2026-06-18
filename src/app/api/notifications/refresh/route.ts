@@ -18,9 +18,6 @@ export async function POST(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const body = await parseOptionalJson(request);

@@ -4,7 +4,11 @@
 
 ```bash
 pnpm db:dev:up
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm db:migrate
+cp .env.example .env
+set -a
+. ./.env
+set +a
+pnpm db:migrate
 pnpm dev
 ```
 
@@ -29,9 +33,10 @@ secrets, and lets operators clear DB overrides back to runtime/default values.
 - Keep browser profile storage private.
 - Prefer webhook `secret_ref` over inline config.
 
-`DATABASE_URL` remains runtime-only. The internal Better Auth secret is never
-editable or displayed in the Settings Center. Auth is always enabled before the
-service is exposed beyond trusted local access.
+`DATABASE_URL` remains runtime-only and required at process start. The app does
+not fall back to database settings when it is missing. The internal Better Auth
+secret is never editable or displayed in the Settings Center. Auth is always
+enabled before the service is exposed beyond trusted local access.
 
 ## Docker
 

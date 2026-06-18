@@ -17,7 +17,7 @@ const stringBoolean = z.preprocess((value) => {
 }, z.boolean());
 
 const serverEnvSchema = {
-  DATABASE_URL: z.string().url().optional(),
+  DATABASE_URL: z.string().url(),
   JUNO_WHOLESALE_OPS_DATA_MODE: z.enum(["demo", "real_mailbox"]).default("demo"),
   AUTH_SECRET: z.string().min(32).optional(),
   AUTH_BASE_URL: z.string().url().optional(),
@@ -78,6 +78,10 @@ export type RuntimeEnv = ReturnType<typeof loadRuntimeEnv>;
 
 export function loadRuntimeEnv(overrides: RuntimeEnvInput = process.env): ReturnType<typeof createRuntimeEnv> {
   return createRuntimeEnv(buildRuntimeEnv(overrides));
+}
+
+export function getDatabaseUrl(overrides: RuntimeEnvInput = process.env): string {
+  return loadRuntimeEnv(overrides).DATABASE_URL;
 }
 
 export function parseScopes(scopes: string): string[] {

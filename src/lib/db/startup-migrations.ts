@@ -8,15 +8,11 @@ import { ensureDatabaseAuthSecretClient } from "@/lib/settings/repository";
 import { applyMigrations, type AppliedMigration } from "./migrations";
 
 export type StartupMigrationResult =
-  | {
-      status: "skipped";
-      reason: "missing_database_url";
-    }
-  | {
-      status: "applied";
-      migrationCount: number;
-      latestVersion: number | null;
-    };
+  {
+    status: "applied";
+    migrationCount: number;
+    latestVersion: number | null;
+  };
 
 export type StartupMigrationLogger = Pick<Console, "error" | "info">;
 
@@ -27,10 +23,6 @@ export async function runStartupMigrations(options: {
   migrationsDir?: string;
 } = {}): Promise<StartupMigrationResult> {
   const env = loadRuntimeEnv(options.env ?? process.env);
-
-  if (!env.DATABASE_URL) {
-    return { status: "skipped", reason: "missing_database_url" };
-  }
 
   const logger = options.logger ?? console;
   const migrate = options.migrate ?? applyMigrations;

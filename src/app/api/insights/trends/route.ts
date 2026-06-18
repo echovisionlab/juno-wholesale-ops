@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { getDatabaseUrl } from "@/lib/env";
 import { getCatalogTrends } from "@/lib/insights/trend-repository";
 
 export const dynamic = "force-dynamic";
@@ -9,11 +10,7 @@ export async function GET(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
-
+  const databaseUrl = getDatabaseUrl();
   const searchParams = new URL(request.url).searchParams;
   const trends = await getCatalogTrends({
     databaseUrl,

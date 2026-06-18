@@ -14,9 +14,6 @@ export async function GET(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const limit = parseLimit(new URL(request.url).searchParams.get("limit"), 100, 1, 200);
   const deliveries = await listNotificationDeliveries(database.databaseUrl, limit);
