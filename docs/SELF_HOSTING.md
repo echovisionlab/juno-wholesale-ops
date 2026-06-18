@@ -41,5 +41,26 @@ Build locally:
 docker build -t juno-wholesale-ops:local .
 ```
 
+Published images use the first-party Harbor namespace:
+
+```text
+harbor.dsub.io/dsub/juno-wholesale-ops-web:<tag>
+```
+
+The `Publish Image` GitHub Actions workflow publishes `main` and
+`sha-<commit>` tags on pushes to `main`. Release tags `v*` promote the existing
+`sha-<commit>` image for that commit to the release tag instead of rebuilding.
+Configure these GitHub repository or organization secrets before enabling the
+workflow:
+
+```text
+HARBOR_REGISTRY_USERNAME
+HARBOR_REGISTRY_PASSWORD
+```
+
+Production compose should use an immutable image reference such as
+`harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<commit>` or a reviewed release
+tag.
+
 The production compose files under `compose/` and `deploy/prod/` are skeletons.
 Review them before use and inject secrets through your deployment platform.

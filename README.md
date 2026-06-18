@@ -289,6 +289,9 @@ See [docs/SELF_HOSTING.md](docs/SELF_HOSTING.md) and
 Production recommendations:
 
 - Enable auth.
+- Use immutable Harbor image refs such as
+  `harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<commit>` or a reviewed
+  release tag.
 - Use mounted secrets or runtime env for credentials.
 - Back up Postgres and raw attachment storage.
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
