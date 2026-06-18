@@ -37,15 +37,21 @@ Demo mode uses only synthetic workbooks:
 
 ```bash
 pnpm db:dev:up
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm db:migrate
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+set -a
+. ./.env
+set +a
+pnpm db:migrate
+pnpm demo:seed
 pnpm dev
 ```
 
 Reset demo rows after review:
 
 ```bash
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:reset -- --confirm-demo-reset
+set -a
+. ./.env
+set +a
+pnpm demo:reset -- --confirm-demo-reset
 ```
 
 ## Quick Start
@@ -53,8 +59,11 @@ DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_who
 ```bash
 pnpm install
 pnpm db:dev:up
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm db:migrate
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+set -a
+. ./.env
+set +a
+pnpm db:migrate
+pnpm demo:seed
 pnpm dev
 ```
 

@@ -22,9 +22,6 @@ export async function GET(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const rules = await listNotificationRules(database.databaseUrl);
   return Response.json({ rules });
@@ -37,9 +34,6 @@ export async function POST(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const rule = await createNotificationRule(database.databaseUrl, (await parseJson(request)) as NotificationRuleInput);
@@ -56,9 +50,6 @@ export async function PATCH(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const rule = await updateNotificationRule(database.databaseUrl, (await parseJson(request)) as NotificationRulePatch);
@@ -78,9 +69,6 @@ export async function DELETE(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const deleted = await deleteNotificationRule(database.databaseUrl, readId(await parseJson(request), "Notification rule"));

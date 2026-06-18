@@ -15,9 +15,6 @@ export async function POST(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);

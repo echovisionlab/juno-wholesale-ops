@@ -9,9 +9,20 @@ import {
   type AuthServiceSettingsRow,
 } from "./settings";
 
+
+function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
+  return loadRuntimeEnv({
+    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+    ...overrides,
+  });
+}
+
 describe("resolveAppAuthSettings", () => {
   it("defaults to always-on auth with local email/password without exposing the internal secret as an operator setting", () => {
-    const settings = resolveAppAuthSettings(loadRuntimeEnv({}), null);
+    const settings = resolveAppAuthSettings(
+      runtimeEnv({ DATABASE_URL: "postgres://user:pass@localhost:5432/app" }),
+      null,
+    );
 
     expect(settings.emailPasswordEnabled).toBe(true);
     expect(settings.externalProvider).toBeNull();
@@ -21,7 +32,7 @@ describe("resolveAppAuthSettings", () => {
 
   it("resolves complete env-based external provider settings", () => {
     const settings = resolveAppAuthSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_TRUSTED_ORIGINS: "https://app.example.com\nhttps://admin.example.com",
@@ -75,7 +86,7 @@ describe("resolveAppAuthSettings", () => {
 
   it("lets database settings override env auth settings", () => {
     const settings = resolveAppAuthSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://env.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "true",
@@ -105,7 +116,7 @@ describe("resolveAppAuthSettings", () => {
 
   it("reports missing runnable external provider settings", () => {
     const settings = resolveAppAuthSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
       }),
@@ -124,7 +135,7 @@ describe("resolveAppAuthSettings", () => {
 
   it("reports when every sign-in method is disabled", () => {
     const settings = resolveAppAuthSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
@@ -140,7 +151,7 @@ describe("resolveAppAuthSettings", () => {
 
   it("defaults external provider scopes to an empty list", () => {
     const settings = resolveAppAuthSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
       }),

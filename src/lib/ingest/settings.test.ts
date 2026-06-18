@@ -7,9 +7,17 @@ import {
   type GmailIngestServiceSettingsRow,
 } from "./settings";
 
+
+function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
+  return loadRuntimeEnv({
+    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+    ...overrides,
+  });
+}
+
 describe("resolveGmailIngestSettings", () => {
   it("uses env values when the settings row is empty", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
       GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
       GMAIL_INGEST_QUERY: "from:supplier@example.com filename:xlsx",
@@ -30,7 +38,7 @@ describe("resolveGmailIngestSettings", () => {
   });
 
   it("lets database settings override env values", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       GOOGLE_WORKSPACE_DELEGATED_USER: "env@example.com",
       GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/env/google.json",
     });
@@ -64,7 +72,10 @@ describe("resolveGmailIngestSettings", () => {
   });
 
   it("reports and throws for missing runtime settings", () => {
-    const settings = resolveGmailIngestSettings(loadRuntimeEnv({}), null);
+    const settings = resolveGmailIngestSettings(
+      runtimeEnv({ DATABASE_URL: "postgres://user:pass@localhost:5432/app" }),
+      null,
+    );
 
     expect(getMissingGmailIngestSettings(settings)).toEqual([
       "google_workspace_delegated_user",
@@ -77,7 +88,7 @@ describe("resolveGmailIngestSettings", () => {
 
   it("accepts complete runnable settings", () => {
     const settings = resolveGmailIngestSettings(
-      loadRuntimeEnv({
+      runtimeEnv({
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
       }),

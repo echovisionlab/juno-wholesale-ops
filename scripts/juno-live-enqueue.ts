@@ -4,9 +4,6 @@ import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
   const snapshotId = getArgValue("--snapshot-id");
   const limit = Number(getArgValue("--limit") ?? "1000");
   const settings = resolveJunoLiveSettings(

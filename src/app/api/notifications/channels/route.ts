@@ -22,9 +22,6 @@ export async function GET(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   const channels = await listNotificationChannels(database.databaseUrl);
   return Response.json({ channels });
@@ -37,9 +34,6 @@ export async function POST(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const channel = await createNotificationChannel(database.databaseUrl, (await parseJson(request)) as NotificationChannelInput);
@@ -56,9 +50,6 @@ export async function PATCH(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const channel = await updateNotificationChannel(database.databaseUrl, (await parseJson(request)) as NotificationChannelPatch);
@@ -78,9 +69,6 @@ export async function DELETE(request: Request) {
   }
 
   const database = databaseUrlResponse();
-  if ("response" in database) {
-    return database.response;
-  }
 
   try {
     const deleted = await deleteNotificationChannel(database.databaseUrl, readId(await parseJson(request), "Notification channel"));

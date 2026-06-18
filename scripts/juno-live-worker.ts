@@ -19,9 +19,6 @@ import {
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
 
   const loopMode = process.argv.includes("--loop");
   const workerId = `${crypto.randomUUID()}`;

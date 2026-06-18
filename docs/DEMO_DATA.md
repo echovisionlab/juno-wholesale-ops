@@ -13,7 +13,10 @@ Juno IDs. Demo Juno IDs use the `demo-` prefix.
 ## Seed
 
 ```bash
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:seed
+set -a
+. ./.env
+set +a
+pnpm demo:seed
 ```
 
 The seed command:
@@ -28,7 +31,10 @@ The seed command:
 ## Reset
 
 ```bash
-DATABASE_URL=postgres://juno_wholesale_ops_app:change-me@localhost:5437/juno_wholesale_ops?sslmode=disable pnpm demo:reset -- --confirm-demo-reset
+set -a
+. ./.env
+set +a
+pnpm demo:reset -- --confirm-demo-reset
 ```
 
 Reset deletes only demo supplier, demo snapshots, demo signals, demo live

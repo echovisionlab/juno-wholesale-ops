@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
+import { getDatabaseUrl } from "@/lib/env";
 import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 
 export const dynamic = "force-dynamic";
@@ -9,10 +10,7 @@ export async function GET(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ summary: null });
-  }
+  const databaseUrl = getDatabaseUrl();
   const summary = await withJunoLiveRepository(databaseUrl, (repository) => repository.getSummary());
   return Response.json({ summary });
 }

@@ -12,9 +12,16 @@ const requiredEnv = {
   GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
 };
 
+function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
+  return loadRuntimeEnv({
+    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+    ...overrides,
+  });
+}
+
 describe("resolveJunoLiveSettings", () => {
   it("uses env values when the service settings row is empty", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       ...requiredEnv,
       JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
@@ -46,7 +53,7 @@ describe("resolveJunoLiveSettings", () => {
   });
 
   it("enables interval enqueue only when explicitly configured with credentials", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       ...requiredEnv,
       JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
@@ -60,7 +67,7 @@ describe("resolveJunoLiveSettings", () => {
   });
 
   it("lets database settings override env values", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       ...requiredEnv,
       JUNO_LOGIN_EMAIL: "env@example.com",
       JUNO_LOGIN_PASSWORD: "env-secret",
@@ -110,7 +117,7 @@ describe("resolveJunoLiveSettings", () => {
   });
 
   it("disables automatic polling when both database and env omit the interval", () => {
-    const env = loadRuntimeEnv(requiredEnv);
+    const env = runtimeEnv(requiredEnv);
     const settings = resolveJunoLiveSettings(env, null);
 
     expect(settings.pollIntervalMs).toBeNull();
@@ -120,7 +127,7 @@ describe("resolveJunoLiveSettings", () => {
   });
 
   it("requires credentials for automatic interval enqueue", () => {
-    const env = loadRuntimeEnv({
+    const env = runtimeEnv({
       ...requiredEnv,
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
     });

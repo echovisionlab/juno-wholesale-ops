@@ -3,9 +3,6 @@ import { demoResetConfirmFlag, resetDemoData } from "@/lib/demo/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
   const result = await resetDemoData({
     databaseUrl: env.DATABASE_URL,
     confirm: process.argv.includes(demoResetConfirmFlag),

@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
-import { loadRuntimeEnv } from "@/lib/env";
+import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 
@@ -11,10 +11,7 @@ export async function POST(request: Request) {
     return authorization.response;
   }
 
-  const databaseUrl = process.env.DATABASE_URL;
-  if (!databaseUrl) {
-    return Response.json({ error: "DATABASE_URL is not configured" }, { status: 503 });
-  }
+  const databaseUrl = getDatabaseUrl();
   const env = loadRuntimeEnv(process.env);
   const settings = resolveJunoLiveSettings(
     env,

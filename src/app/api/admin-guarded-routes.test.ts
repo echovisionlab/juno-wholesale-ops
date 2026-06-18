@@ -173,7 +173,7 @@ describe("admin guarded API routes", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    vi.stubEnv("DATABASE_URL", "");
+    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     requireAdminMock.mockResolvedValue({ authorized: true, user: null });
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
@@ -257,13 +257,7 @@ describe("admin guarded API routes", () => {
     expect(enqueueLiveLookupJobsMock).not.toHaveBeenCalled();
   });
 
-  it("returns ingest state only after admin authorization and database configuration", async () => {
-    await expect(expectJson(getIngestStatus(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
+  it("returns ingest state only after admin authorization", async () => {
     getGmailIngestStateMock.mockResolvedValue({ lastQueryStatus: "succeeded" } as never);
 
     await expect(expectJson(getIngestStatus(request()))).resolves.toEqual({
@@ -283,15 +277,10 @@ describe("admin guarded API routes", () => {
       },
     });
     await expect(expectJson(getSettings(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(patchSettings(jsonRequest({ auth: { auth_base_url: "https://app.example.test" } })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
+      status: 200,
+      body: expect.any(Object),
     });
 
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     vi.stubEnv("AUTH_BASE_URL", "https://inventory-dev.example.test");
     vi.stubEnv("JUNO_LOGIN_PASSWORD", "runtime-juno-password");
     ensureServiceSettingsRowMock.mockResolvedValue({
@@ -405,12 +394,6 @@ describe("admin guarded API routes", () => {
   });
 
   it("returns today signals through the admin route with conservative limit parsing", async () => {
-    await expect(expectJson(getTodayInsights(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     getTodaySignalsMock.mockResolvedValue([{ signalId: "signal-1" }] as never);
 
     await expect(expectJson(getTodayInsights(new Request("http://app.test/api/insights/today?limit=25")))).resolves.toEqual({
@@ -433,20 +416,6 @@ describe("admin guarded API routes", () => {
   });
 
   it("returns movement, trend, and digest insights through admin routes", async () => {
-    await expect(expectJson(getMovementInsights(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(getTrendInsights(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(getDigestInsights(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     getMovementSignalsMock.mockResolvedValue([{ signalId: "movement-1" }] as never);
     getCatalogTrendsMock.mockResolvedValue({ genres: [], labels: [], watchOverlap: [] } as never);
     getInsightDigestMock.mockResolvedValue({ generatedAt: "2026-06-17T00:00:00.000Z" } as never);
@@ -516,24 +485,6 @@ describe("admin guarded API routes", () => {
   });
 
   it("guards watch rule CRUD and translates validation outcomes", async () => {
-    await expect(expectJson(getWatchRules(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(postWatchRules(jsonRequest({ type: "artist", pattern: "Lara Voss" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(patchWatchRules(jsonRequest({ id: "rule-1", enabled: false })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(deleteWatchRules(jsonRequest({ id: "rule-1" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     listWatchRulesMock.mockResolvedValue([{ id: "rule-1", pattern: "Lara Voss" }] as never);
     createWatchRuleMock.mockResolvedValue({ id: "rule-2", pattern: "Blue Note" } as never);
     updateWatchRuleMock.mockResolvedValueOnce({ id: "rule-2", enabled: false } as never).mockResolvedValueOnce(null);
@@ -584,56 +535,6 @@ describe("admin guarded API routes", () => {
   });
 
   it("guards notification APIs and keeps action modes explicit", async () => {
-    await expect(expectJson(getNotificationDeliveries(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(getNotificationChannels(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(postNotificationChannels(jsonRequest({ name: "Ops", type: "logging" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(patchNotificationChannels(jsonRequest({ id: "channel-1", enabled: false })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(deleteNotificationChannels(jsonRequest({ id: "channel-1" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(getNotificationRules(request()))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(postNotificationRules(jsonRequest({ name: "Rule", channelId: "channel-1" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(patchNotificationRules(jsonRequest({ id: "rule-1", enabled: false })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(deleteNotificationRules(jsonRequest({ id: "rule-1" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(queueNotifications(jsonRequest({ limit: 10 })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(dispatchNotifications(jsonRequest({ mode: "send" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-    await expect(expectJson(refreshNotifications(jsonRequest({ mode: "dry-run" })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     listNotificationDeliveriesMock.mockResolvedValue([{ id: "delivery-1" }] as never);
     listNotificationChannelsMock.mockResolvedValue([{ id: "channel-1" }] as never);
     createNotificationChannelMock.mockResolvedValue({ id: "channel-2" } as never);
@@ -935,7 +836,7 @@ describe("admin guarded API routes", () => {
     });
   });
 
-  it("builds settings status with or without database-backed overrides", async () => {
+  it("builds settings status with database-backed overrides", async () => {
     await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
       status: 200,
       body: {
@@ -944,29 +845,10 @@ describe("admin guarded API routes", () => {
         },
       },
     });
-    expect(withJunoLiveRepositoryMock).not.toHaveBeenCalled();
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
-
-    await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
-      status: 200,
-      body: {
-        setup: {
-          steps: expect.any(Array),
-        },
-      },
-    });
     expect(repository.getServiceSettingsRow).toHaveBeenCalled();
   });
 
-  it("returns live lookup summary only when database state is configured", async () => {
-    await expect(expectJson(getLiveLookupStatus(request()))).resolves.toEqual({
-      status: 200,
-      body: { summary: null },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
-
+  it("returns live lookup summary from database state", async () => {
     await expect(expectJson(getLiveLookupStatus(request()))).resolves.toEqual({
       status: 200,
       body: { summary: { queued: 2 } },
@@ -1015,12 +897,6 @@ describe("admin guarded API routes", () => {
   });
 
   it("enqueues live lookup jobs with conservative parsing fallbacks", async () => {
-    await expect(expectJson(enqueueLiveLookups(jsonRequest({ limit: 10 })))).resolves.toEqual({
-      status: 503,
-      body: { error: "DATABASE_URL is not configured" },
-    });
-
-    vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     enqueueLiveLookupJobsMock.mockResolvedValue({ enqueued: 3, skipped: 1 } as never);
 
     await expect(expectJson(

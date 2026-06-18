@@ -3,10 +3,20 @@ import { loadRuntimeEnv } from "@/lib/env";
 import type { JunoLiveServiceSettingsRow } from "@/lib/juno-live/settings";
 import { buildAppSetupStatus } from "./status";
 
+
+function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
+  return loadRuntimeEnv({
+    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+    ...overrides,
+  });
+}
+
 describe("buildAppSetupStatus", () => {
-  it("marks a fresh install as missing only required runtime settings", () => {
+  it("marks a fresh install as missing only required operator settings after runtime database validation", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({}),
+      env: runtimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+      }),
       settingsRow: null,
     });
 
@@ -14,18 +24,18 @@ describe("buildAppSetupStatus", () => {
     expect(status.steps).toEqual([
       expect.objectContaining({
         id: "database",
-        state: "missing",
-        missing: ["DATABASE_URL"],
+        state: "warning",
+        missing: [],
         settings: expect.arrayContaining([
           expect.objectContaining({
             key: "DATABASE_URL",
-            source: "unset",
-            state: "missing",
-            value: "not set",
+            source: "runtime",
+            state: "configured",
+            value: "configured",
           }),
         ]),
         guardrails: expect.arrayContaining([
-          expect.objectContaining({ label: "Persistent state", state: "blocked" }),
+          expect.objectContaining({ label: "Migration ledger", state: "warning" }),
         ]),
       }),
       expect.objectContaining({
@@ -59,7 +69,7 @@ describe("buildAppSetupStatus", () => {
 
   it("marks setup complete when values come from env and database settings", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
@@ -97,7 +107,7 @@ describe("buildAppSetupStatus", () => {
 
   it("does not require Gmail settings in demo mode", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
       }),
@@ -116,7 +126,7 @@ describe("buildAppSetupStatus", () => {
 
   it("requires Gmail settings in real mailbox mode", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
         AUTH_BASE_URL: "https://app.example.com",
@@ -135,7 +145,7 @@ describe("buildAppSetupStatus", () => {
 
   it("does not block app setup for missing Juno credentials while live lookup is disabled", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
       }),
@@ -153,7 +163,7 @@ describe("buildAppSetupStatus", () => {
 
   it("does not expose the internal auth secret in setup status", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
@@ -174,7 +184,7 @@ describe("buildAppSetupStatus", () => {
 
   it("blocks auth when every sign-in method is explicitly disabled", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
@@ -204,7 +214,7 @@ describe("buildAppSetupStatus", () => {
 
   it("blocks auth when no admin access path is configured", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
       }),
@@ -225,7 +235,7 @@ describe("buildAppSetupStatus", () => {
 
   it("accepts external provider admin allowlist as an auth bootstrap path", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
@@ -253,7 +263,7 @@ describe("buildAppSetupStatus", () => {
 
   it("accepts external provider admin claim mapping as an auth bootstrap path", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
@@ -282,7 +292,7 @@ describe("buildAppSetupStatus", () => {
 
   it("surfaces unsafe live lookup delay ranges as a blocking setting issue", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -310,7 +320,7 @@ describe("buildAppSetupStatus", () => {
 
   it("marks configured polling as blocked when credentials are absent", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -333,7 +343,7 @@ describe("buildAppSetupStatus", () => {
 
   it("warns when polling loop is scheduled but automatic enqueue is disabled", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -355,9 +365,9 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("marks a feature missing when required guardrails are blocked even if its own fields are set", () => {
+  it("keeps the Gmail cursor guardrail ready after database env validation", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -368,16 +378,16 @@ describe("buildAppSetupStatus", () => {
     expect(status.ready).toBe(false);
     expect(status.steps.find((step) => step.id === "gmail")).toEqual(
       expect.objectContaining({
-        state: "missing",
+        state: "complete",
         missing: [],
-        guardrails: [expect.objectContaining({ label: "Cursored Gmail search", state: "blocked" })],
+        guardrails: [expect.objectContaining({ label: "Cursored Gmail search", state: "ok" })],
       }),
     );
   });
 
   it("formats minute-based automatic polling guardrails", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -402,7 +412,7 @@ describe("buildAppSetupStatus", () => {
 
   it("formats singular minute automatic polling guardrails", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -427,7 +437,7 @@ describe("buildAppSetupStatus", () => {
 
   it("formats plural hour automatic polling guardrails", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -452,7 +462,7 @@ describe("buildAppSetupStatus", () => {
 
   it("formats raw millisecond polling guardrails", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
@@ -475,9 +485,9 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("treats blank database strings as unset instead of configured", () => {
+  it("treats blank database setting strings as unset instead of configured", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
       }),
       settingsRow: {
@@ -499,7 +509,7 @@ describe("buildAppSetupStatus", () => {
 
   it("surfaces the migration ledger as the database guardrail", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({
+      env: runtimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",

@@ -3,9 +3,6 @@ import { seedDemoData } from "@/lib/demo/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
   const result = await seedDemoData({ databaseUrl: env.DATABASE_URL });
   console.log(JSON.stringify(result, null, 2));
 }

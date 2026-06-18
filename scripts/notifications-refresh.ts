@@ -5,9 +5,6 @@ import { parseNotificationScriptOptions } from "@/lib/notifications/script-optio
 
 async function main() {
   const env = loadRuntimeEnv();
-  if (!env.DATABASE_URL) {
-    throw new Error("DATABASE_URL is required");
-  }
   const options = parseNotificationScriptOptions(process.argv.slice(2));
   const queued = await matchNotificationRulesForSignals({
     databaseUrl: env.DATABASE_URL,

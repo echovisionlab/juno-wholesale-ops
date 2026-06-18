@@ -9,9 +9,9 @@ import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
-  const settingsRow = env.DATABASE_URL
-    ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
-    : null;
+  const settingsRow = await withJunoLiveRepository(env.DATABASE_URL, (repository) =>
+    repository.getServiceSettingsRow(),
+  );
   const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
   assertRunnableGmailIngestSettings(gmailSettings);
   const key = await loadServiceAccountKey(gmailSettings.serviceAccountKeyJson);
