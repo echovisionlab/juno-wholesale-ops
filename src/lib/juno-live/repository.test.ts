@@ -27,7 +27,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(16);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(17);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -45,6 +45,7 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 14, filename: "0014_auth_sign_in_guardrail.sql" }),
       expect.objectContaining({ version: 15, filename: "0015_login_logo_url.sql" }),
       expect.objectContaining({ version: 16, filename: "0016_mail_source_model.sql" }),
+      expect.objectContaining({ version: 17, filename: "0017_always_on_email_password_auth.sql" }),
     ]);
   });
 
@@ -66,7 +67,6 @@ describe("JunoLiveRepository", () => {
             auth_secret = 'db-auth-secret-value-that-is-long-enough',
             auth_base_url = 'https://app.example.com',
             auth_trusted_origins = 'https://app.example.com',
-            auth_email_password_enabled = true,
             auth_external_provider_enabled = true,
             auth_external_provider_id = 'workspace',
             auth_external_provider_name = 'Workspace',
@@ -95,7 +95,6 @@ describe("JunoLiveRepository", () => {
       auth_secret: "db-auth-secret-value-that-is-long-enough",
       auth_base_url: "https://app.example.com",
       auth_trusted_origins: "https://app.example.com",
-      auth_email_password_enabled: true,
       auth_external_provider_enabled: true,
       auth_external_provider_id: "workspace",
       auth_external_provider_name: "Workspace",

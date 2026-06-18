@@ -316,29 +316,6 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("blocks setup when every sign-in method is disabled", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
-      }),
-      settingsRow: emptyRow(),
-      adminUserCount: 1,
-    });
-
-    expect(status.ready).toBe(false);
-    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Sign-in method",
-          state: "blocked",
-          detail: "Auth is always enabled, but every sign-in method is disabled.",
-        }),
-      ]),
-    );
-  });
-
   it("surfaces database and runtime setting sources without raw secrets", () => {
     const status = buildAppSetupStatus({
       env: runtimeEnv({
@@ -382,7 +359,6 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,

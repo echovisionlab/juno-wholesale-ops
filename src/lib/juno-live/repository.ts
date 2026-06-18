@@ -95,7 +95,6 @@ export class JunoLiveRepository {
           auth_secret,
           auth_base_url,
           auth_trusted_origins,
-          auth_email_password_enabled,
           auth_external_provider_enabled,
           auth_external_provider_id,
           auth_external_provider_name,

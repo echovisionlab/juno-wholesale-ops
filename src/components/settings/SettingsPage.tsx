@@ -567,7 +567,6 @@ function AdvancedDiagnosticsPanel({
 function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
   const trustedOrigins = findSetting(settings, "auth_trusted_origins");
-  const emailPassword = findSetting(settings, "auth_email_password_enabled");
   const externalProvider = settings.units.authProvider;
   const currentOriginMatches = settings.environment.appBaseUrl && settings.environment.currentRequestOrigin
     ? normalizeOrigin(settings.environment.appBaseUrl) === normalizeOrigin(settings.environment.currentRequestOrigin)
@@ -608,7 +607,7 @@ function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
       <Card>
         <Stack gap="xs">
           <Text fw={700}>Sign-in Methods</Text>
-          <SignalFact label="Email/password login" value={emailPassword?.displayValue ?? "Default value"} />
+          <SignalFact label="Email/password login" value="Always enabled" />
           <SignalFact label="External SSO provider" value={externalProvider.enabled ? externalProvider.status : "disabled"} />
           <SignalFact label="SSO login button" value={externalProvider.status === "ready" ? externalProvider.buttonLabel : "shown when provider is ready"} />
         </Stack>

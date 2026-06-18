@@ -21,7 +21,6 @@ export type JunoLiveServiceSettingsRow = {
   auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
-  auth_email_password_enabled: boolean | null;
   auth_external_provider_enabled: boolean | null;
   auth_external_provider_id: string | null;
   auth_external_provider_name: string | null;

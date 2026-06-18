@@ -22,7 +22,6 @@ const serverEnvSchema = {
   AUTH_SECRET: z.string().min(32).optional(),
   AUTH_BASE_URL: z.string().url().optional(),
   AUTH_TRUSTED_ORIGINS: z.string().optional(),
-  AUTH_EMAIL_PASSWORD_ENABLED: stringBoolean.default(true),
   AUTH_EXTERNAL_PROVIDER_ENABLED: stringBoolean.default(false),
   AUTH_EXTERNAL_PROVIDER_ID: z.string().min(1).optional(),
   AUTH_EXTERNAL_PROVIDER_NAME: z.string().min(1).optional(),

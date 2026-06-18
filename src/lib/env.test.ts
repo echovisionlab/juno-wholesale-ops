@@ -21,7 +21,6 @@ describe("loadRuntimeEnv", () => {
       DATABASE_URL: configuredEnv.DATABASE_URL,
       JUNO_WHOLESALE_OPS_DATA_MODE: "demo",
       JUNO_LIVE_ENQUEUE_ON_INGEST: false,
-      AUTH_EMAIL_PASSWORD_ENABLED: true,
       AUTH_EXTERNAL_PROVIDER_ENABLED: false,
       AUTH_EXTERNAL_PROVIDER_SCOPES: "openid email profile",
       AUTH_INITIAL_ADMIN_NAME: "Initial Admin",
@@ -51,7 +50,6 @@ describe("loadRuntimeEnv", () => {
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://app.example.com",
       AUTH_TRUSTED_ORIGINS: "https://app.example.com,https://admin.example.com",
-      AUTH_EMAIL_PASSWORD_ENABLED: "false",
       AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
       AUTH_EXTERNAL_PROVIDER_ID: "workspace",
       AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
@@ -83,7 +81,6 @@ describe("loadRuntimeEnv", () => {
     expect(env.AUTH_SECRET).toBe("a".repeat(32));
     expect(env.AUTH_BASE_URL).toBe("https://app.example.com");
     expect(env.AUTH_TRUSTED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
-    expect(env.AUTH_EMAIL_PASSWORD_ENABLED).toBe(false);
     expect(env.AUTH_EXTERNAL_PROVIDER_ENABLED).toBe(true);
     expect(env.AUTH_EXTERNAL_PROVIDER_ID).toBe("workspace");
     expect(env.AUTH_EXTERNAL_PROVIDER_NAME).toBe("Workspace");

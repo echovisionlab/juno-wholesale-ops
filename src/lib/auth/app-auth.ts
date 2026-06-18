@@ -93,7 +93,7 @@ export function buildAppAuthOptions(options: {
       type: "postgres" as const,
     },
     emailAndPassword: {
-      enabled: options.settings.emailPasswordEnabled,
+      enabled: true,
     },
     user: appAuthSchema.user,
     session: appAuthSchema.session,
@@ -112,7 +112,6 @@ export async function getCachedAppAuth(options: {
     settings: {
       baseUrl: options.settings.baseUrl,
       trustedOrigins: options.settings.trustedOrigins,
-      emailPasswordEnabled: options.settings.emailPasswordEnabled,
       externalProviderEnabled: options.settings.externalProviderEnabled,
       externalProvider: options.settings.externalProvider
         ? {
