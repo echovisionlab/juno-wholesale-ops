@@ -41,6 +41,8 @@ describe("SettingsPage", () => {
   });
 
   it("renders source badges and masked secrets without raw values", async () => {
+    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
+    Object.assign(navigator, { clipboard: { writeText } });
     await renderSettingsPage(settingsFixture());
 
     expect(pageText()).toContain("Settings Center");
@@ -53,6 +55,13 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Continue with Workspace");
     expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
     expect(pageText()).toContain("Copy callback URL");
+    clickButton("Copy callback URL");
+    await act(async () => undefined);
+    expect(writeText).toHaveBeenCalledWith("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
+    expect(pageText()).toContain("Callback URL copied.");
+    clickButton("Copy callback URL");
+    await act(async () => undefined);
+    expect(pageText()).toContain("Browser denied clipboard access. Callback URL remains visible for manual copy.");
     expect(pageText()).toContain("Client secret");
     expect(pageText()).toContain("configured");
     expect(pageText()).not.toContain("raw-db-secret");
@@ -112,6 +121,25 @@ describe("SettingsPage", () => {
     expect(writeText).toHaveBeenCalledOnce();
     expect(writeText.mock.calls[0]?.[0]).toContain("[redacted]");
     expect(writeText.mock.calls[0]?.[0]).not.toContain("raw-secret-token");
+  });
+
+  it("handles diagnostics clipboard denial without exposing raw diagnostics", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ ok: false, status: "missing_settings", service_account: "raw-secret-token" }));
+    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+    vi.stubGlobal("fetch", fetchMock);
+    Object.assign(navigator, { clipboard: { writeText } });
+
+    await renderSettingsPage(settingsFixture());
+    clickButton("Test Mail Source");
+    await act(async () => undefined);
+    clickButton("Advanced");
+    clickButton("View sanitized JSON");
+    clickButton("Copy diagnostics");
+    await act(async () => undefined);
+
+    expect(pageText()).toContain("Browser denied clipboard access. Diagnostics remain visible for manual copy.");
+    expect(pageText()).toContain("[redacted]");
+    expect(pageText()).not.toContain("raw-secret-token");
   });
 
   it("refreshes status with a short summary instead of raw settings JSON", async () => {

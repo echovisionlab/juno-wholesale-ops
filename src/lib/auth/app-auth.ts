@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { nextCookies } from "better-auth/next-js";
 import { genericOAuth } from "better-auth/plugins";
@@ -61,7 +62,7 @@ export function buildAppAuthOptions(options: {
 }) {
   const plugins = [];
 
-  if (options.settings.externalProvider) {
+  if (options.settings.externalProvider && isExternalProviderReady(options.settings.externalProvider)) {
     plugins.push(
       genericOAuth({
         config: [
@@ -118,6 +119,7 @@ export async function getCachedAppAuth(options: {
             providerId: options.settings.externalProvider.providerId,
             discoveryUrl: options.settings.externalProvider.discoveryUrl,
             clientId: options.settings.externalProvider.clientId,
+            clientSecretHash: hashSecret(options.settings.externalProvider.clientSecret),
             scopes: options.settings.externalProvider.scopes,
           }
         : null,
@@ -133,6 +135,28 @@ export async function getCachedAppAuth(options: {
   const auth = betterAuth(buildAppAuthOptions({ database: database.db, settings: options.settings })) as AppAuthInstance;
   cachedAuth = { key, auth, database };
   return auth;
+}
+
+function isExternalProviderReady(provider: AppAuthSettings["externalProvider"]): boolean {
+  return Boolean(
+    provider?.providerId.trim()
+      && isUrl(provider.discoveryUrl)
+      && provider.clientId.trim()
+      && provider.clientSecret.trim(),
+  );
+}
+
+function isUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function hashSecret(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
 }
 
 async function closeCachedAppAuth(): Promise<void> {

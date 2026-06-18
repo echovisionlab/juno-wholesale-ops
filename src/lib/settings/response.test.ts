@@ -110,6 +110,30 @@ describe("settings response and validation", () => {
     expect(JSON.stringify(response)).not.toContain("runtime-client-secret");
   });
 
+  it("marks malformed external provider URLs invalid instead of ready", () => {
+    const response = buildSettingsResponse({
+      env: runtimeEnv(),
+      rawEnv: {},
+      settingsRow: {
+        ...emptySettingsRow(),
+        auth_base_url: "https://inventory-dev.example.test",
+        auth_external_provider_enabled: true,
+        auth_external_provider_id: "workspace",
+        auth_external_discovery_url: "not-a-url",
+        auth_external_client_id: "client-id",
+        auth_external_client_secret: "db-client-secret",
+      },
+      nodeEnv: "development",
+    });
+
+    expect(response.units.authProvider).toMatchObject({
+      enabled: true,
+      status: "invalid",
+      detail: "Invalid discovery URL.",
+      callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
+    });
+  });
+
   it("treats mail sources as optional in demo mode and required in real mailbox mode", () => {
     const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
