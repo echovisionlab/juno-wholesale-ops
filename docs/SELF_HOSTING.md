@@ -12,13 +12,13 @@ pnpm db:migrate
 pnpm dev
 ```
 
-After migrations, open `/settings`. Runtime env is bootstrap for infrastructure
-and explicitly supported operator settings. The singleton `service_setting` row
-is the primary operator settings surface. Mail ingest uses separate
+After migrations, open `/settings`. Runtime configuration is bootstrap for
+infrastructure and explicitly supported operator settings. Saved Postgres
+settings are the primary operator settings surface. Mail ingest uses separate
 `mail_connection` and `mail_mailbox_source` records, with no env fallback for
 mailbox addresses, Gmail service account JSON, storage directories, or supplier
-codes. The Settings Center shows database/runtime/default/unset source badges,
-masks secrets, and lets operators clear DB overrides back to runtime/default
+codes. The Settings Center shows saved setting/runtime fallback/default/not set
+source badges, masks secrets, and lets operators clear saved settings back to runtime/default
 values.
 
 ## Production Checklist
@@ -33,7 +33,7 @@ values.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.
-- Keep Juno credentials in runtime env or secret storage.
+- Keep Juno credentials in runtime fallback or secret storage.
 - Store raw attachments outside the application image.
 - Back up Postgres and attachment storage.
 - Keep browser profile storage private.

@@ -4,7 +4,7 @@ import { genericOAuth } from "better-auth/plugins";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 
-import type { AppAuthSettings } from "./settings";
+import { resolveExternalProfileRole, type AppAuthSettings } from "./settings";
 import { appAuthSchema } from "./schema";
 
 type AuthDatabase = {
@@ -28,6 +28,18 @@ type CachedAuth = {
   key: string;
   auth: AppAuthInstance;
   database: AuthDatabase;
+};
+
+type GenericOAuthUserMap = Partial<{
+  id: string;
+  createdAt: Date;
+  updatedAt: Date;
+  email: string;
+  emailVerified: boolean;
+  name: string;
+  image: string | null;
+}> & {
+  role?: "admin" | "user";
 };
 
 let cachedAuth: CachedAuth | null = null;
@@ -59,6 +71,9 @@ export function buildAppAuthOptions(options: {
             clientSecret: options.settings.externalProvider.clientSecret,
             discoveryUrl: options.settings.externalProvider.discoveryUrl,
             scopes: options.settings.externalProvider.scopes,
+            mapProfileToUser: (profile): GenericOAuthUserMap => ({
+              role: resolveExternalProfileRole(profile, options.settings),
+            }),
           },
         ],
       }),

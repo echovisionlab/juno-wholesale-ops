@@ -92,8 +92,8 @@ export function buildAppSetupStatus(options: {
           label: "Migration ledger",
           state: options.settingsRow ? "ok" : "warning",
           detail: options.settingsRow
-            ? "Next.js startup applied migrations and the service_setting row is available."
-            : "Startup migrations run automatically, but the singleton service_setting row is not available yet.",
+            ? "Next.js startup applied migrations and saved settings are available."
+            : "Startup migrations run automatically, but saved settings are not available yet.",
         },
       ],
     }),

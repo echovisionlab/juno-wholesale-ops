@@ -81,7 +81,7 @@ function maskSecret(value: unknown, source: SettingSource): string {
     return "Not configured";
   }
   if (source === "database") {
-    return "Database override configured";
+    return "Saved setting configured";
   }
   if (source === "runtime") {
     return "Runtime fallback configured";

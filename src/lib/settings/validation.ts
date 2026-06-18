@@ -192,7 +192,7 @@ function normalizePatchValue(
   }
   const text = value.trim();
   if (definition.required && text.length === 0) {
-    return { kind: "invalid", issue: "cannot be empty; use null to clear the DB override" };
+    return { kind: "invalid", issue: "cannot be empty; use null to clear the saved setting" };
   }
   if (definition.type === "email" && text.length > 0 && !isEmail(text)) {
     return { kind: "invalid", issue: "must be a valid email address" };

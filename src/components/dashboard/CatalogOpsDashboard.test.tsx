@@ -328,7 +328,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("no recorded mail ingest run");
   });
 
-  it("renders setup warning, database override, secret, and optional setting states", () => {
+  it("renders setup warning, saved setting, secret, and optional setting states", () => {
     renderDashboard({
       ...dashboardFixture,
       setupStatus: {
@@ -343,11 +343,11 @@ describe("CatalogOpsDashboard", () => {
             missing: [],
             settings: [
               {
-                key: "db_override",
-                label: "DB override",
+                key: "saved_setting",
+                label: "Saved setting",
                 source: "database",
                 state: "configured",
-                value: "from row",
+                value: "configured value",
               },
               {
                 key: "secret",
@@ -405,7 +405,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Runtime configuration is usable");
     expect(pageText()).toContain("Review");
     expect(pageText()).toContain("Blocked");
-    expect(pageText()).toContain("DB override");
+    expect(pageText()).toContain("Saved setting");
     expect(pageText()).toContain("Secret set");
     expect(pageText()).toContain("Optional");
     expect(pageText()).toContain("last observed");

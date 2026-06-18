@@ -206,7 +206,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
               </Text>
               <Title order={1}>Settings Center</Title>
               <Text c="dimmed">
-                Read-only observation only. Runtime env is bootstrap only for infrastructure; operator settings and mail sources live in the database.
+                Read-only observation only. Runtime configuration bootstraps infrastructure; saved operator settings and mail sources live in Postgres.
               </Text>
             </Stack>
             <Button component="a" href="/" variant="light">
@@ -313,7 +313,7 @@ function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
       <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
       <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
-      <StatusCard icon={Settings} label="DB overrides" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} bootstrap runtime values`} />
+      <StatusCard icon={Settings} label="Saved settings" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} runtime fallback values`} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </SimpleGrid>
   );
@@ -436,7 +436,7 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
           <Stack gap={4}>
             <Text fw={700}>Auth Provider</Text>
             <Text size="sm" c="dimmed">
-              Generic OAuth/OIDC provider unit. The Site address setting owns the callback URL; runtime env is only a fallback.
+              Generic OAuth/OIDC provider unit. The Site address setting owns the callback URL; runtime configuration is only a bootstrap fallback.
             </Text>
           </Stack>
           <Badge color={unitStatusColor(provider.status)} variant="light">
@@ -446,9 +446,12 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
 
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
           <SignalFact label="Provider type" value="Generic OAuth/OIDC" />
+          <SignalFact label="Enabled" value={provider.enabled ? "enabled" : "disabled"} />
           <SignalFact label="Display name" value={provider.displayName} />
           <SignalFact label="Button label" value={provider.buttonLabel} />
           <SignalFact label="Provider ID" value={provider.providerId ?? "not configured"} />
+          <SignalFact label="Logo URL" value={provider.logoUrl ?? "not configured"} />
+          <SignalFact label="Discovery / issuer URL" value={provider.discoveryUrl ?? "not configured"} />
           <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
           <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
           <SignalFact label="Scopes" value={provider.scopes.length > 0 ? provider.scopes.join(" ") : "not configured"} />
@@ -583,7 +586,7 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
         <Stack gap={4}>
           <Text fw={700}>{group.label}</Text>
           <Text size="sm" c="dimmed">
-            Source badges show database overrides, bootstrap runtime values, schema defaults, or unset values.
+            Source badges show saved settings, runtime fallback values, defaults, or values that are not set.
           </Text>
         </Stack>
         <Badge color={groupStateColor(group.state)} variant="light">
@@ -649,12 +652,12 @@ function SettingEditor({ setting, draftValue, onChange, onClear }: {
             {setting.help}
           </Text>
           <Text size="sm">
-            Effective: <Text span fw={700}>{pendingClear ? "Will reset to runtime/default" : setting.displayValue}</Text>
+            Effective: <Text span fw={700}>{pendingClear ? "Will reset to runtime fallback or default" : setting.displayValue}</Text>
           </Text>
         </Stack>
         {setting.clearable ? (
           <Button size="xs" variant="light" color="gray" onClick={onClear}>
-            Clear override
+            Clear saved setting
           </Button>
         ) : null}
       </Group>
@@ -677,7 +680,7 @@ function renderInput(
   if (setting.type === "boolean") {
     return (
       <Switch
-        label="Database override"
+        label="Saved setting"
         checked={Boolean(value)}
         onChange={(event) => onChange(event.currentTarget.checked)}
       />
@@ -686,7 +689,7 @@ function renderInput(
   if (setting.type === "number") {
     return (
       <NumberInput
-        label="Database override"
+        label="Saved setting"
         value={typeof value === "number" ? value : value === "" ? "" : Number(value)}
         allowDecimal={false}
         onChange={(nextValue) => onChange(typeof nextValue === "number" ? nextValue : String(nextValue))}
@@ -696,7 +699,7 @@ function renderInput(
   if (setting.type === "select") {
     return (
       <NativeSelect
-        label="Database override"
+        label="Saved setting"
         value={typeof value === "string" ? value : ""}
         data={setting.options?.map((option) => ({ value: option.value, label: option.label })) ?? []}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -706,7 +709,7 @@ function renderInput(
   if (setting.secret) {
     return (
       <PasswordInput
-        label="New secret override"
+        label="New secret"
         placeholder="Leave blank for no change"
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -716,7 +719,7 @@ function renderInput(
   if (setting.type === "csv" || setting.key === "auth_trusted_origins") {
     return (
       <Textarea
-        label="Database override"
+        label="Saved setting"
         minRows={2}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -725,7 +728,7 @@ function renderInput(
   }
   return (
     <TextInput
-      label="Database override"
+      label="Saved setting"
       value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
       onChange={(event) => onChange(event.currentTarget.value)}
     />
@@ -768,9 +771,15 @@ function SourceBadge({ source }: { source: SettingDescriptor["source"] }) {
     default: "teal",
     unset: "red",
   } satisfies Record<SettingDescriptor["source"], string>;
+  const labels = {
+    database: "Saved setting",
+    runtime: "Runtime fallback",
+    default: "Default",
+    unset: "Not set",
+  } satisfies Record<SettingDescriptor["source"], string>;
   return (
     <Badge color={colors[source]} variant="light" size="xs">
-      {source}
+      {labels[source]}
     </Badge>
   );
 }

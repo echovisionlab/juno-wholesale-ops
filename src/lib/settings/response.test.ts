@@ -12,7 +12,7 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 }
 
 describe("settings response and validation", () => {
-  it("resolves database overrides, runtime fallback, defaults, unset values, and masked secrets", () => {
+  it("resolves saved settings, runtime fallback, defaults, unset values, and masked secrets", () => {
     const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
@@ -99,10 +99,10 @@ describe("settings response and validation", () => {
       buttonLabel: "Sign in with Workspace",
       providerId: "workspace",
       clientSecretConfigured: true,
-      callbackUrl: "https://inventory-dev.example.test/api/auth/callback/workspace",
+      callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
     });
     expect(descriptor(response, "auth_external_client_secret")).toMatchObject({
-      displayValue: "Database override configured",
+      displayValue: "Saved setting configured",
       value: null,
       secret: true,
     });
