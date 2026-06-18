@@ -53,6 +53,8 @@ Issue: [#5](https://github.com/echovisionlab/juno-wholesale-ops/issues/5)
 - Add filters for signal type, severity, watch hits, and date ranges.
 - Store saved views in the local/self-hosted database.
 - Avoid user tracking and multi-tenant SaaS behavior.
+- Keep Settings Center status cards and diagnostics operator-facing; do not
+  reintroduce raw diagnostic dumps into the main dashboard.
 
 ### Parser fixture expansion
 
