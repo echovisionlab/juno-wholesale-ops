@@ -305,6 +305,8 @@ Production recommendations:
 - Use immutable Harbor image refs such as
   `harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<commit>` or a reviewed
   release tag.
+- Tagged releases can deploy through Komodo after image promotion when the
+  production stack and Komodo GitHub secrets are configured.
 - Use mounted secrets or runtime env for credentials.
 - Back up Postgres and raw attachment storage.
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.

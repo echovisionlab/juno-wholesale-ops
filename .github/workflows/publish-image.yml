@@ -19,6 +19,7 @@ env:
   REGISTRY: harbor.dsub.io
   REGISTRY_PROJECT: dsub
   IMAGE_NAME: juno-wholesale-ops-web
+  NODE_VERSION: 22
   PLATFORMS: linux/amd64
 
 jobs:
@@ -33,6 +34,8 @@ jobs:
       REF_TYPE: ${{ github.ref_type }}
       REF_NAME: ${{ github.ref_name }}
       SHA_TAG: sha-${{ github.sha }}
+    outputs:
+      image-published: ${{ steps.harbor_credentials.outputs.available }}
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -65,6 +68,10 @@ jobs:
           done
 
           if [ "${#missing[@]}" -gt 0 ]; then
+            if [ "${REF_TYPE}" = "tag" ]; then
+              echo "Missing Harbor secrets for release publish: ${missing[*]}" >&2
+              exit 1
+            fi
             echo "available=false" >> "${GITHUB_OUTPUT}"
             echo "::warning::Skipping Harbor publish; missing secrets: ${missing[*]}"
             exit 0
@@ -138,3 +145,78 @@ jobs:
 
             sleep 10
           done
+
+  deploy-production:
+    name: Deploy Production via Komodo (v-tag)
+    needs: publish
+    runs-on: ubuntu-latest
+    if: ${{ needs.publish.result == 'success' && needs.publish.outputs.image-published == 'true' && github.ref_type == 'tag' && startsWith(github.ref_name, 'v') }}
+    timeout-minutes: 20
+    environment: production
+    env:
+      DEPLOY_IMAGE_TAG: ${{ github.ref_name }}
+      IMAGE_NAME: juno-wholesale-ops-web
+      KOMODO_ALLOW_GMAIL_MODIFY_SCOPE: ${{ vars.KOMODO_ALLOW_GMAIL_MODIFY_SCOPE }}
+      KOMODO_FILE_PATHS: ${{ vars.KOMODO_FILE_PATHS }}
+      KOMODO_PROJECT_NAME: ${{ vars.KOMODO_PROJECT_NAME }}
+      KOMODO_REQUIRE_HEALTHY: ${{ vars.KOMODO_REQUIRE_HEALTHY }}
+      KOMODO_REQUIRE_SMOKE_URLS: ${{ vars.KOMODO_REQUIRE_SMOKE_URLS }}
+      KOMODO_RUN_DIRECTORY: ${{ vars.KOMODO_RUN_DIRECTORY }}
+      KOMODO_SMOKE_URLS: ${{ vars.KOMODO_SMOKE_URLS }}
+      REGISTRY: harbor.dsub.io
+      REGISTRY_PROJECT: dsub
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Validate Komodo credentials
+        id: komodo_credentials
+        shell: bash
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_PASSWORD: ${{ secrets.KOMODO_PASSWORD }}
+          KOMODO_TOKEN: ${{ secrets.KOMODO_TOKEN }}
+          KOMODO_URL: ${{ secrets.KOMODO_URL }}
+          KOMODO_USERNAME: ${{ secrets.KOMODO_USERNAME }}
+        run: |
+          set -euo pipefail
+          if [ -z "${KOMODO_URL:-}" ]; then
+            echo "available=false" >> "${GITHUB_OUTPUT}"
+            echo "::warning::Skipping Komodo deploy; missing secret: KOMODO_URL"
+            exit 0
+          fi
+          if [ -n "${KOMODO_TOKEN:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ -n "${KOMODO_API_KEY:-}" ] && [ -n "${KOMODO_API_SECRET:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          if [ -n "${KOMODO_USERNAME:-}" ] && [ -n "${KOMODO_PASSWORD:-}" ]; then
+            echo "available=true" >> "${GITHUB_OUTPUT}"
+            exit 0
+          fi
+          echo "available=false" >> "${GITHUB_OUTPUT}"
+          echo "::warning::Skipping Komodo deploy; missing credentials: set KOMODO_TOKEN, KOMODO_API_KEY/KOMODO_API_SECRET, or KOMODO_USERNAME/KOMODO_PASSWORD"
+          exit 0
+
+      - name: Sync stack files and deploy
+        if: ${{ steps.komodo_credentials.outputs.available == 'true' }}
+        env:
+          KOMODO_API_KEY: ${{ secrets.KOMODO_API_KEY }}
+          KOMODO_API_SECRET: ${{ secrets.KOMODO_API_SECRET }}
+          KOMODO_PASSWORD: ${{ secrets.KOMODO_PASSWORD }}
+          KOMODO_STACK_NAME: ${{ secrets.KOMODO_STACK_NAME }}
+          KOMODO_TOKEN: ${{ secrets.KOMODO_TOKEN }}
+          KOMODO_URL: ${{ secrets.KOMODO_URL }}
+          KOMODO_USERNAME: ${{ secrets.KOMODO_USERNAME }}
+        run: node ./scripts/ci/deploy-komodo-production.mjs
