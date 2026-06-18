@@ -7,7 +7,7 @@ const meta = {
   args: {
     items: [
       "Never commit Google service account JSON.",
-      "Dry-run Gmail ingestion before writing Postgres rows.",
+      "Dry-run mail ingestion before writing Postgres rows.",
       "Keep wholesale tables outside the another application schema.",
     ],
   },

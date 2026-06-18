@@ -2,6 +2,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   resetApplicationTables,
   startMigratedPostgresTestDatabase,
+  testMailboxSourceId,
   type StartedPostgresTestDatabase,
 } from "@/test/postgres";
 import {
@@ -29,6 +30,7 @@ describe("recordCatalogAttachment", () => {
   });
 
   it("persists catalog rows only once for duplicate sheet content", async () => {
+    await ensureTestMailboxSource(database);
     const first = await recordCatalogAttachment({
       databaseUrl: database.container.getConnectionUri(),
       supplierCode: "juno",
@@ -81,8 +83,48 @@ describe("recordCatalogAttachment", () => {
     expect(attachments.rows[0].count).toBe("2");
   });
 
-  it("records Gmail ingest cursor state in the singleton row", async () => {
+  it("dedupes against migrated provider mailbox messages without legacy runtime support", async () => {
     const databaseUrl = database.container.getConnectionUri();
+    await ensureTestMailboxSource(database);
+    await database.pool.query(
+      `
+        INSERT INTO mail_message (provider, mailbox_address, provider_message_id, payload)
+        VALUES ('gmail', 'operator@example.com', 'legacy-message', '{}')
+      `,
+    );
+
+    await recordCatalogAttachment({
+      databaseUrl,
+      supplierCode: "juno",
+      message: message("legacy-message"),
+      attachment: {
+        filename: "Juno Wholesale New Preorders 17 June 2026.xlsx",
+        mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        byteSize: 100,
+        sha256: "attachment-hash-legacy",
+        storageUri: "/tmp/legacy.xlsx",
+        catalog: catalog({ kind: "preorder", catalogDate: "2026-06-17" }),
+      },
+    });
+
+    const messages = await database.pool.query<{ count: string; mailbox_source_id: string | null }>(
+      `
+        SELECT count(*)::text AS count, max(mailbox_source_id::text) AS mailbox_source_id
+        FROM mail_message
+        WHERE provider = 'gmail'
+          AND mailbox_address = 'operator@example.com'
+          AND provider_message_id = 'legacy-message'
+      `,
+    );
+    expect(messages.rows[0]).toEqual({
+      count: "1",
+      mailbox_source_id: testMailboxSourceId,
+    });
+  });
+
+  it("records mailbox ingest cursor state per source", async () => {
+    const databaseUrl = database.container.getConnectionUri();
+    const mailboxSourceId = await ensureTestMailboxSource(database);
     const snapshot = await recordCatalogAttachment({
       databaseUrl,
       supplierCode: "juno",
@@ -99,12 +141,14 @@ describe("recordCatalogAttachment", () => {
 
     await recordGmailIngestStarted({
       databaseUrl,
+      mailboxSourceId,
       query: "to:catalog@example.com filename:xlsx after:2026/06/10",
       windowFrom: "2026-06-10T00:00:00.000Z",
       windowTo: "2026-06-17T00:00:00.000Z",
     });
     await recordGmailIngestFinished({
       databaseUrl,
+      mailboxSourceId,
       status: "succeeded",
       error: null,
       messageCount: 2,
@@ -134,12 +178,14 @@ describe("recordCatalogAttachment", () => {
     const databaseUrl = database.container.getConnectionUri();
     await recordGmailIngestStarted({
       databaseUrl,
+      mailboxSourceId: await ensureTestMailboxSource(database),
       query: "filename:xlsx",
       windowFrom: null,
       windowTo: "2026-06-17T00:00:00.000Z",
     });
     await recordGmailIngestFinished({
       databaseUrl,
+      mailboxSourceId: await ensureTestMailboxSource(database),
       status: "succeeded",
       error: null,
       messageCount: 1,
@@ -151,12 +197,14 @@ describe("recordCatalogAttachment", () => {
     });
     await recordGmailIngestStarted({
       databaseUrl,
+      mailboxSourceId: await ensureTestMailboxSource(database),
       query: "filename:xlsx after:2026/06/10",
       windowFrom: "2026-06-10T00:00:00.000Z",
       windowTo: "2026-06-18T00:00:00.000Z",
     });
     await recordGmailIngestFinished({
       databaseUrl,
+      mailboxSourceId: await ensureTestMailboxSource(database),
       status: "failed",
       error: "Gmail API 500",
       messageCount: 0,
@@ -177,9 +225,11 @@ describe("recordCatalogAttachment", () => {
 
 function message(gmailMessageId: string): MessageRecord {
   return {
-    userEmail: "operator@example.com",
-    gmailMessageId,
-    gmailThreadId: null,
+    provider: "gmail",
+    mailboxAddress: "operator@example.com",
+    mailboxSourceId: testMailboxSourceId,
+    providerMessageId: gmailMessageId,
+    providerThreadId: null,
     rfc822MessageId: `<${gmailMessageId}@example.com>`,
     subject: "Daily Juno",
     fromAddress: "juno@example.com",
@@ -188,6 +238,53 @@ function message(gmailMessageId: string): MessageRecord {
     receivedAt: "2026-06-17T00:00:00.000Z",
     payload: { id: gmailMessageId, payload: { headers: [] } },
   };
+}
+
+async function ensureTestMailboxSource(database: StartedPostgresTestDatabase): Promise<string> {
+  await database.pool.query(
+    `
+      INSERT INTO mail_connection (id, name, provider, auth_type, credential_type, credential_secret, is_active, config)
+      VALUES (
+        '10000000-0000-4000-8000-000000000100',
+        'Test Gmail',
+        'gmail',
+        'google_workspace_delegation',
+        'google_service_account_json',
+        '{"client_email":"test@example.com","fixture_key":"synthetic-test-key"}',
+        true,
+        '{"scopes":"https://www.googleapis.com/auth/gmail.readonly"}'
+      )
+      ON CONFLICT (id) DO NOTHING
+    `,
+  );
+  await database.pool.query(
+    `
+      INSERT INTO mail_mailbox_source (
+        id,
+        connection_id,
+        mailbox_address,
+        display_name,
+        ingest_query,
+        storage_dir,
+        attachment_pattern,
+        supplier_code,
+        is_active
+      )
+      VALUES (
+        '10000000-0000-4000-8000-000000000101',
+        '10000000-0000-4000-8000-000000000100',
+        'operator@example.com',
+        'Operator',
+        'filename:xlsx',
+        '.data/test-mail',
+        'xlsx',
+        'juno',
+        true
+      )
+      ON CONFLICT (id) DO NOTHING
+    `,
+  );
+  return "10000000-0000-4000-8000-000000000101";
 }
 
 function catalog(overrides: Pick<ParsedCatalog, "kind" | "catalogDate">): ParsedCatalog {

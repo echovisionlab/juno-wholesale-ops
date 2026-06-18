@@ -110,7 +110,7 @@ describe("public safety check", () => {
       "## Quick start",
       "## Demo mode",
       "## Configuration",
-      "## Gmail ingestion",
+      "## Mail ingestion",
       "## Live stock observation",
       "## Insights",
       "## Notifications",

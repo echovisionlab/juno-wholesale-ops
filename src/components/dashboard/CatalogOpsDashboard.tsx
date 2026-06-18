@@ -191,7 +191,7 @@ export function CatalogOpsDashboard({
           </Grid.Col>
 
           <Grid.Col span={12}>
-            <SectionHeader icon={MailSearch}>Gmail Ingest State</SectionHeader>
+            <SectionHeader icon={MailSearch}>Mail Ingest State</SectionHeader>
             <GmailIngestStatusPanel state={ingestState} />
           </Grid.Col>
 
@@ -882,7 +882,7 @@ function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) 
   if (!state) {
     return (
       <Card>
-        <Text fw={700}>Gmail ingest status unavailable</Text>
+        <Text fw={700}>Mail ingest status unavailable</Text>
         <Text size="sm" c="dimmed" mt={4}>
           The server did not return a readable ingest state.
         </Text>
@@ -896,7 +896,7 @@ function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) 
     <Card>
       <Group justify="space-between" align="flex-start">
         <Stack gap={4}>
-          <Text fw={700}>Last Gmail run</Text>
+          <Text fw={700}>Last mail ingest run</Text>
           <Text size="sm" c="dimmed">
             {formatIngestRunDetail(state)}
           </Text>
@@ -950,7 +950,7 @@ function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) 
         </Stack>
         <Stack gap={4}>
           <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-            Gmail query
+            Mail query
           </Text>
           <Code block>{state.lastQuery ?? "N/A"}</Code>
         </Stack>
@@ -1129,7 +1129,7 @@ function formatIngestRunDetail(state: GmailIngestState): string {
   if (state.lastQueryFinishedAt) {
     return `finished ${formatOptionalDate(state.lastQueryFinishedAt)}`;
   }
-  return "no recorded Gmail ingest run";
+  return "no recorded mail ingest run";
 }
 
 function formatSnapshotDetail(snapshotId: string | null): string {

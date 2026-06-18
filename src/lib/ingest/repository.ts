@@ -4,9 +4,11 @@ import type { GmailMessage } from "./gmail";
 import type { ParsedCatalog } from "./juno-parser";
 
 export type MessageRecord = {
-  userEmail: string;
-  gmailMessageId: string;
-  gmailThreadId: string | null;
+  provider: "gmail" | "imap" | "microsoft_graph" | "generic";
+  mailboxAddress: string;
+  mailboxSourceId: string;
+  providerMessageId: string;
+  providerThreadId: string | null;
   rfc822MessageId: string | null;
   subject: string | null;
   fromAddress: string | null;
@@ -26,6 +28,9 @@ export type AttachmentRecord = {
 };
 
 export type GmailIngestState = {
+  mailboxSourceId: string | null;
+  mailboxAddress: string | null;
+  provider: "gmail" | "imap" | "microsoft_graph" | "generic" | null;
   lastQuery: string | null;
   lastQueryWindowFrom: string | null;
   lastQueryWindowTo: string | null;
@@ -70,9 +75,11 @@ export async function recordCatalogAttachment(options: {
       const message = await client.query<{ id: string }>(
         `
           INSERT INTO mail_message (
-            gmail_user_email,
-            gmail_message_id,
-            gmail_thread_id,
+            provider,
+            mailbox_address,
+            mailbox_source_id,
+            provider_message_id,
+            provider_thread_id,
             rfc822_message_id,
             subject,
             from_address,
@@ -81,15 +88,19 @@ export async function recordCatalogAttachment(options: {
             received_at,
             payload
           )
-          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-          ON CONFLICT (gmail_user_email, gmail_message_id) DO UPDATE SET
-            first_seen_at = mail_message.first_seen_at
+          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+          ON CONFLICT (provider, mailbox_address, provider_message_id) DO UPDATE SET
+            first_seen_at = mail_message.first_seen_at,
+            mailbox_source_id = EXCLUDED.mailbox_source_id,
+            provider_thread_id = EXCLUDED.provider_thread_id
           RETURNING id
         `,
         [
-          options.message.userEmail,
-          options.message.gmailMessageId,
-          options.message.gmailThreadId,
+          options.message.provider,
+          options.message.mailboxAddress,
+          options.message.mailboxSourceId,
+          options.message.providerMessageId,
+          options.message.providerThreadId,
           options.message.rfc822MessageId,
           options.message.subject,
           options.message.fromAddress,
@@ -224,6 +235,9 @@ export async function getGmailIngestState(databaseUrl: string): Promise<GmailIng
   const pool = new Pool({ connectionString: databaseUrl, max: 1 });
   try {
     const result = await pool.query<{
+      mailbox_source_id: string | null;
+      mailbox_address: string | null;
+      provider: "gmail" | "imap" | "microsoft_graph" | "generic" | null;
       last_query: string | null;
       last_query_window_from: string | null;
       last_query_window_to: string | null;
@@ -240,25 +254,108 @@ export async function getGmailIngestState(databaseUrl: string): Promise<GmailIng
     }>(
       `
         SELECT
-          last_query,
-          last_query_window_from::text AS last_query_window_from,
-          last_query_window_to::text AS last_query_window_to,
-          last_query_started_at::text AS last_query_started_at,
-          last_query_finished_at::text AS last_query_finished_at,
-          last_query_status,
-          last_query_error,
-          last_query_message_count,
-          last_query_attachment_count,
-          last_successful_message_received_at::text AS last_successful_message_received_at,
-          last_ingested_snapshot_id::text AS last_ingested_snapshot_id,
-          last_ingested_catalog_date::text AS last_ingested_catalog_date,
-          last_ingested_content_hash
-        FROM gmail_ingest_state
-        WHERE id = true
+          state.mailbox_source_id::text AS mailbox_source_id,
+          source.mailbox_address,
+          connection.provider,
+          state.last_query,
+          state.last_query_window_from::text AS last_query_window_from,
+          state.last_query_window_to::text AS last_query_window_to,
+          state.last_query_started_at::text AS last_query_started_at,
+          state.last_query_finished_at::text AS last_query_finished_at,
+          state.last_query_status,
+          state.last_query_error,
+          state.last_query_message_count,
+          state.last_query_attachment_count,
+          state.last_successful_message_received_at::text AS last_successful_message_received_at,
+          state.last_ingested_snapshot_id::text AS last_ingested_snapshot_id,
+          state.last_ingested_catalog_date::text AS last_ingested_catalog_date,
+          state.last_ingested_content_hash
+        FROM mail_mailbox_ingest_state state
+        JOIN mail_mailbox_source source ON source.id = state.mailbox_source_id
+        JOIN mail_connection connection ON connection.id = source.connection_id
+        ORDER BY
+          state.last_query_finished_at DESC NULLS LAST,
+          state.last_query_started_at DESC NULLS LAST,
+          state.updated_at DESC
+        LIMIT 1
       `,
     );
     const row = result.rows[0];
     return {
+      mailboxSourceId: row?.mailbox_source_id ?? null,
+      mailboxAddress: row?.mailbox_address ?? null,
+      provider: row?.provider ?? null,
+      lastQuery: row?.last_query ?? null,
+      lastQueryWindowFrom: row?.last_query_window_from ?? null,
+      lastQueryWindowTo: row?.last_query_window_to ?? null,
+      lastQueryStartedAt: row?.last_query_started_at ?? null,
+      lastQueryFinishedAt: row?.last_query_finished_at ?? null,
+      lastQueryStatus: row?.last_query_status ?? null,
+      lastQueryError: row?.last_query_error ?? null,
+      lastQueryMessageCount: row?.last_query_message_count ?? 0,
+      lastQueryAttachmentCount: row?.last_query_attachment_count ?? 0,
+      lastSuccessfulMessageReceivedAt: row?.last_successful_message_received_at ?? null,
+      lastIngestedSnapshotId: row?.last_ingested_snapshot_id ?? null,
+      lastIngestedCatalogDate: row?.last_ingested_catalog_date ?? null,
+      lastIngestedContentHash: row?.last_ingested_content_hash ?? null,
+    };
+  } finally {
+    await pool.end();
+  }
+}
+
+export async function getMailboxIngestState(databaseUrl: string, mailboxSourceId: string): Promise<GmailIngestState> {
+  const pool = new Pool({ connectionString: databaseUrl, max: 1 });
+  try {
+    const result = await pool.query<{
+      mailbox_source_id: string;
+      mailbox_address: string;
+      provider: "gmail" | "imap" | "microsoft_graph" | "generic";
+      last_query: string | null;
+      last_query_window_from: string | null;
+      last_query_window_to: string | null;
+      last_query_started_at: string | null;
+      last_query_finished_at: string | null;
+      last_query_status: "running" | "succeeded" | "failed" | null;
+      last_query_error: string | null;
+      last_query_message_count: number;
+      last_query_attachment_count: number;
+      last_successful_message_received_at: string | null;
+      last_ingested_snapshot_id: string | null;
+      last_ingested_catalog_date: string | null;
+      last_ingested_content_hash: string | null;
+    }>(
+      `
+        SELECT
+          source.id::text AS mailbox_source_id,
+          source.mailbox_address,
+          connection.provider,
+          state.last_query,
+          state.last_query_window_from::text AS last_query_window_from,
+          state.last_query_window_to::text AS last_query_window_to,
+          state.last_query_started_at::text AS last_query_started_at,
+          state.last_query_finished_at::text AS last_query_finished_at,
+          state.last_query_status,
+          state.last_query_error,
+          COALESCE(state.last_query_message_count, 0) AS last_query_message_count,
+          COALESCE(state.last_query_attachment_count, 0) AS last_query_attachment_count,
+          state.last_successful_message_received_at::text AS last_successful_message_received_at,
+          state.last_ingested_snapshot_id::text AS last_ingested_snapshot_id,
+          state.last_ingested_catalog_date::text AS last_ingested_catalog_date,
+          state.last_ingested_content_hash
+        FROM mail_mailbox_source source
+        JOIN mail_connection connection ON connection.id = source.connection_id
+        LEFT JOIN mail_mailbox_ingest_state state ON state.mailbox_source_id = source.id
+        WHERE source.id = $1
+        LIMIT 1
+      `,
+      [mailboxSourceId],
+    );
+    const row = result.rows[0];
+    return {
+      mailboxSourceId: row?.mailbox_source_id ?? mailboxSourceId,
+      mailboxAddress: row?.mailbox_address ?? null,
+      provider: row?.provider ?? null,
       lastQuery: row?.last_query ?? null,
       lastQueryWindowFrom: row?.last_query_window_from ?? null,
       lastQueryWindowTo: row?.last_query_window_to ?? null,
@@ -280,6 +377,7 @@ export async function getGmailIngestState(databaseUrl: string): Promise<GmailIng
 
 export async function recordGmailIngestStarted(options: {
   databaseUrl: string;
+  mailboxSourceId: string;
   query: string;
   windowFrom: string | null;
   windowTo: string;
@@ -288,8 +386,8 @@ export async function recordGmailIngestStarted(options: {
   try {
     await pool.query(
       `
-        INSERT INTO gmail_ingest_state (
-          id,
+        INSERT INTO mail_mailbox_ingest_state (
+          mailbox_source_id,
           last_query,
           last_query_window_from,
           last_query_window_to,
@@ -298,8 +396,8 @@ export async function recordGmailIngestStarted(options: {
           last_query_error,
           updated_at
         )
-        VALUES (true, $1, $2, $3, now(), 'running', NULL, now())
-        ON CONFLICT (id) DO UPDATE SET
+        VALUES ($1, $2, $3, $4, now(), 'running', NULL, now())
+        ON CONFLICT (mailbox_source_id) DO UPDATE SET
           last_query = EXCLUDED.last_query,
           last_query_window_from = EXCLUDED.last_query_window_from,
           last_query_window_to = EXCLUDED.last_query_window_to,
@@ -308,7 +406,7 @@ export async function recordGmailIngestStarted(options: {
           last_query_error = NULL,
           updated_at = now()
       `,
-      [options.query, options.windowFrom, options.windowTo],
+      [options.mailboxSourceId, options.query, options.windowFrom, options.windowTo],
     );
   } finally {
     await pool.end();
@@ -317,6 +415,7 @@ export async function recordGmailIngestStarted(options: {
 
 export async function recordGmailIngestFinished(options: {
   databaseUrl: string;
+  mailboxSourceId: string;
   status: "succeeded" | "failed";
   error: string | null;
   messageCount: number;
@@ -330,7 +429,7 @@ export async function recordGmailIngestFinished(options: {
   try {
     await pool.query(
       `
-        UPDATE gmail_ingest_state
+        UPDATE mail_mailbox_ingest_state
         SET last_query_finished_at = now(),
             last_query_status = $1,
             last_query_error = $2,
@@ -341,7 +440,7 @@ export async function recordGmailIngestFinished(options: {
             last_ingested_catalog_date = COALESCE($7, last_ingested_catalog_date),
             last_ingested_content_hash = COALESCE($8, last_ingested_content_hash),
             updated_at = now()
-        WHERE id = true
+        WHERE mailbox_source_id = $9
       `,
       [
         options.status,
@@ -352,6 +451,7 @@ export async function recordGmailIngestFinished(options: {
         options.lastIngestedSnapshotId,
         options.lastIngestedCatalogDate,
         options.lastIngestedContentHash,
+        options.mailboxSourceId,
       ],
     );
   } finally {

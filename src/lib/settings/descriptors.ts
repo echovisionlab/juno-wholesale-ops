@@ -1,7 +1,9 @@
 import type { RuntimeEnv } from "@/lib/env";
 import type { JunoLiveServiceSettingsRow } from "@/lib/juno-live/settings";
 
-export type SettingsGroupId = "system" | "auth" | "gmail" | "juno" | "notifications" | "advanced";
+import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
+
+export type SettingsGroupId = "system" | "auth" | "mail" | "juno" | "notifications" | "advanced";
 export type SettingValueType = "string" | "number" | "boolean" | "email" | "url" | "csv" | "secret" | "select";
 export type SettingSource = "database" | "runtime" | "default" | "unset";
 export type SettingState = "configured" | "missing" | "disabled" | "invalid";
@@ -14,7 +16,7 @@ export type SettingRequiredWhen =
 export type SettingUnit =
   | "system_runtime"
   | "auth_provider"
-  | "gmail_workspace"
+  | "mail_source"
   | "juno_live_lookup"
   | "notification_delivery";
 
@@ -96,7 +98,7 @@ export type SettingsWarning = {
 export type IntegrationUnitStatus = "ready" | "missing" | "invalid" | "disabled" | "warning" | "blocked";
 
 export type IntegrationUnit = {
-  id: "gmail" | "juno_live" | "notifications";
+  id: "mail_sources" | "juno_live" | "notifications";
   label: string;
   status: IntegrationUnitStatus;
   detail: string;
@@ -153,13 +155,14 @@ export type SettingsResponse = {
   };
   units: {
     authProvider: AuthProviderUnit;
-    gmail: IntegrationUnit;
+    mail: IntegrationUnit;
     junoLive: IntegrationUnit;
     notifications: IntegrationUnit;
   };
   security: {
     authBootstrap: AuthBootstrapStatus;
   };
+  mailSources: PublicMailboxSource[];
   groups: SettingsGroup[];
   nextActions: NextAction[];
   warnings: SettingsWarning[];
@@ -182,16 +185,6 @@ export const serviceSettingColumns = [
   "juno_live_poll_interval_ms",
   "juno_live_auto_enqueue_on_interval",
   "juno_live_auto_enqueue_limit",
-  "gmail_ingest_lookback_ms",
-  "google_workspace_delegated_user",
-  "google_service_account_key_json",
-  "google_gmail_scopes",
-  "gmail_ingest_query",
-  "gmail_max_results",
-  "gmail_processed_label",
-  "gmail_storage_dir",
-  "catalog_attachment_pattern",
-  "supplier_code",
   "auth_secret",
   "auth_base_url",
   "auth_trusted_origins",
@@ -233,16 +226,6 @@ const runtimeEnvKeyLookup = {
   AUTH_INITIAL_ADMIN_EMAIL: true,
   AUTH_INITIAL_ADMIN_PASSWORD: true,
   AUTH_INITIAL_ADMIN_NAME: true,
-  GOOGLE_WORKSPACE_DELEGATED_USER: true,
-  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: true,
-  GOOGLE_GMAIL_SCOPES: true,
-  GMAIL_INGEST_QUERY: true,
-  GMAIL_MAX_RESULTS: true,
-  GMAIL_INGEST_LOOKBACK_MS: true,
-  GMAIL_PROCESSED_LABEL: true,
-  GMAIL_STORAGE_DIR: true,
-  CATALOG_ATTACHMENT_PATTERN: true,
-  SUPPLIER_CODE: true,
   JUNO_LIVE_ENQUEUE_ON_INGEST: true,
   JUNO_LOGIN_EMAIL: true,
   JUNO_LOGIN_PASSWORD: true,
@@ -307,7 +290,7 @@ export const settingDefinitions = [
     undefined,
     true,
   ),
-  dbSetting("system", "data_mode", "JUNO_WHOLESALE_OPS_DATA_MODE", "Data mode", "select", false, false, "Demo mode uses synthetic data and does not require Gmail; real mailbox mode requires Gmail credentials.", "demo", {
+  dbSetting("system", "data_mode", "JUNO_WHOLESALE_OPS_DATA_MODE", "Data mode", "select", false, false, "Demo mode uses synthetic data and does not require mail sources; real mailbox mode requires at least one runnable mail source.", "demo", {
     options: [
       { value: "demo", label: "Demo" },
       { value: "real_mailbox", label: "Real mailbox" },
@@ -329,16 +312,6 @@ export const settingDefinitions = [
   dbSetting("auth", "auth_admin_email_allowlist", "AUTH_ADMIN_EMAIL_ALLOWLIST", "Admin email allowlist", "csv", false, false, "Optional admin bootstrap allowlist for external provider accounts. Values are masked in security status as configured/not configured.", undefined, { unit: "auth_provider" }),
   dbSetting("auth", "auth_external_admin_claim", "AUTH_EXTERNAL_ADMIN_CLAIM", "Admin claim", "string", false, false, "Optional external provider claim name used for admin bootstrap policy.", undefined, { unit: "auth_provider" }),
   dbSetting("auth", "auth_external_admin_claim_value", "AUTH_EXTERNAL_ADMIN_CLAIM_VALUE", "Admin claim value", "string", false, false, "Optional external provider claim value used for admin bootstrap policy.", undefined, { unit: "auth_provider" }),
-  dbSetting("gmail", "google_workspace_delegated_user", "GOOGLE_WORKSPACE_DELEGATED_USER", "Delegated mailbox", "email", true, false, "Mailbox used for read-only Gmail catalog search. Required only in real mailbox mode.", undefined, { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
-  dbSetting("gmail", "google_service_account_key_json", "GOOGLE_SERVICE_ACCOUNT_KEY_JSON", "Service account key", "secret", true, true, "Service account JSON content or private runtime reference. Write-only and required only in real mailbox mode.", undefined, { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
-  dbSetting("gmail", "google_gmail_scopes", "GOOGLE_GMAIL_SCOPES", "Gmail scopes", "csv", false, false, "Gmail OAuth scopes. Read-only scope is recommended.", "https://www.googleapis.com/auth/gmail.readonly", { unit: "gmail_workspace" }),
-  dbSetting("gmail", "gmail_ingest_query", "GMAIL_INGEST_QUERY", "Gmail query", "string", true, false, "Catalog mail search expression.", "has:attachment filename:xlsx newer_than:30d", { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
-  dbSetting("gmail", "gmail_max_results", "GMAIL_MAX_RESULTS", "Max messages", "number", false, false, "Maximum Gmail messages per ingest run.", 25, { unit: "gmail_workspace" }),
-  dbSetting("gmail", "gmail_ingest_lookback_ms", "GMAIL_INGEST_LOOKBACK_MS", "Lookback window", "number", false, false, "Fallback ingest lookback window in milliseconds.", 604800000, { unit: "gmail_workspace" }),
-  dbSetting("gmail", "gmail_processed_label", "GMAIL_PROCESSED_LABEL", "Processed label", "string", false, false, "Advanced label used only when Gmail modify scope is intentionally configured.", "Wholesale Processed", { advanced: true, unit: "gmail_workspace" }),
-  dbSetting("gmail", "gmail_storage_dir", "GMAIL_STORAGE_DIR", "Attachment storage", "string", true, false, "Local archive path for raw XLSX attachments.", ".data/mail-attachments", { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
-  dbSetting("gmail", "catalog_attachment_pattern", "CATALOG_ATTACHMENT_PATTERN", "Attachment pattern", "string", true, false, "Filename pattern for catalog workbooks.", "New Preorders|New Releases In Stock", { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
-  dbSetting("gmail", "supplier_code", "SUPPLIER_CODE", "Supplier code", "string", true, false, "Supplier code stored with catalog snapshots.", "juno", { requiredWhen: "real_mailbox", unit: "gmail_workspace" }),
   dbSetting("juno", "juno_live_enqueue_on_ingest", "JUNO_LIVE_ENQUEUE_ON_INGEST", "Enqueue on ingest", "boolean", false, false, "Queues read-only live lookup jobs after new snapshots.", false, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_email", "JUNO_LOGIN_EMAIL", "Juno login email", "email", true, false, "Login email used only for read-only product page observation. Required only when live lookup is enabled.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_password", "JUNO_LOGIN_PASSWORD", "Juno login password", "secret", true, true, "Login password. Write-only and required only when live lookup is enabled.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),

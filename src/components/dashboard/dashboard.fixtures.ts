@@ -3,15 +3,15 @@ import type { CatalogOpsDashboardProps } from "./CatalogOpsDashboard";
 
 export const dashboardFixture: CatalogOpsDashboardProps = {
   stats: [
-    { label: "Mailbox", value: "Configurable", detail: "delegated Gmail access", icon: MailSearch },
-    { label: "Source", value: "Gmail query", detail: "catalog mail search expression", icon: Archive },
+    { label: "Mailbox", value: "Configurable", detail: "mail source access", icon: MailSearch },
+    { label: "Source", value: "Mail query", detail: "catalog mail search expression", icon: Archive },
     { label: "Deduping", value: "4 keys", detail: "message, RFC822, attachment, content", icon: CircleCheck },
     { label: "Storage", value: "raw XLSX", detail: "replayable attachment archive", icon: Database },
   ],
   pipeline: [
     {
       title: "Fetch",
-      body: "Query Gmail for Juno XLSX messages using configured workspace settings.",
+      body: "Query active Gmail mail sources for Juno XLSX messages using configured mail source records.",
       status: "Ready",
     },
     {
@@ -393,33 +393,26 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
         ],
       },
       {
-        id: "gmail",
-        label: "Gmail ingest",
+        id: "mail",
+        label: "Mail sources",
         state: "missing",
         detail: "required for catalog email ingestion",
-        action: "Configure the delegated mailbox, service account key, query, storage, and supplier defaults.",
-        missing: ["google_workspace_delegated_user", "google_service_account_key_json"],
+        action: "Create an active Gmail source with Google Workspace delegation and a JSON service account credential.",
+        missing: ["mail_source"],
         settings: [
           {
-            key: "google_workspace_delegated_user",
-            label: "Delegated mailbox",
-            source: "unset",
-            state: "missing",
-            value: "not set",
-          },
-          {
-            key: "gmail_ingest_query",
-            label: "Search query",
-            source: "runtime",
+            key: "active_mail_sources",
+            label: "Active sources",
+            source: "database",
             state: "configured",
-            value: "has:attachment filename:xlsx newer_than:30d",
+            value: "0",
           },
         ],
         guardrails: [
           {
-            label: "Cursored Gmail search",
+            label: "Cursored mail search",
             state: "ok",
-            detail: "Ingest can use stored cursor state and content hashes to avoid duplicate sheets.",
+            detail: "Ingest uses mailbox source cursor state and content hashes to avoid duplicate sheets.",
           },
         ],
       },

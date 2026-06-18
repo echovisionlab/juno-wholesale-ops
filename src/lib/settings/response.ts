@@ -4,8 +4,9 @@ import { settingDefinitions, type SettingsGroup, type SettingsResponse, type Dat
 import { resolveSettingDescriptor, hasSettingValue, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
 import type { ServiceSettingsRow, SettingsGroupId, NextAction } from "./descriptors";
+import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 
-const groupOrder: SettingsGroupId[] = ["system", "auth", "gmail", "juno", "notifications", "advanced"];
+const groupOrder: SettingsGroupId[] = ["system", "auth", "mail", "juno", "notifications", "advanced"];
 
 export function buildSettingsResponse(options: {
   env: RuntimeEnv;
@@ -14,8 +15,10 @@ export function buildSettingsResponse(options: {
   nodeEnv: string;
   currentRequestOrigin?: string | null;
   adminUserCount?: number | null;
+  mailSources?: PublicMailboxSource[];
 }): SettingsResponse {
   const dataMode = resolveDataMode(options.settingsRow, options.env);
+  const mailSources = options.mailSources ?? [];
   const externalProviderEnabled = options.settingsRow?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
   const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow, options.env);
   const context: SettingResolutionContext = {
@@ -47,7 +50,7 @@ export function buildSettingsResponse(options: {
     return {
       id: groupId,
       label: groupLabel(groupId),
-      state: groupState(settings, warningForGroup),
+      state: groupId === "mail" ? mailGroupState(dataMode, mailSources) : groupState(settings, warningForGroup),
       settings,
     };
   });
@@ -70,12 +73,12 @@ export function buildSettingsResponse(options: {
       source: descriptorByKey(descriptors, "data_mode")?.source ?? "default",
       status: dataMode,
       detail: dataMode === "demo"
-        ? "Synthetic demo data mode. Gmail credentials are optional."
-        : "Real mailbox mode. Gmail delegated mailbox and service account are required.",
+        ? "Synthetic demo data mode. Mail sources are optional."
+        : "Real mailbox mode. At least one runnable mail source is required.",
     },
     units: {
       authProvider: buildAuthProviderUnit(options.settingsRow, options.env),
-      gmail: buildGmailUnit(groups),
+      mail: buildMailUnit(mailSources, dataMode),
       junoLive: buildJunoUnit(groups, junoLookupEnabled),
       notifications: {
         id: "notifications",
@@ -96,6 +99,7 @@ export function buildSettingsResponse(options: {
           && hasSettingValue(options.settingsRow?.auth_external_admin_claim_value ?? options.env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
       }),
     },
+    mailSources,
     groups,
     nextActions: buildNextActions(groups, warnings),
     warnings,
@@ -108,8 +112,8 @@ function descriptorGroup(key: string): SettingsGroupId {
 }
 
 function groupLabel(id: SettingsGroupId): string {
-  if (id === "gmail") {
-    return "Gmail Ingest";
+  if (id === "mail") {
+    return "Mail Sources";
   }
   if (id === "juno") {
     return "Juno Live";
@@ -153,11 +157,11 @@ function buildNextActions(groups: SettingsGroup[], warnings: SettingsResponse["w
     });
   }
 
-  if (settingsInGroup(groups, "gmail").some((setting) => setting.state === "missing")) {
+  if (groups.find((group) => group.id === "mail")?.state === "missing") {
     actions.push({
-      id: "configure-gmail",
-      label: "Configure Gmail ingest",
-      detail: "Set the delegated mailbox and service account key reference, then run the Gmail smoke test.",
+      id: "configure-mail-source",
+      label: "Configure a mail source",
+      detail: "Create an active Gmail mailbox source with Google Workspace delegation and a JSON service account credential.",
       href: "/settings",
       action: "test-gmail",
       severity: "warning",
@@ -275,19 +279,47 @@ function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv):
   };
 }
 
-function buildGmailUnit(groups: SettingsGroup[]): SettingsResponse["units"]["gmail"] {
-  const gmail = groups.find((group) => group.id === "gmail");
-  const hasMissing = gmail?.settings.some((setting) => setting.state === "missing") ?? false;
+function buildMailUnit(sources: PublicMailboxSource[], dataMode: DataMode): SettingsResponse["units"]["mail"] {
+  const runnableSources = sources.filter(isRunnableMailSource);
+  const activeSources = sources.filter((source) => source.isActive);
+  const missing = dataMode === "real_mailbox" && runnableSources.length === 0;
+  const warning = activeSources.some((source) => source.provider !== "gmail");
   return {
-    id: "gmail",
-    label: "Gmail workspace ingest",
-    status: hasMissing ? "missing" : "ready",
-    detail: hasMissing
-      ? "Real mailbox mode requires the delegated mailbox and service account key."
-      : "Catalog ingest settings are sufficient for the selected data mode.",
-    configured: !hasMissing,
+    id: "mail_sources",
+    label: "Mail sources",
+    status: missing ? "missing" : warning ? "warning" : runnableSources.length > 0 ? "ready" : "disabled",
+    detail: missing
+      ? "Real mailbox mode requires at least one active Gmail source with a configured JSON service account credential."
+      : warning
+        ? "One or more active mail sources use a provider adapter that is not implemented yet."
+        : runnableSources.length > 0
+          ? `${runnableSources.length} runnable Gmail source${runnableSources.length === 1 ? "" : "s"} configured.`
+          : "Mail ingest is optional while demo mode is selected.",
+    configured: runnableSources.length > 0,
     optional: false,
   };
+}
+
+function mailGroupState(dataMode: DataMode, sources: PublicMailboxSource[]): SettingsGroup["state"] {
+  const activeSources = sources.filter((source) => source.isActive);
+  const runnableSources = activeSources.filter(isRunnableMailSource);
+  if (dataMode === "real_mailbox" && runnableSources.length === 0) {
+    return "missing";
+  }
+  if (activeSources.some((source) => source.provider !== "gmail")) {
+    return "warning";
+  }
+  return runnableSources.length > 0 ? "complete" : "disabled";
+}
+
+function isRunnableMailSource(source: PublicMailboxSource): boolean {
+  return (
+    source.isActive &&
+    source.provider === "gmail" &&
+    source.authType === "google_workspace_delegation" &&
+    source.credentialType === "google_service_account_json" &&
+    source.credentialConfigured
+  );
 }
 
 function buildJunoUnit(groups: SettingsGroup[], junoLookupEnabled: boolean): SettingsResponse["units"]["junoLive"] {

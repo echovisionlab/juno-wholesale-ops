@@ -7,14 +7,14 @@ credentials. The maintainers do not receive catalog data from your deployment.
 
 - Postgres stores catalog snapshots, settings, signals, and notification
   records.
-- `GMAIL_STORAGE_DIR` stores raw XLSX attachments outside git.
+- Each mailbox source has a `storage_dir` for raw XLSX attachments outside git.
 - Playwright stores browser profile data in the configured local profile path.
 
 ## Credentials
 
-Google service account keys, delegated mailbox settings, Juno credentials, and
-webhook secrets stay in runtime env, secret mounts, or private DB settings.
-They should not be committed.
+Google service account JSON credentials, mailbox settings, Juno credentials,
+and webhook secrets stay in private DB settings or private runtime secret
+stores. They should not be committed.
 
 ## External Calls
 

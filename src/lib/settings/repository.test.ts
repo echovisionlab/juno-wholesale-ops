@@ -29,16 +29,14 @@ describe("settings repository", () => {
 
     await expect(getServiceSettings(databaseUrl)).resolves.toBeNull();
     const ensured = await ensureServiceSettingsRow(databaseUrl);
-    expect(ensured).toMatchObject({ juno_login_email: null, google_service_account_key_json: null });
+    expect(ensured).toMatchObject({ juno_login_email: null, juno_login_password: null });
 
     const updated = await updateServiceSettings(databaseUrl, {
-      google_workspace_delegated_user: "operator@example.test",
       juno_login_email: "buyer@example.test",
       juno_live_concurrency: 2,
       juno_login_password: "db-secret",
     });
     expect(updated).toMatchObject({
-      google_workspace_delegated_user: "operator@example.test",
       juno_login_email: "buyer@example.test",
       juno_live_concurrency: 2,
       juno_login_password: "db-secret",
@@ -47,13 +45,13 @@ describe("settings repository", () => {
 
     const cleared = await clearServiceSettingOverrides(databaseUrl, ["juno_login_password", "juno_live_concurrency"]);
     expect(cleared).toMatchObject({
-      google_workspace_delegated_user: "operator@example.test",
+      juno_login_email: "buyer@example.test",
       juno_login_password: null,
       juno_live_concurrency: null,
     });
 
     await expect(updateServiceSettings(databaseUrl, {})).resolves.toMatchObject({
-      google_workspace_delegated_user: "operator@example.test",
+      juno_login_email: "buyer@example.test",
     });
   });
 });

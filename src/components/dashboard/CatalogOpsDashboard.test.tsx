@@ -48,7 +48,7 @@ describe("CatalogOpsDashboard", () => {
     });
 
     expect(pageText()).toContain("Setup status unavailable");
-    expect(pageText()).toContain("Gmail ingest status unavailable");
+    expect(pageText()).toContain("Mail ingest status unavailable");
     expect(pageText()).toContain("Today signals unavailable");
     expect(pageText()).toContain("Movement signals unavailable");
     expect(pageText()).toContain("Catalog trends unavailable");
@@ -325,7 +325,7 @@ describe("CatalogOpsDashboard", () => {
       ingestState: emptyIngestState(),
     });
     expect(pageText()).toContain("Not run");
-    expect(pageText()).toContain("no recorded Gmail ingest run");
+    expect(pageText()).toContain("no recorded mail ingest run");
   });
 
   it("renders setup warning, database override, secret, and optional setting states", () => {
@@ -379,8 +379,8 @@ describe("CatalogOpsDashboard", () => {
             ],
           },
           {
-            id: "gmail",
-            label: "Gmail ingest",
+            id: "mail",
+            label: "Mail ingest",
             state: "disabled",
             detail: "optional",
             action: "Optional while demo mode is selected.",
@@ -756,7 +756,7 @@ function readySetupStatus(): NonNullable<CatalogOpsDashboardProps["setupStatus"]
           {
             label: "Read-only browser lookup",
             state: "ok",
-            detail: "Worker can reuse a persistent browser session and avoid cart or wishlist actions.",
+            detail: "Worker can reuse a persistent browser session and only open read-only product pages.",
           },
         ],
       },

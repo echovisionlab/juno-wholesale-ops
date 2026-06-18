@@ -8,7 +8,7 @@ central service operated by the maintainers.
 Depending on configuration, your deployment may process:
 
 - Gmail message metadata needed to locate XLSX attachments
-- raw XLSX attachments saved in `GMAIL_STORAGE_DIR`
+- raw XLSX attachments saved in each mailbox source `storage_dir`
 - parsed catalog rows
 - read-only live observation results
 - watch rules, signal events, operator digest data, and notification records

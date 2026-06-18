@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireAdmin } from "@/lib/auth/admin";
+import { createMailboxSource, deleteMailboxSource, listMailboxSources, updateMailboxSource } from "@/lib/ingest/mail-source";
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
   createWatchRule,
@@ -68,6 +69,12 @@ import {
   PATCH as patchWatchRules,
   POST as postWatchRules,
 } from "./watch-rules/route";
+import {
+  DELETE as deleteMailSources,
+  GET as getMailSources,
+  PATCH as patchMailSources,
+  POST as postMailSources,
+} from "./mail-sources/route";
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: vi.fn(),
@@ -75,6 +82,21 @@ vi.mock("@/lib/auth/admin", () => ({
 
 vi.mock("@/lib/ingest/repository", () => ({
   getGmailIngestState: vi.fn(),
+}));
+
+vi.mock("@/lib/ingest/mail-source", () => ({
+  createMailboxSource: vi.fn(),
+  deleteMailboxSource: vi.fn(),
+  getMissingMailboxSourceSettings: vi.fn(() => []),
+  getRunnableGmailSources: vi.fn((sources) => sources.filter((source: { provider: string; credentialConfigured: boolean }) => source.provider === "gmail" && source.credentialConfigured)),
+  listActiveMailboxSources: vi.fn(async () => []),
+  listMailboxSources: vi.fn(),
+  redactMailboxSource: vi.fn((source) => {
+    const publicSource = { ...(source as Record<string, unknown>) };
+    delete publicSource.credentialSecret;
+    return publicSource;
+  }),
+  updateMailboxSource: vi.fn(),
 }));
 
 vi.mock("@/lib/insights/repository", () => ({
@@ -131,6 +153,10 @@ vi.mock("@/lib/settings/repository", () => ({
 }));
 
 const requireAdminMock = vi.mocked(requireAdmin);
+const createMailboxSourceMock = vi.mocked(createMailboxSource);
+const deleteMailboxSourceMock = vi.mocked(deleteMailboxSource);
+const listMailboxSourcesMock = vi.mocked(listMailboxSources);
+const updateMailboxSourceMock = vi.mocked(updateMailboxSource);
 const getGmailIngestStateMock = vi.mocked(getGmailIngestState);
 const getTodaySignalsMock = vi.mocked(getTodaySignals);
 const getMovementSignalsMock = vi.mocked(getMovementSignals);
@@ -175,6 +201,10 @@ describe("admin guarded API routes", () => {
     vi.resetAllMocks();
     vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     requireAdminMock.mockResolvedValue({ authorized: true, user: null });
+    listMailboxSourcesMock.mockResolvedValue([]);
+    createMailboxSourceMock.mockResolvedValue(mailSource());
+    updateMailboxSourceMock.mockResolvedValue(mailSource());
+    deleteMailboxSourceMock.mockResolvedValue(true);
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
     countAdminUsersMock.mockResolvedValue(1);
@@ -200,6 +230,10 @@ describe("admin guarded API routes", () => {
     await expectStatus(getSettings(request()), 403);
     await expectStatus(getSettingsSecurityBootstrap(request()), 403);
     await expectStatus(patchSettings(jsonRequest({ auth: { auth_base_url: "https://app.example.test" } })), 403);
+    await expectStatus(getMailSources(request()), 403);
+    await expectStatus(postMailSources(jsonRequest({ name: "Mail", provider: "gmail" })), 403);
+    await expectStatus(patchMailSources(jsonRequest({ id: "source-1", isActive: false })), 403);
+    await expectStatus(deleteMailSources(jsonRequest({ id: "source-1" })), 403);
     await expectStatus(testGmailSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(testJunoSessionSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(refreshSettingsStatus(jsonRequest({})), 403);
@@ -230,6 +264,10 @@ describe("admin guarded API routes", () => {
     await expectStatus(refreshNotifications(jsonRequest({ mode: "dry-run" })), 403);
 
     expect(getGmailIngestStateMock).not.toHaveBeenCalled();
+    expect(listMailboxSourcesMock).not.toHaveBeenCalled();
+    expect(createMailboxSourceMock).not.toHaveBeenCalled();
+    expect(updateMailboxSourceMock).not.toHaveBeenCalled();
+    expect(deleteMailboxSourceMock).not.toHaveBeenCalled();
     expect(getTodaySignalsMock).not.toHaveBeenCalled();
     expect(getMovementSignalsMock).not.toHaveBeenCalled();
     expect(getCatalogTrendsMock).not.toHaveBeenCalled();
@@ -285,7 +323,6 @@ describe("admin guarded API routes", () => {
     vi.stubEnv("JUNO_LOGIN_PASSWORD", "runtime-juno-password");
     ensureServiceSettingsRowMock.mockResolvedValue({
       ...emptySettingsRow(),
-      google_service_account_key_json: "db-service-account-json",
       juno_login_email: "buyer@example.test",
       juno_login_password: "db-juno-password",
       auth_external_client_secret: "db-client-secret",
@@ -294,7 +331,6 @@ describe("admin guarded API routes", () => {
     const settingsResponse = await expectJson(getSettings(request()));
     expect(settingsResponse.status).toBe(200);
     expect(JSON.stringify(settingsResponse.body)).toContain("Database override configured");
-    expect(JSON.stringify(settingsResponse.body)).not.toContain("db-service-account-json");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-juno-password");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-client-secret");
 
@@ -361,7 +397,7 @@ describe("admin guarded API routes", () => {
 
     await expect(expectJson(testGmailSettings(jsonRequest({ mode: "smoke" })))).resolves.toMatchObject({
       status: 200,
-      body: { ok: false, status: "missing_settings" },
+      body: { ok: false, status: "missing_mail_source" },
     });
 
     ensureServiceSettingsRowMock.mockResolvedValueOnce({
@@ -390,6 +426,95 @@ describe("admin guarded API routes", () => {
     await expect(expectJson(runDemoSeedSettings(jsonRequest({})))).resolves.toEqual({
       status: 403,
       body: { error: "demo_seed_disabled_in_production" },
+    });
+  });
+
+  it("guards mail source CRUD and never returns credential secrets", async () => {
+    listMailboxSourcesMock.mockResolvedValue([mailSource()]);
+
+    const getResponse = await expectJson(getMailSources(request()));
+    expect(getResponse).toEqual({
+      status: 200,
+      body: {
+        sources: [
+          expect.not.objectContaining({
+            credentialSecret: expect.anything(),
+          }),
+        ],
+      },
+    });
+    expect(JSON.stringify(getResponse.body)).not.toContain("secret");
+    expect(listMailboxSourcesMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app");
+
+    const input = {
+      name: "Ops Gmail",
+      provider: "gmail",
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      credentialSecret: "{\"client_email\":\"ops@example.test\"}",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      storageDir: ".data/mail",
+      attachmentPattern: "xlsx",
+      supplierCode: "juno",
+    };
+    const postResponse = await expectJson(postMailSources(jsonRequest(input)));
+    expect(postResponse).toEqual({
+      status: 201,
+      body: { source: expect.not.objectContaining({ credentialSecret: expect.anything() }) },
+    });
+    expect(createMailboxSourceMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", input);
+
+    updateMailboxSourceMock.mockResolvedValueOnce(mailSource()).mockResolvedValueOnce(null);
+    await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", isActive: false })))).resolves.toEqual({
+      status: 200,
+      body: { source: expect.not.objectContaining({ credentialSecret: expect.anything() }) },
+    });
+    expect(updateMailboxSourceMock).toHaveBeenLastCalledWith("postgres://user:pass@localhost:5432/app", {
+      id: "source-1",
+      isActive: false,
+    });
+    await expect(expectJson(patchMailSources(jsonRequest({ id: "missing", isActive: false })))).resolves.toEqual({
+      status: 404,
+      body: { error: "mail_source_not_found" },
+    });
+    await expect(expectJson(patchMailSources(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    updateMailboxSourceMock.mockRejectedValueOnce("bad source");
+    await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", provider: "gmail" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid mail source request" },
+    });
+
+    deleteMailboxSourceMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await expect(expectJson(deleteMailSources(jsonRequest({ id: "source-1" })))).resolves.toEqual({
+      status: 200,
+      body: { deleted: true },
+    });
+    expect(deleteMailboxSourceMock).toHaveBeenLastCalledWith("postgres://user:pass@localhost:5432/app", "source-1");
+    await expect(expectJson(deleteMailSources(jsonRequest({ id: "missing" })))).resolves.toEqual({
+      status: 404,
+      body: { error: "mail_source_not_found" },
+    });
+    await expect(expectJson(deleteMailSources(jsonRequest({ id: "" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Mail source id is required" },
+    });
+    await expect(expectJson(deleteMailSources(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+
+    createMailboxSourceMock.mockRejectedValueOnce("bad source");
+    await expect(expectJson(postMailSources(jsonRequest(input)))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid mail source request" },
+    });
+    await expect(expectJson(postMailSources(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
     });
   });
 
@@ -1007,16 +1132,6 @@ function emptySettingsRow(): ServiceSettingsRow {
     juno_live_poll_interval_ms: null,
     juno_live_auto_enqueue_on_interval: null,
     juno_live_auto_enqueue_limit: null,
-    gmail_ingest_lookback_ms: null,
-    google_workspace_delegated_user: null,
-    google_service_account_key_json: null,
-    google_gmail_scopes: null,
-    gmail_ingest_query: null,
-    gmail_max_results: null,
-    gmail_processed_label: null,
-    gmail_storage_dir: null,
-    catalog_attachment_pattern: null,
-    supplier_code: null,
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
@@ -1035,5 +1150,30 @@ function emptySettingsRow(): ServiceSettingsRow {
     auth_external_admin_claim: null,
     auth_external_admin_claim_value: null,
     updated_at: null,
+  };
+}
+
+function mailSource() {
+  return {
+    id: "source-1",
+    connectionId: "connection-1",
+    name: "Mail source",
+    provider: "gmail" as const,
+    authType: "google_workspace_delegation" as const,
+    credentialType: "google_service_account_json" as const,
+    credentialSecret: "secret",
+    credentialReference: null,
+    credentialConfigured: true,
+    scopes: "https://www.googleapis.com/auth/gmail.readonly",
+    mailboxAddress: "operator@example.test",
+    displayName: "Operator",
+    query: "filename:xlsx",
+    maxResults: 10,
+    lookbackMs: 604800000,
+    processedLabel: "Processed",
+    storageDir: ".data/test-mail",
+    attachmentPattern: "xlsx",
+    supplierCode: "juno",
+    isActive: true,
   };
 }

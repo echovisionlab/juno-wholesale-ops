@@ -48,20 +48,20 @@ describe("runStartupMigrations", () => {
       }),
     ).resolves.toEqual({
       status: "applied",
-      migrationCount: 15,
-      latestVersion: 15,
+      migrationCount: 16,
+      latestVersion: 16,
     });
 
     const pool = new Pool({ connectionString: container.getConnectionUri(), max: 1 });
     try {
-      await expect(pool.query("SELECT count(*)::int AS count FROM gmail_ingest_state")).resolves.toMatchObject({
-        rows: [{ count: 1 }],
+      await expect(pool.query("SELECT count(*)::int AS count FROM mail_mailbox_ingest_state")).resolves.toMatchObject({
+        rows: [{ count: 0 }],
       });
     } finally {
       await pool.end();
     }
     expect(logger.infoMessages).toEqual([
-      JSON.stringify({ event: "database_migrations_ready", migrationCount: 15, latestVersion: 15 }),
+      JSON.stringify({ event: "database_migrations_ready", migrationCount: 16, latestVersion: 16 }),
       JSON.stringify({ event: "initial_admin_seeded", email: "admin@example.test" }),
     ]);
   });

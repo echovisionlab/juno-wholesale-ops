@@ -18,16 +18,6 @@ export type JunoLiveServiceSettingsRow = {
   juno_live_poll_interval_ms: number | null;
   juno_live_auto_enqueue_on_interval: boolean | null;
   juno_live_auto_enqueue_limit: number | null;
-  gmail_ingest_lookback_ms: number | null;
-  google_workspace_delegated_user: string | null;
-  google_service_account_key_json: string | null;
-  google_gmail_scopes: string | null;
-  gmail_ingest_query: string | null;
-  gmail_max_results: number | null;
-  gmail_processed_label: string | null;
-  gmail_storage_dir: string | null;
-  catalog_attachment_pattern: string | null;
-  supplier_code: string | null;
   auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
@@ -62,7 +52,6 @@ export type JunoLiveSettings = {
   retryDelayMs: number;
   autoEnqueueOnInterval: boolean;
   autoEnqueueLimit: number;
-  gmailIngestLookbackMs: number;
 };
 
 export function resolveJunoLiveSettings(
@@ -86,7 +75,6 @@ export function resolveJunoLiveSettings(
     retryDelayMs: pollIntervalMs ?? DEFAULT_RETRY_DELAY_MS,
     autoEnqueueOnInterval: row?.juno_live_auto_enqueue_on_interval ?? env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL,
     autoEnqueueLimit: row?.juno_live_auto_enqueue_limit ?? env.JUNO_LIVE_AUTO_ENQUEUE_LIMIT,
-    gmailIngestLookbackMs: row?.gmail_ingest_lookback_ms ?? env.GMAIL_INGEST_LOOKBACK_MS,
   };
 }
 

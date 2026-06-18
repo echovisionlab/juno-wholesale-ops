@@ -1,4 +1,5 @@
 import { loadRuntimeEnv } from "@/lib/env";
+import { listMailboxSources, redactMailboxSource } from "@/lib/ingest/mail-source";
 import { countAdminUsers, ensureServiceSettingsRow, updateServiceSettings } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import { validateSettingsPatch } from "@/lib/settings/validation";
@@ -23,6 +24,7 @@ export async function GET(request: Request) {
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
   const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
+  const mailSources = (await listMailboxSources(database.databaseUrl)).map(redactMailboxSource);
   return Response.json(
     buildSettingsResponse({
       env,
@@ -31,6 +33,7 @@ export async function GET(request: Request) {
       nodeEnv: process.env.NODE_ENV ?? "development",
       currentRequestOrigin: getRequestOrigin(request),
       adminUserCount,
+      mailSources,
     }),
   );
 }
@@ -63,6 +66,7 @@ export async function PATCH(request: Request) {
       ? await updateServiceSettings(database.databaseUrl, validation.patch)
       : currentRow;
     const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
+    const mailSources = (await listMailboxSources(database.databaseUrl)).map(redactMailboxSource);
     const settings = buildSettingsResponse({
       env,
       rawEnv: process.env,
@@ -70,6 +74,7 @@ export async function PATCH(request: Request) {
       nodeEnv: process.env.NODE_ENV ?? "development",
       currentRequestOrigin: getRequestOrigin(request),
       adminUserCount,
+      mailSources,
     });
 
     return Response.json({

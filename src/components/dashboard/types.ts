@@ -256,7 +256,7 @@ export type SetupGuardrail = {
 };
 
 export type SetupStep = {
-  id: "database" | "gmail" | "juno" | "auth";
+  id: "database" | "data" | "mail" | "juno" | "auth";
   label: string;
   state: SetupStepState;
   detail: string;

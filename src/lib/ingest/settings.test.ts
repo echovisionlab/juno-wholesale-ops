@@ -1,116 +1,68 @@
 import { describe, expect, it } from "vitest";
-import { GOOGLE_GMAIL_READONLY_SCOPE, loadRuntimeEnv } from "@/lib/env";
+import { GOOGLE_GMAIL_READONLY_SCOPE } from "@/lib/env";
 import {
-  assertRunnableGmailIngestSettings,
-  getMissingGmailIngestSettings,
-  resolveGmailIngestSettings,
-  type GmailIngestServiceSettingsRow,
+  assertRunnableGmailMailboxSource,
+  getMissingMailboxSourceSettings,
+  getRunnableGmailSources,
+  redactMailboxSource,
+  type MailboxIngestSource,
 } from "./settings";
 
+describe("mail source ingest settings", () => {
+  it("classifies runnable Gmail sources without exposing credential secrets", () => {
+    const source = mailboxSource();
 
-function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
-  return loadRuntimeEnv({
-    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-    ...overrides,
-  });
-}
-
-describe("resolveGmailIngestSettings", () => {
-  it("uses env values when the settings row is empty", () => {
-    const env = runtimeEnv({
-      GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-      GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-      GMAIL_INGEST_QUERY: "from:supplier@example.com filename:xlsx",
-    });
-
-    expect(resolveGmailIngestSettings(env, emptyRow())).toMatchObject({
-      delegatedUser: "operator@example.com",
-      serviceAccountKeyJson: "/run/secrets/google.json",
-      scopes: GOOGLE_GMAIL_READONLY_SCOPE,
-      query: "from:supplier@example.com filename:xlsx",
-      maxResults: 25,
-      lookbackMs: 604800000,
-      processedLabel: "Wholesale Processed",
-      storageDir: ".data/mail-attachments",
-      attachmentPattern: "New Preorders|New Releases In Stock",
-      supplierCode: "juno",
-    });
+    expect(getRunnableGmailSources([source])).toEqual([source]);
+    expect(getMissingMailboxSourceSettings(source)).toEqual([]);
+    expect(() => assertRunnableGmailMailboxSource(source)).not.toThrow();
+    expect(redactMailboxSource(source)).toEqual(expect.not.objectContaining({ credentialSecret: expect.anything() }));
   });
 
-  it("lets database settings override env values", () => {
-    const env = runtimeEnv({
-      GOOGLE_WORKSPACE_DELEGATED_USER: "env@example.com",
-      GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/env/google.json",
-    });
+  it("reports missing source settings and blocks unsupported providers", () => {
+    const source = {
+      ...mailboxSource(),
+      provider: "imap" as const,
+      authType: "basic" as const,
+      credentialType: "password" as const,
+      credentialSecret: null,
+      credentialConfigured: false,
+      mailboxAddress: "",
+      query: "",
+    };
 
-    expect(
-      resolveGmailIngestSettings(env, {
-        ...emptyRow(),
-        google_workspace_delegated_user: "db@example.com",
-        google_service_account_key_json: "/db/google.json",
-        google_gmail_scopes: "scope-a scope-b",
-        gmail_ingest_query: "subject:Juno",
-        gmail_max_results: 50,
-        gmail_ingest_lookback_ms: 86400000,
-        gmail_processed_label: "Done",
-        gmail_storage_dir: "/archive",
-        catalog_attachment_pattern: "Daily",
-        supplier_code: "supplier",
-      }),
-    ).toMatchObject({
-      delegatedUser: "db@example.com",
-      serviceAccountKeyJson: "/db/google.json",
-      scopes: "scope-a scope-b",
-      query: "subject:Juno",
-      maxResults: 50,
-      lookbackMs: 86400000,
-      processedLabel: "Done",
-      storageDir: "/archive",
-      attachmentPattern: "Daily",
-      supplierCode: "supplier",
-    });
-  });
-
-  it("reports and throws for missing runtime settings", () => {
-    const settings = resolveGmailIngestSettings(
-      runtimeEnv({ DATABASE_URL: "postgres://user:pass@localhost:5432/app" }),
-      null,
-    );
-
-    expect(getMissingGmailIngestSettings(settings)).toEqual([
-      "google_workspace_delegated_user",
-      "google_service_account_key_json",
+    expect(getRunnableGmailSources([source])).toEqual([]);
+    expect(getMissingMailboxSourceSettings(source)).toEqual([
+      "mailbox_address",
+      "ingest_query",
+      "credential",
     ]);
-    expect(() => assertRunnableGmailIngestSettings(settings)).toThrow(
-      "google_workspace_delegated_user, google_service_account_key_json",
+    expect(() => assertRunnableGmailMailboxSource(source)).toThrow(
+      "Mail provider imap is configured but no ingest adapter is implemented yet",
     );
-  });
-
-  it("accepts complete runnable settings", () => {
-    const settings = resolveGmailIngestSettings(
-      runtimeEnv({
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-      }),
-      null,
-    );
-
-    expect(getMissingGmailIngestSettings(settings)).toEqual([]);
-    expect(() => assertRunnableGmailIngestSettings(settings)).not.toThrow();
   });
 });
 
-function emptyRow(): GmailIngestServiceSettingsRow {
+function mailboxSource(): MailboxIngestSource {
   return {
-    google_workspace_delegated_user: null,
-    google_service_account_key_json: null,
-    google_gmail_scopes: null,
-    gmail_ingest_query: null,
-    gmail_max_results: null,
-    gmail_ingest_lookback_ms: null,
-    gmail_processed_label: null,
-    gmail_storage_dir: null,
-    catalog_attachment_pattern: null,
-    supplier_code: null,
+    id: "source-1",
+    connectionId: "connection-1",
+    name: "Gmail source",
+    provider: "gmail",
+    authType: "google_workspace_delegation",
+    credentialType: "google_service_account_json",
+    credentialSecret: "{\"client_email\":\"test@example.com\",\"private_key\":\"key\"}",
+    credentialReference: null,
+    credentialConfigured: true,
+    scopes: GOOGLE_GMAIL_READONLY_SCOPE,
+    mailboxAddress: "operator@example.com",
+    displayName: "Operator",
+    query: "filename:xlsx",
+    maxResults: 25,
+    lookbackMs: 604800000,
+    processedLabel: "Processed",
+    storageDir: ".data/mail",
+    attachmentPattern: "xlsx",
+    supplierCode: "juno",
+    isActive: true,
   };
 }

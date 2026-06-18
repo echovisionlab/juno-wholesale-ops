@@ -1,9 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { getMissingAppAuthSettings, resolveAppAuthSettings } from "@/lib/auth/settings";
-import {
-  getMissingGmailIngestSettings,
-  resolveGmailIngestSettings,
-} from "@/lib/ingest/settings";
+import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 import {
   resolveJunoLiveSettings,
   shouldAutoEnqueueLiveLookups,
@@ -36,7 +33,7 @@ export type SetupGuardrail = {
 };
 
 export type SetupStep = {
-  id: "database" | "data" | "gmail" | "juno" | "auth";
+  id: "database" | "data" | "mail" | "juno" | "auth";
   label: string;
   state: SetupStepState;
   detail: string;
@@ -55,10 +52,12 @@ export function buildAppSetupStatus(options: {
   env: RuntimeEnv;
   settingsRow: JunoLiveServiceSettingsRow | null;
   adminUserCount?: number | null;
+  mailSources?: PublicMailboxSource[];
 }): AppSetupStatus {
   const dataMode = resolveDataMode(options.env, options.settingsRow);
-  const gmailSettings = resolveGmailIngestSettings(options.env, options.settingsRow);
-  const gmailMissing = dataMode === "real_mailbox" ? getMissingGmailIngestSettings(gmailSettings) : [];
+  const mailSources = options.mailSources ?? [];
+  const runnableMailSources = mailSources.filter(isRunnableMailSource);
+  const mailMissing = dataMode === "real_mailbox" && runnableMailSources.length === 0 ? ["mail_source"] : [];
   const liveSettings = resolveJunoLiveSettings(options.env, options.settingsRow);
   const junoLookupEnabled = isJunoLookupEnabled(options.env, options.settingsRow);
   const junoMissing = [
@@ -118,81 +117,45 @@ export function buildAppSetupStatus(options: {
           label: "Mailbox requirement",
           state: dataMode === "demo" ? "warning" : "ok",
           detail: dataMode === "demo"
-            ? "Demo mode does not require Gmail credentials."
-            : "Real mailbox mode requires Gmail delegated mailbox and service account settings.",
+            ? "Demo mode does not require mail source credentials."
+            : "Real mailbox mode requires at least one runnable mail source.",
         },
       ],
     }),
     setupStep({
-      id: "gmail",
-      label: "Gmail ingest",
-      missing: gmailMissing,
+      id: "mail",
+      label: "Mail sources",
+      missing: mailMissing,
       detail: dataMode === "demo" ? "optional while demo mode is selected" : "required for catalog email ingestion",
-      action: gmailMissing.length > 0 ? "Configure the delegated mailbox, service account key, query, storage, and supplier defaults." : null,
+      action: mailMissing.length > 0 ? "Create an active Gmail source with Google Workspace delegation and a JSON service account credential." : null,
       settings: [
-        rowBackedSetting({
-          key: "google_workspace_delegated_user",
-          label: "Delegated mailbox",
-          rowValue: options.settingsRow?.google_workspace_delegated_user,
-          runtimeValue: options.env.GOOGLE_WORKSPACE_DELEGATED_USER,
+        staticSetting({
+          key: "active_mail_sources",
+          label: "Active sources",
+          value: String(mailSources.filter((source) => source.isActive).length),
           required: dataMode === "real_mailbox",
         }),
-        rowBackedSetting({
-          key: "google_service_account_key_json",
-          label: "Service account key",
-          rowValue: options.settingsRow?.google_service_account_key_json,
-          runtimeValue: options.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON,
+        staticSetting({
+          key: "runnable_gmail_sources",
+          label: "Runnable Gmail sources",
+          value: String(runnableMailSources.length),
+          required: dataMode === "real_mailbox",
+        }),
+        staticSetting({
+          key: "credential_state",
+          label: "Credential state",
+          value: runnableMailSources.length > 0 ? "configured" : "not configured",
           required: dataMode === "real_mailbox",
           secret: true,
-        }),
-        rowBackedSetting({
-          key: "gmail_ingest_query",
-          label: "Search query",
-          rowValue: options.settingsRow?.gmail_ingest_query,
-          runtimeValue: options.env.GMAIL_INGEST_QUERY,
-          required: dataMode === "real_mailbox",
-        }),
-        rowBackedSetting({
-          key: "catalog_attachment_pattern",
-          label: "Attachment pattern",
-          rowValue: options.settingsRow?.catalog_attachment_pattern,
-          runtimeValue: options.env.CATALOG_ATTACHMENT_PATTERN,
-          required: dataMode === "real_mailbox",
-        }),
-        rowBackedSetting({
-          key: "gmail_storage_dir",
-          label: "Attachment storage",
-          rowValue: options.settingsRow?.gmail_storage_dir,
-          runtimeValue: options.env.GMAIL_STORAGE_DIR,
-          required: dataMode === "real_mailbox",
-        }),
-        rowBackedSetting({
-          key: "supplier_code",
-          label: "Supplier code",
-          rowValue: options.settingsRow?.supplier_code,
-          runtimeValue: options.env.SUPPLIER_CODE,
-          required: dataMode === "real_mailbox",
-        }),
-        rowBackedSetting({
-          key: "google_gmail_scopes",
-          label: "Gmail scopes",
-          rowValue: options.settingsRow?.google_gmail_scopes,
-          runtimeValue: options.env.GOOGLE_GMAIL_SCOPES,
-        }),
-        rowBackedSetting({
-          key: "gmail_max_results",
-          label: "Max messages per run",
-          rowValue: options.settingsRow?.gmail_max_results,
-          runtimeValue: options.env.GMAIL_MAX_RESULTS,
         }),
       ],
       guardrails: [
         {
-          label: "Cursored Gmail search",
+          label: "Cursored mail search",
           state: dataMode === "demo" ? "warning" : "ok",
           detail: dataMode === "demo"
-            ? "Gmail ingest is optional in demo mode."
-            : "Ingest can use stored cursor state and content hashes to avoid duplicate sheets.",
+            ? "Mail ingest is optional in demo mode."
+            : "Ingest uses mailbox source cursor state and content hashes to avoid duplicate sheets.",
         },
       ],
     }),
@@ -251,7 +214,7 @@ export function buildAppSetupStatus(options: {
           detail: !junoLookupEnabled
             ? "Live lookup is disabled; missing credentials do not block app setup."
             : liveSettings.loginEmail && liveSettings.loginPassword
-              ? "Worker can reuse a persistent browser session and avoid cart or wishlist actions."
+              ? "Worker can reuse a persistent browser session and only open read-only product pages."
               : "Credentials are required before lookup jobs can run.",
         },
         {
@@ -473,6 +436,23 @@ function runtimeSetting(options: {
   });
 }
 
+function staticSetting(options: {
+  key: string;
+  label: string;
+  value: string;
+  required: boolean;
+  secret?: boolean;
+}): SetupSetting {
+  return buildSetting({
+    key: options.key,
+    label: options.label,
+    source: "database",
+    value: options.value,
+    required: options.required,
+    secret: options.secret ?? false,
+  });
+}
+
 function buildSetting(options: {
   key: string;
   label: string;
@@ -505,6 +485,16 @@ function displaySettingValue(value: string | number | boolean | null | undefined
     return value ? "enabled" : "disabled";
   }
   return String(value);
+}
+
+function isRunnableMailSource(source: PublicMailboxSource): boolean {
+  return (
+    source.isActive &&
+    source.provider === "gmail" &&
+    source.authType === "google_workspace_delegation" &&
+    source.credentialType === "google_service_account_json" &&
+    source.credentialConfigured
+  );
 }
 
 function formatDuration(ms: number): string {

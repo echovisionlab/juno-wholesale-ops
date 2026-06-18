@@ -3,6 +3,7 @@ import { applyMigrations, loadAppliedMigrations } from "@/lib/db/migrations";
 import {
   resetApplicationTables,
   startMigratedPostgresTestDatabase,
+  testMailboxSourceId,
   type StartedPostgresTestDatabase,
 } from "@/test/postgres";
 import { upsertCatalogItemIdentitiesForSnapshot } from "@/lib/insights/repository";
@@ -26,7 +27,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(15);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(16);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -43,6 +44,7 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 13, filename: "0013_remove_auth_enabled_setting.sql" }),
       expect.objectContaining({ version: 14, filename: "0014_auth_sign_in_guardrail.sql" }),
       expect.objectContaining({ version: 15, filename: "0015_login_logo_url.sql" }),
+      expect.objectContaining({ version: 16, filename: "0016_mail_source_model.sql" }),
     ]);
   });
 
@@ -61,16 +63,6 @@ describe("JunoLiveRepository", () => {
             juno_live_max_attempts = 2,
             juno_live_auto_enqueue_on_interval = true,
             juno_live_auto_enqueue_limit = 50,
-            gmail_ingest_lookback_ms = 86400000,
-            google_workspace_delegated_user = 'operator@example.com',
-            google_service_account_key_json = '/run/secrets/google.json',
-            google_gmail_scopes = 'scope-a scope-b',
-            gmail_ingest_query = 'has:attachment filename:xlsx',
-            gmail_max_results = 15,
-            gmail_processed_label = 'Processed',
-            gmail_storage_dir = '/storage',
-            catalog_attachment_pattern = 'New Releases',
-            supplier_code = 'juno-test',
             auth_secret = 'db-auth-secret-value-that-is-long-enough',
             auth_base_url = 'https://app.example.com',
             auth_trusted_origins = 'https://app.example.com',
@@ -100,16 +92,6 @@ describe("JunoLiveRepository", () => {
       juno_live_poll_interval_ms: null,
       juno_live_auto_enqueue_on_interval: true,
       juno_live_auto_enqueue_limit: 50,
-      gmail_ingest_lookback_ms: 86400000,
-      google_workspace_delegated_user: "operator@example.com",
-      google_service_account_key_json: "/run/secrets/google.json",
-      google_gmail_scopes: "scope-a scope-b",
-      gmail_ingest_query: "has:attachment filename:xlsx",
-      gmail_max_results: 15,
-      gmail_processed_label: "Processed",
-      gmail_storage_dir: "/storage",
-      catalog_attachment_pattern: "New Releases",
-      supplier_code: "juno-test",
       auth_secret: "db-auth-secret-value-that-is-long-enough",
       auth_base_url: "https://app.example.com",
       auth_trusted_origins: "https://app.example.com",
@@ -308,10 +290,11 @@ describe("JunoLiveRepository", () => {
     );
     const message = await database.pool.query<{ id: string }>(
       `
-        INSERT INTO mail_message (gmail_user_email, gmail_message_id, payload)
-        VALUES ('operator@example.com', 'message-1', '{}')
+        INSERT INTO mail_message (provider, mailbox_address, mailbox_source_id, provider_message_id, payload)
+        VALUES ('gmail', 'operator@example.com', $1, 'message-1', '{}')
         RETURNING id
       `,
+      [testMailboxSourceId],
     );
     const attachment = await database.pool.query<{ id: string }>(
       `

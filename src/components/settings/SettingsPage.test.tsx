@@ -44,7 +44,7 @@ describe("SettingsPage", () => {
     await renderSettingsPage(settingsFixture());
 
     expect(pageText()).toContain("Settings Center");
-    expect(pageText()).toContain("Read-only: no cart, no ordering, no checkout");
+    expect(pageText()).toContain("Read-only observation only");
     expect(pageText()).toContain("Auth bootstrap");
     expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).not.toContain("Auth secret");
@@ -89,7 +89,7 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Runtime fallback configured");
 
     clickButton("Overview");
-    clickButton("Test Gmail");
+    clickButton("Test Mail Source");
     await act(async () => undefined);
     expect(pageText()).toContain("[redacted]");
     expect(pageText()).not.toContain("raw-secret-token");
@@ -122,7 +122,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
       value: "demo",
       source: "default",
       status: "demo",
-      detail: "Synthetic demo data mode. Gmail credentials are optional.",
+      detail: "Synthetic demo data mode. Mail sources are optional.",
     },
     units: {
       authProvider: {
@@ -144,12 +144,12 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         adminClaimMappingConfigured: false,
         detail: "Generic OAuth/OIDC sign-in is ready.",
       },
-      gmail: {
-        id: "gmail",
-        label: "Gmail workspace ingest",
-        status: "missing",
-        detail: "Real mailbox mode requires the delegated mailbox and service account key.",
-        configured: false,
+      mail: {
+        id: "mail_sources",
+        label: "Mail sources",
+        status: "ready",
+        detail: "1 runnable Gmail source configured.",
+        configured: true,
         optional: false,
       },
       junoLive: {
@@ -179,6 +179,29 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
       },
     },
     warnings: [],
+    mailSources: [
+      {
+        id: "source-1",
+        connectionId: "connection-1",
+        name: "Gmail source",
+        provider: "gmail",
+        authType: "google_workspace_delegation",
+        credentialType: "google_service_account_json",
+        credentialReference: null,
+        credentialConfigured: true,
+        scopes: "https://www.googleapis.com/auth/gmail.readonly",
+        mailboxAddress: "operator@example.test",
+        displayName: "Operator",
+        query: "filename:xlsx",
+        maxResults: 25,
+        lookbackMs: 604800000,
+        processedLabel: "Processed",
+        storageDir: ".data/mail",
+        attachmentPattern: "xlsx",
+        supplierCode: "juno",
+        isActive: true,
+      },
+    ],
     nextActions: [
       {
         id: "open-settings-center",
@@ -208,13 +231,10 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         ],
       },
       {
-        id: "gmail",
-        label: "Gmail Ingest",
-        state: "missing",
-        settings: [
-          setting("google_service_account_key_json", "Service account key", "database", "configured", "Database override configured", true, true),
-          setting("google_gmail_scopes", "Gmail scopes", "default", "configured", "https://www.googleapis.com/auth/gmail.readonly", false, true, "csv"),
-        ],
+        id: "mail",
+        label: "Mail Sources",
+        state: "complete",
+        settings: [],
       },
       {
         id: "juno",
@@ -246,7 +266,6 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
           setting("auth_external_client_secret", "External client secret", "database", "configured", "Database override configured", true, true),
-          setting("google_gmail_scopes", "Gmail scopes", "default", "configured", "https://www.googleapis.com/auth/gmail.readonly", false, true, "csv"),
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
           setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", junoPasswordSource === "database" ? "Database override configured" : "Runtime fallback configured", true, true),
         ],

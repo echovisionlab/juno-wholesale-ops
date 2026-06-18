@@ -9,6 +9,10 @@ export type ServiceAccountKey = {
 
 export async function loadServiceAccountKey(path: string): Promise<ServiceAccountKey> {
   const raw = await fs.readFile(path, "utf8");
+  return parseServiceAccountKeyJson(raw);
+}
+
+export function parseServiceAccountKeyJson(raw: string): ServiceAccountKey {
   const parsed = JSON.parse(raw) as Partial<ServiceAccountKey>;
 
   if (!parsed.client_email || !parsed.private_key) {
