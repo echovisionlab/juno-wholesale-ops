@@ -19,7 +19,9 @@ settings are the primary operator settings surface. Mail ingest uses separate
 mailbox addresses, Gmail service account JSON, storage directories, or supplier
 codes. The Settings Center shows saved setting/runtime fallback/default/not set
 source badges, masks secrets, and lets operators clear saved settings back to runtime/default
-values.
+values. Refresh status updates status cards instead of showing diagnostics
+dumps. Sanitized diagnostics JSON is available only under Advanced and can be
+copied without exposing secrets.
 
 ## Production Checklist
 
@@ -30,6 +32,8 @@ values.
   external provider admin mapping.
 - Set the Settings Center `Site address` to the public app URL. `AUTH_BASE_URL`
   may be used only as a bootstrap fallback before the database setting exists.
+- Register the displayed External SSO callback URL in the provider console when
+  enabling Generic OAuth/OIDC.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.

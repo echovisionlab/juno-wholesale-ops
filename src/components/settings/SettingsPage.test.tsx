@@ -70,11 +70,13 @@ describe("SettingsPage", () => {
     expect(pageText()).not.toContain("raw-runtime-secret");
   });
 
-  it("clears a saved setting with a null patch and masks action results", async () => {
+  it("clears a saved setting and keeps diagnostics sanitized under Advanced", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture({ junoPasswordSource: "runtime" }), changed: ["juno_login_password"], warnings: [] }))
       .mockResolvedValueOnce(jsonResponse({ ok: false, status: "missing_settings", service_account: "raw-secret-token" }));
+    const writeText = vi.fn().mockResolvedValue(undefined);
     vi.stubGlobal("fetch", fetchMock);
+    Object.assign(navigator, { clipboard: { writeText } });
 
     await renderSettingsPage(settingsFixture());
     clickButton("Juno Live");
@@ -92,8 +94,43 @@ describe("SettingsPage", () => {
     clickButton("Overview");
     clickButton("Test Mail Source");
     await act(async () => undefined);
+    expect(pageText()).toContain("Mail source check finished");
+    expect(pageText()).toContain("Detailed diagnostics are available only under Advanced");
+    expect(pageText()).not.toContain("raw-secret-token");
+    expect(pageText()).not.toContain("[redacted]");
+
+    clickButton("Advanced");
+    expect(pageText()).toContain("Diagnostics");
+    expect(pageText()).toContain("View sanitized JSON");
+    expect(pageText()).not.toContain("[redacted]");
+    clickButton("View sanitized JSON");
     expect(pageText()).toContain("[redacted]");
     expect(pageText()).not.toContain("raw-secret-token");
+
+    clickButton("Copy diagnostics");
+    await act(async () => undefined);
+    expect(writeText).toHaveBeenCalledOnce();
+    expect(writeText.mock.calls[0]?.[0]).toContain("[redacted]");
+    expect(writeText.mock.calls[0]?.[0]).not.toContain("raw-secret-token");
+  });
+
+  it("refreshes status with a short summary instead of raw settings JSON", async () => {
+    const refreshedSettings = settingsFixture({ junoPasswordSource: "runtime" });
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
+      settings: refreshedSettings,
+      setup: { secret_token: "raw-status-secret", steps: [{ id: "database", state: "ok" }] },
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderSettingsPage(settingsFixture());
+    clickButton("Refresh status");
+    await act(async () => undefined);
+
+    expect(pageText()).toContain("Status refreshed");
+    expect(pageText()).toContain("sections ready");
+    expect(pageText()).not.toContain("raw-status-secret");
+    expect(pageText()).not.toContain('"settings"');
+    expect(pageText()).not.toContain('"setup"');
   });
 });
 

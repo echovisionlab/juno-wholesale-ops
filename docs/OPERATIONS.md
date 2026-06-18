@@ -10,10 +10,12 @@ pnpm notifications:refresh
 ```
 
 Use `/settings` as the first operator stop before running commands. The
-Settings Center shows whether each service setting is coming from a database
-override, bootstrap runtime value, schema default, or is unset, and it exposes
-reset controls for DB-backed settings. Mail ingest settings are separate mail
-source records, not env fallbacks.
+Settings Center groups configuration by operating unit: Data Mode, Auth/Admin
+Access, Gmail Workspace Ingest, Juno Live Session, and Notifications. Source
+badges use operator language: Saved setting, Runtime fallback, Default value,
+or Not set. Refresh status updates the cards and next actions; sanitized JSON
+diagnostics live under Advanced and are collapsed by default. Mail ingest
+settings are separate mail source records, not env fallbacks.
 
 Notes:
 

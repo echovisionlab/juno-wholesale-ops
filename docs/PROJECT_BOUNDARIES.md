@@ -15,6 +15,7 @@ Accepted surfaces:
 - XLSX parsing and dedupe
 - Postgres catalog snapshots
 - Settings Center operator configuration with masked, write-only secrets
+- Settings diagnostics that are sanitized before display or copy
 - read-only live product page observation
 - watch hits and movement signals
 - catalog trend and operator digest summaries

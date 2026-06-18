@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   Alert,
   Badge,
@@ -14,7 +14,7 @@ import {
   NativeSelect,
   NumberInput,
   PasswordInput,
-  SimpleGrid,
+  ScrollArea,
   Stack,
   Switch,
   Table,
@@ -47,6 +47,12 @@ import type {
 type PatchValue = string | number | boolean | null;
 type DraftValues = Record<string, PatchValue>;
 type ActionResult = Record<string, unknown>;
+type SettingsActionName = "test-gmail" | "test-juno-session" | "refresh-status" | "run-demo-seed";
+type ActionSummary = {
+  title: string;
+  detail: string;
+  color: "green" | "yellow" | "red" | "blue";
+};
 
 type SettingsPageProps = {
   initialSettings?: SettingsResponse | null;
@@ -59,7 +65,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [error, setError] = useState<string | null>(initialError);
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
-  const [actionResult, setActionResult] = useState<ActionResult | null>(null);
+  const [actionSummary, setActionSummary] = useState<ActionSummary | null>(null);
+  const [diagnosticsPayload, setDiagnosticsPayload] = useState<ActionResult | null>(null);
+  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
+  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const shouldLoadOnClient = !initialSettings && !initialError;
 
   const loadSettings = useCallback(async () => {
@@ -166,9 +175,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     }
   }
 
-  async function runAction(action: "test-gmail" | "test-juno-session" | "refresh-status" | "run-demo-seed") {
+  async function runAction(action: SettingsActionName) {
     setActionPending(action);
     setError(null);
+    setActionSummary(null);
     try {
       const response = await fetch(`/api/settings/actions/${action}`, {
         method: "POST",
@@ -185,10 +195,19 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       if (payload.settings) {
         setSettings(payload.settings);
       }
-      setActionResult(maskActionResult(payload));
+      setDiagnosticsPayload(maskActionResult({ action, httpStatus: response.status, ...payload }));
+      setActionSummary(summarizeAction(action, payload, response.status, payload.settings ?? settings));
     } finally {
       setActionPending(null);
     }
+  }
+
+  async function copyDiagnostics() {
+    if (!diagnosticsPayload) {
+      return;
+    }
+    await navigator.clipboard?.writeText(JSON.stringify(diagnosticsPayload, null, 2));
+    setCopyStatus("Sanitized diagnostics copied.");
   }
 
   const groupsById = useMemo(() => {
@@ -225,7 +244,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
               <Text fw={700}>{error ? "Settings unavailable" : "Loading settings..."}</Text>
               <Text size="sm" c="dimmed" mt={4}>
                 {error
-                  ? "The server could not provide masked operator configuration. Runtime env is still the bootstrap source for DATABASE_URL."
+                  ? "The server could not provide masked operator configuration. Runtime bootstrap still provides DATABASE_URL."
                   : "The Settings Center is asking the server for masked operator configuration."}
               </Text>
               {error ? (
@@ -249,28 +268,45 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                 </Tabs.List>
 
                 <Tabs.Panel value="overview" pt="md">
-                  <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="md">
-                    <NextActionsPanel settings={settings} />
-                    <DiagnosticsPanel
-                      deploymentMode={settings.environment.deploymentMode}
-                      pending={actionPending}
-                      result={actionResult}
-                      onRun={runAction}
-                    />
-                  </SimpleGrid>
-                  <SimpleGrid cols={{ base: 1, md: 3 }} spacing="md" mt="md">
-                    {settings.groups.filter((group) => group.id !== "advanced").map((group) => (
-                      <GroupSummaryCard key={group.id} group={group} />
-                    ))}
-                  </SimpleGrid>
+                  <Stack gap="md">
+                    <OverviewUnitsGrid settings={settings} />
+                    <ResponsiveGrid minWidth={360} gap="md">
+                      <NextActionsPanel settings={settings} />
+                      <SettingsActionsPanel
+                        deploymentMode={settings.environment.deploymentMode}
+                        pending={actionPending}
+                        summary={actionSummary}
+                        onRun={runAction}
+                      />
+                    </ResponsiveGrid>
+                  </Stack>
                 </Tabs.Panel>
 
                 {(["auth", "mail", "juno", "notifications", "advanced"] as const).map((groupId) => (
                   <Tabs.Panel key={groupId} value={groupId} pt="md">
                     {groupsById[groupId] ? (
                       <Stack gap="md">
-                        {groupId === "auth" ? <AuthProviderCard settings={settings} /> : null}
+                        {groupId === "auth" ? (
+                          <>
+                            <AuthAccessCards settings={settings} />
+                            <AuthProviderCard settings={settings} />
+                          </>
+                        ) : null}
                         {groupId === "mail" ? <MailSourcesCard settings={settings} /> : null}
+                        {groupId === "juno" ? <JunoLiveSessionCard settings={settings} group={groupsById[groupId]} /> : null}
+                        {groupId === "notifications" ? <NotificationsUnitCard settings={settings} /> : null}
+                        {groupId === "advanced" ? (
+                          <AdvancedDiagnosticsPanel
+                            diagnosticsPayload={diagnosticsPayload}
+                            open={diagnosticsOpen}
+                            copyStatus={copyStatus}
+                            onToggle={() => {
+                              setDiagnosticsOpen((current) => !current);
+                              setCopyStatus(null);
+                            }}
+                            onCopy={() => void copyDiagnostics()}
+                          />
+                        ) : null}
                         <SettingsGroupCard
                           group={groupsById[groupId]}
                           draft={draft}
@@ -310,12 +346,26 @@ function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
 function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
   const sourceCounts = countSources(settings.groups.find((group) => group.id === "advanced")?.settings ?? []);
   return (
-    <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
+    <ResponsiveGrid minWidth={180} gap="sm">
       <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
       <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
       <StatusCard icon={Settings} label="Saved settings" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} runtime fallback values`} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
-    </SimpleGrid>
+    </ResponsiveGrid>
+  );
+}
+
+function ResponsiveGrid({ children, minWidth, gap }: { children: ReactNode; minWidth: number; gap: "xs" | "sm" | "md" }) {
+  return (
+    <Box
+      style={{
+        display: "grid",
+        gap: `var(--mantine-spacing-${gap})`,
+        gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, ${minWidth}px), 1fr))`,
+      }}
+    >
+      {children}
+    </Box>
   );
 }
 
@@ -369,18 +419,60 @@ function NextActionsPanel({ settings }: { settings: SettingsResponse }) {
   );
 }
 
-function DiagnosticsPanel({ deploymentMode, pending, result, onRun }: {
+function OverviewUnitsGrid({ settings }: { settings: SettingsResponse }) {
+  const units = buildOverviewUnits(settings);
+  return (
+    <ResponsiveGrid minWidth={200} gap="md">
+      {units.map((unit) => (
+        <UnitOverviewCard key={unit.label} {...unit} />
+      ))}
+    </ResponsiveGrid>
+  );
+}
+
+function UnitOverviewCard({
+  label,
+  status,
+  detail,
+  action,
+}: {
+  label: string;
+  status: "Ready" | "Needs attention" | "Disabled";
+  detail: string;
+  action: string;
+}) {
+  return (
+    <Card>
+      <Stack gap="xs">
+        <Group justify="space-between" align="flex-start">
+          <Text fw={700}>{label}</Text>
+          <Badge color={overviewStatusColor(status)} variant="light">
+            {status}
+          </Badge>
+        </Group>
+        <Text size="sm" c="dimmed">
+          {detail}
+        </Text>
+        <Text size="sm" fw={700}>
+          Action: <Text span fw={500}>{action}</Text>
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+function SettingsActionsPanel({ deploymentMode, pending, summary, onRun }: {
   deploymentMode: SettingsResponse["environment"]["deploymentMode"];
   pending: string | null;
-  result: ActionResult | null;
-  onRun: (action: "test-gmail" | "test-juno-session" | "refresh-status" | "run-demo-seed") => void;
+  summary: ActionSummary | null;
+  onRun: (action: SettingsActionName) => void;
 }) {
   return (
     <Card>
       <Stack gap="sm">
         <Group gap="xs">
           <MailSearch size={18} aria-hidden="true" />
-          <Text fw={700}>Diagnostics</Text>
+          <Text fw={700}>Actions</Text>
         </Group>
         <Group gap="xs">
           <Button size="xs" loading={pending === "test-gmail"} onClick={() => onRun("test-gmail")}>
@@ -398,11 +490,18 @@ function DiagnosticsPanel({ deploymentMode, pending, result, onRun }: {
             </Button>
           ) : null}
         </Group>
-        {result ? (
-          <Code block>{JSON.stringify(result, null, 2)}</Code>
+        {summary ? (
+          <>
+            <Alert color={summary.color} variant="light" title={summary.title}>
+              {summary.detail}
+            </Alert>
+            <Text size="sm" c="dimmed">
+              Detailed diagnostics are available only under Advanced.
+            </Text>
+          </>
         ) : (
           <Text size="sm" c="dimmed">
-            Diagnostics only observe configuration and catalog state; they do not mutate supplier accounts.
+            Actions refresh status or run read-only smoke checks. Detailed diagnostics are available only under Advanced.
           </Text>
         )}
       </Stack>
@@ -410,20 +509,107 @@ function DiagnosticsPanel({ deploymentMode, pending, result, onRun }: {
   );
 }
 
-function GroupSummaryCard({ group }: { group: SettingsGroup }) {
-  const missing = group.settings.filter((setting) => setting.state === "missing").length;
+function AdvancedDiagnosticsPanel({
+  diagnosticsPayload,
+  open,
+  copyStatus,
+  onToggle,
+  onCopy,
+}: {
+  diagnosticsPayload: ActionResult | null;
+  open: boolean;
+  copyStatus: string | null;
+  onToggle: () => void;
+  onCopy: () => void;
+}) {
   return (
     <Card>
-      <Group justify="space-between">
-        <Text fw={700}>{group.label}</Text>
-        <Badge color={groupStateColor(group.state)} variant="light">
-          {group.state}
-        </Badge>
-      </Group>
-      <Text size="sm" c="dimmed" mt="sm">
-        {group.settings.length} settings, {missing} missing.
-      </Text>
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4}>
+            <Text fw={700}>Diagnostics</Text>
+            <Text size="sm" c="dimmed">
+              View and copy sanitized diagnostics. Secrets, tokens, cookies, passwords, and service account contents are redacted.
+            </Text>
+          </Stack>
+          <Button size="xs" variant="light" onClick={onToggle}>
+            {open ? "Hide sanitized JSON" : "View sanitized JSON"}
+          </Button>
+        </Group>
+        {!diagnosticsPayload ? (
+          <Alert color="blue" title="No diagnostics captured">
+            Run Refresh status or a read-only smoke check from Overview first.
+          </Alert>
+        ) : null}
+        {open && diagnosticsPayload ? (
+          <>
+            <Group justify="space-between" align="center">
+              <Text size="sm" fw={700}>Sanitized JSON</Text>
+              <Button size="xs" variant="light" leftSection={<Copy size={14} aria-hidden="true" />} onClick={onCopy}>
+                Copy diagnostics
+              </Button>
+            </Group>
+            {copyStatus ? <Text size="sm" c="green.7">{copyStatus}</Text> : null}
+            <ScrollArea h={320} type="auto">
+              <Code block>{JSON.stringify(diagnosticsPayload, null, 2)}</Code>
+            </ScrollArea>
+          </>
+        ) : null}
+      </Stack>
     </Card>
+  );
+}
+
+function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
+  const siteAddress = findSetting(settings, "auth_base_url");
+  const trustedOrigins = findSetting(settings, "auth_trusted_origins");
+  const emailPassword = findSetting(settings, "auth_email_password_enabled");
+  const externalProvider = settings.units.authProvider;
+  const currentOriginMatches = settings.environment.appBaseUrl && settings.environment.currentRequestOrigin
+    ? normalizeOrigin(settings.environment.appBaseUrl) === normalizeOrigin(settings.environment.currentRequestOrigin)
+    : false;
+
+  return (
+    <ResponsiveGrid minWidth={280} gap="md">
+      <Card>
+        <Stack gap="xs">
+          <Group justify="space-between">
+            <Text fw={700}>Admin Gate</Text>
+            <Badge color={settings.warnings.some((warning) => warning.id.startsWith("auth_") && warning.severity === "critical") ? "red" : "green"} variant="light">
+              {settings.warnings.some((warning) => warning.id.startsWith("auth_") && warning.severity === "critical") ? "Needs attention" : "Ready"}
+            </Badge>
+          </Group>
+          <SignalFact label="Admin access protection" value="Enabled" />
+          <SignalFact label="Site address" value={siteAddress?.displayValue ?? settings.environment.appBaseUrl ?? "Not set"} />
+          <SignalFact label="Current origin match" value={currentOriginMatches ? "matches" : "review required"} />
+          <SignalFact label="Trusted origins" value={trustedOrigins?.state === "configured" ? "configured" : "not configured"} />
+        </Stack>
+      </Card>
+
+      <Card>
+        <Stack gap="xs">
+          <Group justify="space-between">
+            <Text fw={700}>Admin Access</Text>
+            <Badge color={settings.security.authBootstrap.status === "ready" ? "green" : "red"} variant="light">
+              {settings.security.authBootstrap.status === "ready" ? "Ready" : "Blocked"}
+            </Badge>
+          </Group>
+          <SignalFact label="Admin users" value={formatAdminCount(settings.security.authBootstrap.adminUserCount)} />
+          <SignalFact label="Initial admin seed" value={settings.security.authBootstrap.hasInitialAdminEnv ? "configured" : "not configured"} />
+          <SignalFact label="External admin mapping" value={settings.security.authBootstrap.hasExternalAdminMapping ? "configured" : "not configured"} />
+          <Text size="sm" c="dimmed">{settings.security.authBootstrap.detail}</Text>
+        </Stack>
+      </Card>
+
+      <Card>
+        <Stack gap="xs">
+          <Text fw={700}>Sign-in Methods</Text>
+          <SignalFact label="Email/password login" value={emailPassword?.displayValue ?? "Default value"} />
+          <SignalFact label="External SSO provider" value={externalProvider.enabled ? externalProvider.status : "disabled"} />
+          <SignalFact label="SSO login button" value={externalProvider.status === "ready" ? externalProvider.buttonLabel : "shown when provider is ready"} />
+        </Stack>
+      </Card>
+    </ResponsiveGrid>
   );
 }
 
@@ -444,8 +630,9 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
           </Badge>
         </Group>
 
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+        <ResponsiveGrid minWidth={240} gap="xs">
           <SignalFact label="Provider type" value="Generic OAuth/OIDC" />
+          <SignalFact label="Provider preset" value={inferProviderPreset(provider)} />
           <SignalFact label="Enabled" value={provider.enabled ? "enabled" : "disabled"} />
           <SignalFact label="Display name" value={provider.displayName} />
           <SignalFact label="Button label" value={provider.buttonLabel} />
@@ -455,8 +642,9 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
           <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
           <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
           <SignalFact label="Scopes" value={provider.scopes.length > 0 ? provider.scopes.join(" ") : "not configured"} />
+          <SignalFact label="Require issuer validation" value="Use provider discovery document" />
           <SignalFact label="Admin mapping" value={provider.adminEmailAllowlistConfigured || provider.adminClaimMappingConfigured ? "configured" : "not configured"} />
-        </SimpleGrid>
+        </ResponsiveGrid>
 
         <Box>
           <Text size="sm" fw={700}>Callback URL</Text>
@@ -479,7 +667,7 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
         </Box>
 
         <Text size="sm" c="dimmed">
-          {provider.detail}
+          {provider.detail} Register the callback URL in the provider console, then use the Sign in page to test the SSO button.
         </Text>
       </Stack>
     </Card>
@@ -493,19 +681,26 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
           <Stack gap={4}>
-            <Text fw={700}>Mail Sources</Text>
+            <Text fw={700}>Gmail Workspace Ingest</Text>
             <Text size="sm" c="dimmed">
-              Multiple mailboxes are represented as separate source records. Gmail uses Google Workspace delegation with a JSON service account credential; other provider adapters are configuration-only until implemented.
+              Gmail uses Google Workspace delegation with a JSON service account credential. Demo mode can run without Gmail; real mailbox mode requires a runnable Gmail source.
             </Text>
           </Stack>
           <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
             {settings.units.mail.status}
           </Badge>
         </Group>
+        <ResponsiveGrid minWidth={220} gap="xs">
+          <SignalFact label="Mode impact" value={settings.dataMode.value === "demo" ? "Gmail optional in Demo mode" : "Gmail required in Real mailbox mode"} />
+          <SignalFact label="Runnable Gmail sources" value={String(sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length)} />
+          <SignalFact label="Service account key" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
+        </ResponsiveGrid>
 
         {sources.length === 0 ? (
           <Alert color={settings.dataMode.value === "real_mailbox" ? "red" : "blue"} title="No mail sources configured">
-            Real mailbox mode requires an active Gmail mail source. Demo mode can run without external mail.
+            {settings.dataMode.value === "real_mailbox"
+              ? "Real mailbox mode requires delegated mailbox access and a service account key reference."
+              : "Gmail is optional in Demo mode. Use demo data until real mailbox settings are ready."}
           </Alert>
         ) : (
           <Table.ScrollContainer minWidth={840}>
@@ -552,7 +747,75 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
         )}
 
         <Text size="sm" c="dimmed">
-          {settings.units.mail.detail}
+          {settings.units.mail.detail} Use Test Mail Source from Overview for a read-only connection check.
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+function JunoLiveSessionCard({ settings, group }: { settings: SettingsResponse; group: SettingsGroup }) {
+  const loginEmail = findGroupSetting(group, "juno_login_email");
+  const loginPassword = findGroupSetting(group, "juno_login_password");
+  const concurrency = findGroupSetting(group, "juno_live_concurrency");
+  const delayMin = findGroupSetting(group, "juno_live_delay_min_ms");
+  const delayMax = findGroupSetting(group, "juno_live_delay_max_ms");
+  const pollInterval = findGroupSetting(group, "juno_live_poll_interval_ms");
+  const autoEnqueue = findGroupSetting(group, "juno_live_auto_enqueue_on_interval");
+
+  return (
+    <Card>
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4}>
+            <Text fw={700}>Juno Live Session</Text>
+            <Text size="sm" c="dimmed">
+              Optional read-only browser observation. Missing credentials do not block the app, but worker start stays disabled until session settings are ready.
+            </Text>
+          </Stack>
+          <Badge color={unitStatusColor(settings.units.junoLive.status)} variant="light">
+            {settings.units.junoLive.status}
+          </Badge>
+        </Group>
+        <ResponsiveGrid minWidth={220} gap="xs">
+          <SignalFact label="Login email" value={loginEmail?.state === "configured" ? "configured" : "not configured"} />
+          <SignalFact label="Password" value={loginPassword?.state === "configured" ? "configured" : "not configured"} />
+          <SignalFact label="Poll interval" value={pollInterval?.displayValue ?? "manual only"} />
+          <SignalFact label="Concurrency" value={concurrency?.displayValue ?? "Default value"} />
+          <SignalFact label="Delay window" value={`${delayMin?.displayValue ?? "Default value"} to ${delayMax?.displayValue ?? "Default value"}`} />
+          <SignalFact label="Auto enqueue" value={autoEnqueue?.displayValue ?? "Default value"} />
+        </ResponsiveGrid>
+        <Alert color="blue" title="Read-only boundary">
+          No cart, no wishlist, no checkout, no ordering. The browser worker only opens product pages for observed stock status.
+        </Alert>
+        <Text size="sm" c="dimmed">{settings.units.junoLive.detail}</Text>
+      </Stack>
+    </Card>
+  );
+}
+
+function NotificationsUnitCard({ settings }: { settings: SettingsResponse }) {
+  return (
+    <Card>
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4}>
+            <Text fw={700}>Notifications</Text>
+            <Text size="sm" c="dimmed">
+              In-app notifications are valid by default. Generic webhook delivery remains optional and external sending requires explicit opt-in.
+            </Text>
+          </Stack>
+          <Badge color={unitStatusColor(settings.units.notifications.status)} variant="light">
+            {settings.units.notifications.status}
+          </Badge>
+        </Group>
+        <ResponsiveGrid minWidth={220} gap="xs">
+          <SignalFact label="In-app channel" value="ready" />
+          <SignalFact label="Webhook" value="optional; not configured is OK" />
+          <SignalFact label="Dispatch" value="dry-run by default" />
+        </ResponsiveGrid>
+        <Text size="sm" c="dimmed">
+          {settings.units.notifications.detail}
         </Text>
       </Stack>
     </Card>
@@ -839,6 +1102,161 @@ function countSources(settings: SettingDescriptor[]): Record<SettingDescriptor["
     (counts, setting) => ({ ...counts, [setting.source]: counts[setting.source] + 1 }),
     { database: 0, runtime: 0, default: 0, unset: 0 },
   );
+}
+
+function buildOverviewUnits(settings: SettingsResponse): Array<{
+  label: string;
+  status: "Ready" | "Needs attention" | "Disabled";
+  detail: string;
+  action: string;
+}> {
+  return [
+    {
+      label: "Data Mode",
+      status: "Ready",
+      detail: settings.dataMode.value === "demo" ? "Demo mode uses synthetic data and keeps Gmail optional." : "Real mailbox mode requires a runnable Gmail source.",
+      action: settings.dataMode.value === "demo" ? "Seed demo data when you want a preview." : "Configure Gmail Workspace ingest.",
+    },
+    {
+      label: "Auth & Admin Access",
+      status: settings.security.authBootstrap.status === "ready" ? "Ready" : "Needs attention",
+      detail: settings.security.authBootstrap.detail,
+      action: settings.security.authBootstrap.status === "ready" ? "Keep at least one admin access path configured." : "Add an initial admin, existing admin, or SSO admin mapping.",
+    },
+    {
+      label: "Gmail Ingest",
+      status: unitOverviewStatus(settings.units.mail.status),
+      detail: settings.units.mail.detail,
+      action: settings.dataMode.value === "demo" ? "Optional until Real mailbox mode is selected." : "Add a runnable Gmail source.",
+    },
+    {
+      label: "Juno Live",
+      status: unitOverviewStatus(settings.units.junoLive.status),
+      detail: settings.units.junoLive.detail,
+      action: settings.units.junoLive.status === "disabled" ? "Leave disabled or configure a read-only session." : "Review pacing before worker start.",
+    },
+    {
+      label: "Notifications",
+      status: unitOverviewStatus(settings.units.notifications.status),
+      detail: settings.units.notifications.detail,
+      action: "Use in-app alerts; configure webhook only when needed.",
+    },
+  ];
+}
+
+function unitOverviewStatus(status: SettingsResponse["units"]["mail"]["status"]): "Ready" | "Needs attention" | "Disabled" {
+  if (status === "ready") {
+    return "Ready";
+  }
+  if (status === "disabled") {
+    return "Disabled";
+  }
+  return "Needs attention";
+}
+
+function overviewStatusColor(status: "Ready" | "Needs attention" | "Disabled"): string {
+  if (status === "Ready") {
+    return "green";
+  }
+  if (status === "Needs attention") {
+    return "yellow";
+  }
+  return "gray";
+}
+
+function summarizeAction(
+  action: SettingsActionName,
+  payload: ActionResult & { settings?: SettingsResponse; error?: string; status?: string; ok?: boolean },
+  httpStatus: number,
+  currentSettings: SettingsResponse | null,
+): ActionSummary {
+  if (httpStatus >= 400) {
+    return {
+      title: action === "refresh-status" ? "Status refresh failed" : "Action failed",
+      detail: `API returned ${httpStatus}: ${payload.error ?? "No additional detail returned."}`,
+      color: "red",
+    };
+  }
+  if (action === "refresh-status") {
+    return {
+      title: `Status refreshed ${new Date().toLocaleTimeString()}`,
+      detail: currentSettings ? summarizeSettingsHealth(currentSettings) : "Settings cards updated.",
+      color: "green",
+    };
+  }
+  if (action === "run-demo-seed") {
+    return {
+      title: "Demo seed finished",
+      detail: payload.error ?? "Synthetic demo data action completed.",
+      color: payload.ok === false ? "yellow" : "green",
+    };
+  }
+  if (action === "test-gmail") {
+    return {
+      title: "Mail source check finished",
+      detail: payload.status ? `Result: ${String(payload.status)}` : "Read-only Gmail smoke check completed.",
+      color: payload.ok === false ? "yellow" : "green",
+    };
+  }
+  return {
+    title: "Juno session check finished",
+    detail: payload.status ? `Result: ${String(payload.status)}` : "Read-only Juno session preflight completed.",
+    color: payload.ok === false ? "yellow" : "green",
+  };
+}
+
+function summarizeSettingsHealth(settings: SettingsResponse): string {
+  const sections = buildOverviewUnits(settings);
+  const ready = sections.filter((section) => section.status === "Ready").length;
+  const warnings = sections.filter((section) => section.status === "Needs attention").length
+    + settings.warnings.filter((warning) => warning.severity === "warning").length;
+  const blockers = settings.warnings.filter((warning) => warning.severity === "critical").length
+    + (settings.security.authBootstrap.status === "blocked" ? 1 : 0);
+  return `${ready} sections ready · ${warnings} warning${warnings === 1 ? "" : "s"} · ${blockers} blocker${blockers === 1 ? "" : "s"}`;
+}
+
+function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {
+  return settings.groups.find((group) => group.id === "advanced")?.settings.find((setting) => setting.key === key)
+    ?? settings.groups.flatMap((group) => group.settings).find((setting) => setting.key === key);
+}
+
+function findGroupSetting(group: SettingsGroup, key: string): SettingDescriptor | undefined {
+  return group.settings.find((setting) => setting.key === key);
+}
+
+function formatAdminCount(count: number | null): string {
+  if (count === null) {
+    return "count unavailable";
+  }
+  return `${count} existing admin${count === 1 ? "" : "s"}`;
+}
+
+function normalizeOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+}
+
+function inferProviderPreset(provider: SettingsResponse["units"]["authProvider"]): string {
+  const haystack = `${provider.displayName} ${provider.discoveryUrl ?? ""}`.toLowerCase();
+  if (haystack.includes("google")) {
+    return "Google";
+  }
+  if (haystack.includes("microsoft") || haystack.includes("entra")) {
+    return "Microsoft Entra ID";
+  }
+  if (haystack.includes("okta")) {
+    return "Okta";
+  }
+  if (haystack.includes("auth0")) {
+    return "Auth0";
+  }
+  if (haystack.includes("keycloak")) {
+    return "Keycloak";
+  }
+  return "Generic OIDC";
 }
 
 function maskActionResult(payload: ActionResult): ActionResult {

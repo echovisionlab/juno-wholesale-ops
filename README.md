@@ -178,8 +178,12 @@ configuration does not use env fallback or legacy Gmail settings. It lives in
 shown in the dashboard; only configured/unset status is shown.
 
 The app Settings Center at `/settings` is the primary operator UX for runtime
-readiness, saved settings, reset-to-runtime actions, and diagnostics. Resolution
-is always:
+readiness, saved settings, reset-to-runtime actions, and diagnostics. It is
+organized by operating unit instead of internal storage fields: Data Mode,
+Auth/Admin Access, Gmail Workspace Ingest, Juno Live Session, and Notifications.
+Refresh status updates the cards and next actions; sanitized diagnostics JSON is
+available only from Advanced and stays collapsed by default. Resolution is
+always:
 
 ```text
 effective value = saved setting ?? runtime fallback ?? default value
@@ -189,12 +193,13 @@ effective value = saved setting ?? runtime fallback ?? default value
 Center. Export `.env` into the current shell before running local CLI scripts
 such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`. The public
 app URL is the primary saved `Site address` setting;
-`AUTH_BASE_URL` is only a bootstrap fallback before that saved setting exists. Auth is
-always enabled. If `AUTH_SECRET` is absent, startup creates an internal random
-Better Auth secret in the database; it is not an operator-facing setting. At
-least one admin bootstrap path is still required. Secret fields such as
-mail source credentials, Juno passwords, OIDC client secrets, and webhook
-configuration are write-only and masked in API responses.
+`AUTH_BASE_URL` is only a bootstrap fallback before that saved setting exists.
+External SSO setup shows the provider callback URL that must be registered in
+the provider console. Auth is always enabled. If `AUTH_SECRET` is absent,
+startup creates an internal random Better Auth secret in the database; it is not
+an operator-facing setting. At least one admin bootstrap path is still required.
+Secret fields such as mail source credentials, Juno passwords, OIDC client
+secrets, and webhook configuration are write-only and masked in API responses.
 
 ## Mail ingestion
 
