@@ -1,6 +1,5 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { isSupportedLoginLogoUrl, LOGIN_LOGO_URL_REQUIREMENT } from "@/lib/auth/login-logo";
-import { GOOGLE_GMAIL_MODIFY_SCOPE, GOOGLE_GMAIL_READONLY_SCOPE, hasGmailModifyScope } from "@/lib/env";
 import {
   definitionsByKey,
   type ServiceSettingsPatch,
@@ -83,20 +82,11 @@ export function collectSettingsWarnings(options: {
 }): SettingsWarning[] {
   const warnings: SettingsWarning[] = [];
   const authBaseUrl = options.row?.auth_base_url ?? options.env.AUTH_BASE_URL;
-  const gmailScopes = options.row?.google_gmail_scopes ?? options.env.GOOGLE_GMAIL_SCOPES;
   const emailPasswordEnabled =
     options.row?.auth_email_password_enabled ?? options.env.AUTH_EMAIL_PASSWORD_ENABLED;
   const externalProviderEnabled =
     options.row?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
   const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins ?? options.env.AUTH_TRUSTED_ORIGINS);
-
-  if (gmailScopes && hasGmailModifyScope(gmailScopes)) {
-    warnings.push({
-      id: "gmail_modify_scope",
-      severity: "warning",
-      message: `${GOOGLE_GMAIL_READONLY_SCOPE} is recommended. ${GOOGLE_GMAIL_MODIFY_SCOPE} should only be used when label mode is intentionally enabled.`,
-    });
-  }
 
   if (!hasSettingValue(authBaseUrl)) {
     warnings.push({
@@ -159,7 +149,7 @@ function flattenSettingsPatch(input: unknown): Record<string, unknown> {
 }
 
 function isKnownGroupKey(key: string): boolean {
-  return key === "auth" || key === "gmail" || key === "juno" || key === "notifications" || key === "advanced";
+  return key === "auth" || key === "mail" || key === "juno" || key === "notifications" || key === "advanced";
 }
 
 function normalizePatchValue(
@@ -216,9 +206,6 @@ function normalizePatchValue(
   if (definition.key === "data_mode" && text !== "demo" && text !== "real_mailbox") {
     return { kind: "invalid", issue: "must be demo or real_mailbox" };
   }
-  if (definition.key === "google_gmail_scopes" && text.length === 0) {
-    return { kind: "invalid", issue: "must include at least the Gmail read-only scope" };
-  }
   return { kind: "value", value: text };
 }
 
@@ -250,7 +237,6 @@ function validateResolvedPatch(options: {
   const delayMin = effectiveNumber("juno_live_delay_min_ms", merged, options.env);
   const delayMax = effectiveNumber("juno_live_delay_max_ms", merged, options.env);
   const pollInterval = effectiveNullableNumber("juno_live_poll_interval_ms", merged, options.env);
-  const maxResults = effectiveNumber("gmail_max_results", merged, options.env);
   const emailPasswordEnabled = effectiveBoolean("auth_email_password_enabled", merged, options.env);
   const externalProviderEnabled = effectiveBoolean("auth_external_provider_enabled", merged, options.env);
 
@@ -268,9 +254,6 @@ function validateResolvedPatch(options: {
   }
   if (pollInterval !== null && pollInterval <= 0) {
     issues.push("juno_live_poll_interval_ms must be null or a positive integer");
-  }
-  if (maxResults !== null && (maxResults < 1 || maxResults > 500)) {
-    issues.push("gmail_max_results must be between 1 and 500");
   }
   if (emailPasswordEnabled === false && externalProviderEnabled !== true) {
     issues.push("auth_email_password_enabled can be disabled only when auth_external_provider_enabled is true");

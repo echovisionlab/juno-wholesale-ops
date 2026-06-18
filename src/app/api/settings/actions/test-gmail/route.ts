@@ -1,8 +1,11 @@
-import { loadRuntimeEnv, parseScopes } from "@/lib/env";
+import { parseScopes } from "@/lib/env";
 import { GmailClient } from "@/lib/ingest/gmail";
-import { getDelegatedAccessToken, loadServiceAccountKey } from "@/lib/ingest/google-auth";
-import { getMissingGmailIngestSettings, resolveGmailIngestSettings } from "@/lib/ingest/settings";
-import { ensureServiceSettingsRow } from "@/lib/settings/repository";
+import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
+import {
+  getMissingMailboxSourceSettings,
+  getRunnableGmailSources,
+  listActiveMailboxSources,
+} from "@/lib/ingest/settings";
 import {
   authorizeSettingsRequest,
   databaseUrlResponse,
@@ -18,52 +21,63 @@ export async function POST(request: Request) {
   }
 
   const database = databaseUrlResponse();
+  const sources = await listActiveMailboxSources(database.databaseUrl);
+  const gmailSources = getRunnableGmailSources(sources);
 
-  const env = loadRuntimeEnv(process.env);
-  const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
-  const settings = resolveGmailIngestSettings(env, settingsRow);
-  const missing = getMissingGmailIngestSettings(settings);
-
-  if (missing.length > 0) {
+  if (sources.length === 0) {
     return Response.json({
       ok: false,
-      status: "missing_settings",
-      missing,
-      query: settings.query,
+      status: "missing_mail_source",
+      missing: ["mail_source"],
+      results: [],
     });
   }
 
+  if (gmailSources.length === 0) {
+    return Response.json({
+      ok: false,
+      status: "no_runnable_gmail_source",
+      missing: sources.flatMap((source) => getMissingMailboxSourceSettings(source)),
+      results: sources.map((source) => ({
+        sourceId: source.id,
+        mailboxAddress: source.mailboxAddress,
+        provider: source.provider,
+        credentialConfigured: source.credentialConfigured,
+      })),
+    });
+  }
+
+  const results = [];
   try {
-    if (!settings.serviceAccountKeyJson || !settings.delegatedUser) {
-      return Response.json({
-        ok: false,
-        status: "missing_settings",
-        missing: missing.length > 0 ? missing : ["google_workspace_delegated_user", "google_service_account_key_json"],
-        query: settings.query,
+    for (const source of gmailSources) {
+      const key = parseServiceAccountKeyJson(source.credentialSecret);
+      const accessToken = await getDelegatedAccessToken({
+        key,
+        subject: source.mailboxAddress,
+        scopes: parseScopes(source.scopes),
+      });
+      const gmail = new GmailClient(source.mailboxAddress, accessToken);
+      const messages = await gmail.listMessages(source.query, Math.min(source.maxResults, 10));
+      results.push({
+        sourceId: source.id,
+        mailboxAddress: source.mailboxAddress,
+        status: "read_only_smoke_passed",
+        messageCount: messages.length,
+        query: source.query,
       });
     }
-
-    const key = await loadServiceAccountKey(settings.serviceAccountKeyJson);
-    const accessToken = await getDelegatedAccessToken({
-      key,
-      subject: settings.delegatedUser,
-      scopes: parseScopes(settings.scopes),
-    });
-    const gmail = new GmailClient(settings.delegatedUser, accessToken);
-    const messages = await gmail.listMessages(settings.query, Math.min(settings.maxResults, 10));
 
     return Response.json({
       ok: true,
       status: "read_only_smoke_passed",
-      messageCount: messages.length,
-      query: settings.query,
+      results,
     });
   } catch (error: unknown) {
     return Response.json({
       ok: false,
       status: "smoke_failed",
       error: safeSettingsActionError(error),
-      query: settings.query,
+      results,
     });
   }
 }

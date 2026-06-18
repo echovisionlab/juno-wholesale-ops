@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
+import { listMailboxSources, redactMailboxSource } from "@/lib/ingest/mail-source";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
@@ -17,6 +18,7 @@ export async function loadSettingsResponse(databaseUrl: string, request?: Reques
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(databaseUrl);
   const adminUserCount = await countAdminUsers(databaseUrl).catch(() => null);
+  const mailSources = (await listMailboxSources(databaseUrl)).map(redactMailboxSource);
   return buildSettingsResponse({
     env,
     rawEnv: process.env,
@@ -24,6 +26,7 @@ export async function loadSettingsResponse(databaseUrl: string, request?: Reques
     nodeEnv: process.env.NODE_ENV ?? "development",
     currentRequestOrigin: request ? getRequestOrigin(request) : null,
     adminUserCount,
+    mailSources,
   });
 }
 

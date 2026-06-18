@@ -22,8 +22,6 @@ const DEFAULT_REGISTRY_PROJECT = "dsub";
 const DEFAULT_IMAGE_NAME = "juno-wholesale-ops-web";
 const IMAGE_ENV_KEY = "JUNO_WHOLESALE_OPS_WEB_IMAGE";
 const DATABASE_ENV_KEY = "DATABASE_URL";
-const GMAIL_SCOPE_ENV_KEY = "GOOGLE_GMAIL_SCOPES";
-const GMAIL_MODIFY_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const SYNC_FILES = [
   {
     source: "compose/app.yml",
@@ -310,11 +308,6 @@ function validateRuntimeEnvironment(environment) {
     fail(`Komodo stack environment must set ${DATABASE_ENV_KEY} before production deploy`);
   }
 
-  const gmailScopes = values.get(GMAIL_SCOPE_ENV_KEY) ?? "";
-  const allowModifyScope = parseBoolean(process.env.KOMODO_ALLOW_GMAIL_MODIFY_SCOPE, false);
-  if (!allowModifyScope && gmailScopes.split(/[,\s]+/).includes(GMAIL_MODIFY_SCOPE)) {
-    fail(`${GMAIL_SCOPE_ENV_KEY} contains gmail.modify; production deploy requires read-only scope by default`);
-  }
 }
 
 function serviceState(entry) {

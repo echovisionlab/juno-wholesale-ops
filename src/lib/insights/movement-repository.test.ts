@@ -4,6 +4,7 @@ import type { ParsedCatalog } from "@/lib/ingest/juno-parser";
 import {
   resetApplicationTables,
   startMigratedPostgresTestDatabase,
+  testMailboxSourceId,
   type StartedPostgresTestDatabase,
 } from "@/test/postgres";
 import { processInsightsForSnapshot } from "./repository";
@@ -182,9 +183,11 @@ describe("movement insights repository", () => {
 
 function message(gmailMessageId: string): MessageRecord {
   return {
-    userEmail: "operator@example.com",
-    gmailMessageId,
-    gmailThreadId: null,
+    provider: "gmail",
+    mailboxAddress: "operator@example.com",
+    mailboxSourceId: testMailboxSourceId,
+    providerMessageId: gmailMessageId,
+    providerThreadId: null,
     rfc822MessageId: `<${gmailMessageId}@example.com>`,
     subject: "Daily Juno",
     fromAddress: "juno@example.com",

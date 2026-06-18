@@ -9,8 +9,6 @@ import {
 
 const configuredEnv = {
   DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
-  GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
 };
 
 describe("loadRuntimeEnv", () => {
@@ -21,14 +19,6 @@ describe("loadRuntimeEnv", () => {
 
     expect(env).toMatchObject({
       DATABASE_URL: configuredEnv.DATABASE_URL,
-      GOOGLE_GMAIL_SCOPES: GOOGLE_GMAIL_READONLY_SCOPE,
-      GMAIL_INGEST_QUERY: "has:attachment filename:xlsx newer_than:30d",
-      GMAIL_MAX_RESULTS: 25,
-      GMAIL_INGEST_LOOKBACK_MS: 604800000,
-      GMAIL_PROCESSED_LABEL: "Wholesale Processed",
-      GMAIL_STORAGE_DIR: ".data/mail-attachments",
-      CATALOG_ATTACHMENT_PATTERN: "New Preorders|New Releases In Stock",
-      SUPPLIER_CODE: "juno",
       JUNO_WHOLESALE_OPS_DATA_MODE: "demo",
       JUNO_LIVE_ENQUEUE_ON_INGEST: false,
       AUTH_EMAIL_PASSWORD_ENABLED: true,
@@ -45,8 +35,6 @@ describe("loadRuntimeEnv", () => {
       JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: false,
       JUNO_LIVE_AUTO_ENQUEUE_LIMIT: 1000,
     });
-    expect(env.GOOGLE_WORKSPACE_DELEGATED_USER).toBeUndefined();
-    expect(env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON).toBeUndefined();
     expect(env.AUTH_SECRET).toBeUndefined();
     expect(env.AUTH_BASE_URL).toBeUndefined();
     expect(env.AUTH_TRUSTED_ORIGINS).toBeUndefined();
@@ -79,9 +67,6 @@ describe("loadRuntimeEnv", () => {
       AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
       AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       AUTH_INITIAL_ADMIN_NAME: "Ops Admin",
-      GMAIL_MAX_RESULTS: "5",
-      GMAIL_INGEST_LOOKBACK_MS: "86400000",
-      SUPPLIER_CODE: "juno-wholesale",
       JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
       JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
@@ -114,9 +99,6 @@ describe("loadRuntimeEnv", () => {
     expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBe("admin@example.com");
     expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBe("password123");
     expect(env.AUTH_INITIAL_ADMIN_NAME).toBe("Ops Admin");
-    expect(env.GMAIL_MAX_RESULTS).toBe(5);
-    expect(env.GMAIL_INGEST_LOOKBACK_MS).toBe(86400000);
-    expect(env.SUPPLIER_CODE).toBe("juno-wholesale");
     expect(env.JUNO_LIVE_ENQUEUE_ON_INGEST).toBe(true);
     expect(env.JUNO_LOGIN_EMAIL).toBe("catalog@example.com");
     expect(env.JUNO_LOGIN_PASSWORD).toBe("secret");
@@ -158,15 +140,6 @@ describe("loadRuntimeEnv", () => {
       loadRuntimeEnv({
         ...configuredEnv,
         JUNO_BROWSER_HEADLESS: "yes",
-      }),
-    ).toThrow();
-  });
-
-  it("rejects invalid delegated users", () => {
-    expect(() =>
-      loadRuntimeEnv({
-        ...configuredEnv,
-        GOOGLE_WORKSPACE_DELEGATED_USER: "not-an-email",
       }),
     ).toThrow();
   });

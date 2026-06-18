@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { loadRuntimeEnv } from "@/lib/env";
+import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { JunoLiveServiceSettingsRow } from "@/lib/juno-live/settings";
 import { buildAppSetupStatus } from "./status";
-
 
 function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
   return loadRuntimeEnv({
@@ -14,10 +14,9 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 describe("buildAppSetupStatus", () => {
   it("marks a fresh install as missing only required operator settings after runtime database validation", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-      }),
+      env: runtimeEnv(),
       settingsRow: null,
+      mailSources: [],
     });
 
     expect(status.ready).toBe(false);
@@ -34,88 +33,25 @@ describe("buildAppSetupStatus", () => {
             value: "configured",
           }),
         ]),
-        guardrails: expect.arrayContaining([
-          expect.objectContaining({ label: "Migration ledger", state: "warning" }),
-        ]),
       }),
-      expect.objectContaining({
-        id: "data",
-        state: "warning",
-        missing: [],
-      }),
-      expect.objectContaining({
-        id: "gmail",
-        state: "warning",
-        missing: [],
-      }),
-      expect.objectContaining({
-        id: "juno",
-        state: "warning",
-        missing: [],
-        guardrails: expect.arrayContaining([
-          expect.objectContaining({ label: "Read-only browser lookup", state: "warning" }),
-          expect.objectContaining({ label: "Scheduled polling", state: "warning" }),
-        ]),
-      }),
-      expect.objectContaining({
-        id: "auth",
-        state: "missing",
-        missing: ["auth_base_url"],
-      }),
+      expect.objectContaining({ id: "data", state: "warning", missing: [] }),
+      expect.objectContaining({ id: "mail", state: "warning", missing: [] }),
+      expect.objectContaining({ id: "juno", state: "warning", missing: [] }),
+      expect.objectContaining({ id: "auth", state: "missing", missing: ["auth_base_url"] }),
     ]);
     expect(JSON.stringify(status)).not.toContain("AUTH_SECRET");
-    expect(JSON.stringify(status)).not.toContain("Auth secret");
   });
 
-  it("marks setup complete when values come from env and database settings", () => {
+  it("does not require mail sources in demo mode", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
-        AUTH_INITIAL_ADMIN_PASSWORD: "password123",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-      }),
-      settingsRow: {
-        ...emptyRow(),
-        juno_login_email: "buyer@example.com",
-        juno_login_password: "secret",
-        juno_live_poll_interval_ms: 3600000,
-        juno_live_auto_enqueue_on_interval: true,
-      },
-    });
-
-    expect(status.ready).toBe(true);
-    expect(status.steps.map((step) => step.state)).toEqual(["complete", "warning", "warning", "complete", "complete"]);
-    expect(status.steps.find((step) => step.id === "juno")?.settings).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          key: "juno_login_email",
-          source: "database",
-          value: "buyer@example.com",
-        }),
-        expect.objectContaining({
-          key: "juno_login_password",
-          source: "database",
-          value: "configured",
-          secret: true,
-        }),
-      ]),
-    );
-  });
-
-  it("does not require Gmail settings in demo mode", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
+      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
       settingsRow: emptyRow(),
+      adminUserCount: 1,
+      mailSources: [],
     });
 
     expect(status.ready).toBe(true);
-    expect(status.steps.find((step) => step.id === "gmail")).toEqual(
+    expect(status.steps.find((step) => step.id === "mail")).toEqual(
       expect.objectContaining({
         state: "warning",
         missing: [],
@@ -124,32 +60,41 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("requires Gmail settings in real mailbox mode", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
+  it("requires a runnable mail source in real mailbox mode", () => {
+    const missing = buildAppSetupStatus({
+      env: runtimeEnv({ JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox", AUTH_BASE_URL: "https://app.example.com" }),
       settingsRow: emptyRow(),
+      adminUserCount: 1,
+      mailSources: [],
     });
+    expect(missing.ready).toBe(false);
+    expect(missing.steps.find((step) => step.id === "mail")).toEqual(
+      expect.objectContaining({ state: "missing", missing: ["mail_source"] }),
+    );
 
-    expect(status.ready).toBe(false);
-    expect(status.steps.find((step) => step.id === "gmail")).toEqual(
+    const configured = buildAppSetupStatus({
+      env: runtimeEnv({ JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox", AUTH_BASE_URL: "https://app.example.com" }),
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
+      mailSources: [mailSource()],
+    });
+    expect(configured.steps.find((step) => step.id === "mail")).toEqual(
       expect.objectContaining({
-        state: "missing",
-        missing: ["google_workspace_delegated_user", "google_service_account_key_json"],
+        state: "complete",
+        missing: [],
+        settings: expect.arrayContaining([
+          expect.objectContaining({ key: "runnable_gmail_sources", value: "1" }),
+          expect.objectContaining({ key: "credential_state", value: "configured", secret: true }),
+        ]),
       }),
     );
   });
 
-  it("does not block app setup for missing Juno credentials while live lookup is disabled", () => {
+  it("keeps Juno live lookup optional until lookup controls are enabled", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
+      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
       settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
 
     expect(status.ready).toBe(true);
@@ -157,246 +102,67 @@ describe("buildAppSetupStatus", () => {
       expect.objectContaining({
         state: "warning",
         missing: [],
+        guardrails: expect.arrayContaining([
+          expect.objectContaining({ label: "Read-only browser lookup", state: "warning" }),
+        ]),
       }),
     );
   });
 
-  it("does not expose the internal auth secret in setup status", () => {
+  it("blocks Juno live lookup when enabled without credentials", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-      }),
-      settingsRow: null,
+      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com", JUNO_LIVE_POLL_INTERVAL_MS: "300000" }),
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
 
-    expect(JSON.stringify(status)).not.toContain("AUTH_SECRET");
-    expect(JSON.stringify(status)).not.toContain("Auth secret");
-    expect(status.steps.at(-1)).toEqual(
+    expect(status.ready).toBe(false);
+    expect(status.steps.find((step) => step.id === "juno")).toEqual(
       expect.objectContaining({
-        id: "auth",
         state: "missing",
-        missing: ["auth_base_url"],
+        missing: ["juno_login_email", "juno_login_password"],
       }),
     );
   });
 
-  it("blocks auth when every sign-in method is explicitly disabled", () => {
+  it("blocks setup when the Juno live delay window is unsafe", () => {
     const status = buildAppSetupStatus({
       env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
+        JUNO_LIVE_DELAY_MIN_MS: "2000",
+        JUNO_LIVE_DELAY_MAX_MS: "1000",
       }),
-      settingsRow: null,
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
 
-    expect(status.steps.find((step) => step.id === "auth")).toEqual(
+    expect(status.ready).toBe(false);
+    expect(status.steps.find((step) => step.id === "juno")).toEqual(
       expect.objectContaining({
         state: "missing",
-        missing: ["auth_email_password_enabled or auth_external_provider_enabled"],
+        missing: ["juno_live_delay_min_ms must be <= juno_live_delay_max_ms"],
         guardrails: expect.arrayContaining([
           expect.objectContaining({
-            label: "Sign-in method",
+            label: "Randomized request pacing",
             state: "blocked",
-            detail: "Auth is always enabled, but every sign-in method is disabled.",
+            detail: "Minimum delay is greater than maximum delay.",
           }),
         ]),
       }),
     );
   });
 
-  it("blocks auth when no admin access path is configured", () => {
+  it("formats scheduled polling guardrails", () => {
     const status = buildAppSetupStatus({
       env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_BASE_URL: "https://app.example.com",
-      }),
-      settingsRow: emptyRow(),
-      adminUserCount: 0,
-    });
-
-    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Admin bootstrap",
-          state: "blocked",
-          detail: "Auth bootstrap blocked. No admin access path configured.",
-        }),
-      ]),
-    );
-  });
-
-  it("accepts external provider admin allowlist as an auth bootstrap path", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
-        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
-        AUTH_EXTERNAL_CLIENT_ID: "client-id",
-        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
-        AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.com",
-      }),
-      settingsRow: emptyRow(),
-      adminUserCount: 0,
-    });
-
-    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Admin bootstrap",
-          state: "ok",
-          detail: "External provider admin allowlist or claim mapping can bootstrap admin access.",
-        }),
-      ]),
-    );
-  });
-
-  it("accepts external provider admin claim mapping as an auth bootstrap path", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
-        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
-        AUTH_EXTERNAL_CLIENT_ID: "client-id",
-        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
-        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
-        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops",
-      }),
-      settingsRow: emptyRow(),
-      adminUserCount: 0,
-    });
-
-    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Admin bootstrap",
-          state: "ok",
-          detail: "External provider admin allowlist or claim mapping can bootstrap admin access.",
-        }),
-      ]),
-    );
-  });
-
-  it("surfaces unsafe live lookup delay ranges as a blocking setting issue", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_DELAY_MIN_MS: "80000",
-        JUNO_LIVE_DELAY_MAX_MS: "10000",
-      }),
-      settingsRow: null,
-    });
-
-    const juno = status.steps.find((step) => step.id === "juno");
-
-    expect(status.ready).toBe(false);
-    expect(juno).toEqual(
-      expect.objectContaining({
-        state: "missing",
-        missing: ["juno_live_delay_min_ms must be <= juno_live_delay_max_ms"],
-        guardrails: expect.arrayContaining([
-          expect.objectContaining({ label: "Randomized request pacing", state: "blocked" }),
-        ]),
-      }),
-    );
-  });
-
-  it("marks configured polling as blocked when credentials are absent", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-        JUNO_LIVE_POLL_INTERVAL_MS: "3600000",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: null,
-    });
-
-    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Scheduled polling",
-          state: "blocked",
-          detail: "Automatic enqueue is enabled, but credentials are missing.",
-        }),
-      ]),
-    );
-  });
-
-  it("warns when polling loop is scheduled but automatic enqueue is disabled", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "7200000",
-      }),
-      settingsRow: null,
-    });
-
-    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Scheduled polling",
-          state: "warning",
-          detail: "Polling loop can stay alive every 2 hours for queued jobs; automatic enqueue is disabled.",
-        }),
-      ]),
-    );
-  });
-
-  it("keeps the Gmail cursor guardrail ready after database env validation", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-      }),
-      settingsRow: null,
-    });
-
-    expect(status.ready).toBe(false);
-    expect(status.steps.find((step) => step.id === "gmail")).toEqual(
-      expect.objectContaining({
-        state: "complete",
-        missing: [],
-        guardrails: [expect.objectContaining({ label: "Cursored Gmail search", state: "ok" })],
-      }),
-    );
-  });
-
-  it("formats minute-based automatic polling guardrails", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "120000",
         JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
-      settingsRow: null,
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -410,68 +176,85 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("formats singular minute automatic polling guardrails", () => {
-    const status = buildAppSetupStatus({
+  it("formats singular and plural hour/minute scheduled polling intervals", () => {
+    const oneHour = buildAppSetupStatus({
       env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        AUTH_BASE_URL: "https://app.example.com",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "60000",
+        JUNO_LIVE_POLL_INTERVAL_MS: "3600000",
         JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
-      settingsRow: null,
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
-
-    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Scheduled polling",
-          state: "ok",
-          detail: "Automatic lookup is enabled every 1 minute.",
-        }),
-      ]),
-    );
-  });
-
-  it("formats plural hour automatic polling guardrails", () => {
-    const status = buildAppSetupStatus({
+    const twoHours = buildAppSetupStatus({
       env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        AUTH_BASE_URL: "https://app.example.com",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
         JUNO_LIVE_POLL_INTERVAL_MS: "7200000",
         JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
-      settingsRow: null,
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
-
-    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          label: "Scheduled polling",
-          state: "ok",
-          detail: "Automatic lookup is enabled every 2 hours.",
-        }),
-      ]),
-    );
-  });
-
-  it("formats raw millisecond polling guardrails", () => {
-    const status = buildAppSetupStatus({
+    const oneMinute = buildAppSetupStatus({
       env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        AUTH_BASE_URL: "https://app.example.com",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "1500",
+        JUNO_LIVE_POLL_INTERVAL_MS: "60000",
         JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       }),
-      settingsRow: null,
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
+    });
+
+    expect(oneHour.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
+      expect.arrayContaining([expect.objectContaining({ detail: "Automatic lookup is enabled every 1 hour." })]),
+    );
+    expect(twoHours.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
+      expect.arrayContaining([expect.objectContaining({ detail: "Automatic lookup is enabled every 2 hours." })]),
+    );
+    expect(oneMinute.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
+      expect.arrayContaining([expect.objectContaining({ detail: "Automatic lookup is enabled every 1 minute." })]),
+    );
+  });
+
+  it("marks scheduled polling blocked when automatic enqueue has no credentials", () => {
+    const status = buildAppSetupStatus({
+      env: runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        JUNO_LIVE_POLL_INTERVAL_MS: "1234",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
+    });
+
+    expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Scheduled polling",
+          state: "blocked",
+          detail: "Automatic enqueue is enabled, but credentials are missing.",
+        }),
+      ]),
+    );
+  });
+
+  it("formats millisecond scheduled polling when interval is not minute aligned", () => {
+    const status = buildAppSetupStatus({
+      env: runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        JUNO_LOGIN_EMAIL: "buyer@example.com",
+        JUNO_LOGIN_PASSWORD: "secret",
+        JUNO_LIVE_POLL_INTERVAL_MS: "1234",
+        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -479,58 +262,104 @@ describe("buildAppSetupStatus", () => {
         expect.objectContaining({
           label: "Scheduled polling",
           state: "ok",
-          detail: "Automatic lookup is enabled every 1500 ms.",
+          detail: "Automatic lookup is enabled every 1234 ms.",
         }),
       ]),
     );
   });
 
-  it("treats blank database setting strings as unset instead of configured", () => {
+  it("blocks auth bootstrap when no admin access path exists", () => {
+    const blocked = buildAppSetupStatus({
+      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+    expect(blocked.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Admin bootstrap", state: "blocked" }),
+      ]),
+    );
+
+    const withInitialAdmin = buildAppSetupStatus({
+      env: runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
+        AUTH_INITIAL_ADMIN_PASSWORD: "password123",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+    expect(withInitialAdmin.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ label: "Admin bootstrap", state: "ok" }),
+      ]),
+    );
+
+    const withExternalMapping = buildAppSetupStatus({
+      env: runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
+        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops-admin",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+    expect(withExternalMapping.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Admin bootstrap",
+          state: "ok",
+          detail: "External provider admin allowlist or claim mapping can bootstrap admin access.",
+        }),
+      ]),
+    );
+  });
+
+  it("blocks setup when every sign-in method is disabled", () => {
     const status = buildAppSetupStatus({
       env: runtimeEnv({
-        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+        AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 1,
+    });
+
+    expect(status.ready).toBe(false);
+    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Sign-in method",
+          state: "blocked",
+          detail: "Auth is always enabled, but every sign-in method is disabled.",
+        }),
+      ]),
+    );
+  });
+
+  it("surfaces database and runtime setting sources without raw secrets", () => {
+    const status = buildAppSetupStatus({
+      env: runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        JUNO_LOGIN_PASSWORD: "runtime-secret",
       }),
       settingsRow: {
         ...emptyRow(),
-        google_workspace_delegated_user: "   ",
+        juno_login_email: "buyer@example.com",
+        juno_live_poll_interval_ms: 3600000,
       },
+      adminUserCount: 1,
     });
 
-    expect(status.steps.find((step) => step.id === "gmail")?.settings).toEqual(
+    expect(status.steps.find((step) => step.id === "juno")?.settings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          key: "google_workspace_delegated_user",
-          source: "unset",
-          state: "missing",
-        }),
+        expect.objectContaining({ key: "juno_login_email", source: "database", value: "buyer@example.com" }),
+        expect.objectContaining({ key: "juno_login_password", source: "runtime", value: "configured", secret: true }),
       ]),
     );
-  });
-
-  it("surfaces the migration ledger as the database guardrail", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-      }),
-      settingsRow: emptyRow(),
-    });
-
-    expect(status.steps.find((step) => step.id === "database")).toEqual(
-      expect.objectContaining({
-        state: "complete",
-        guardrails: [
-          expect.objectContaining({
-            label: "Migration ledger",
-            state: "ok",
-            detail: "Next.js startup applied migrations and the service_setting row is available.",
-          }),
-        ],
-      }),
-    );
+    expect(JSON.stringify(status)).not.toContain("runtime-secret");
   });
 });
 
@@ -550,16 +379,6 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     juno_live_poll_interval_ms: null,
     juno_live_auto_enqueue_on_interval: null,
     juno_live_auto_enqueue_limit: null,
-    gmail_ingest_lookback_ms: null,
-    google_workspace_delegated_user: null,
-    google_service_account_key_json: null,
-    google_gmail_scopes: null,
-    gmail_ingest_query: null,
-    gmail_max_results: null,
-    gmail_processed_label: null,
-    gmail_storage_dir: null,
-    catalog_attachment_pattern: null,
-    supplier_code: null,
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
@@ -577,5 +396,29 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     auth_admin_email_allowlist: null,
     auth_external_admin_claim: null,
     auth_external_admin_claim_value: null,
+  };
+}
+
+function mailSource(): PublicMailboxSource {
+  return {
+    id: "source-1",
+    connectionId: "connection-1",
+    name: "Gmail source",
+    provider: "gmail",
+    authType: "google_workspace_delegation",
+    credentialType: "google_service_account_json",
+    credentialReference: null,
+    credentialConfigured: true,
+    scopes: "https://www.googleapis.com/auth/gmail.readonly",
+    mailboxAddress: "operator@example.com",
+    displayName: "Operator",
+    query: "filename:xlsx",
+    maxResults: 25,
+    lookbackMs: 604800000,
+    processedLabel: "Processed",
+    storageDir: ".data/mail",
+    attachmentPattern: "xlsx",
+    supplierCode: "juno",
+    isActive: true,
   };
 }

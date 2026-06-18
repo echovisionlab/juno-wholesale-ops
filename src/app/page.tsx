@@ -204,7 +204,7 @@ async function refreshDashboardState(
     notificationRulesPayload,
     notificationChannelsPayload,
   ] = await Promise.all([
-    fetchDashboardJson<{ state?: GmailIngestState }>("/api/ingest/status", "Gmail ingest status"),
+    fetchDashboardJson<{ state?: GmailIngestState }>("/api/ingest/status", "Mail ingest status"),
     fetchDashboardJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status", "Live lookup summary"),
     fetchDashboardJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker", "Live worker"),
     fetchDashboardJson<{ setup?: AppSetupStatus }>("/api/settings/status", "Setup status"),

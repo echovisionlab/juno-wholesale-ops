@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 7660a6c6d0af73df7341bcf99ad7167ccb8870280f5fb8d10363fd93b7a1cc22
+-- migration-manifest-sha256: 7dc8b5f31f075cdcf1c1997aa61e2f2c630a16f2344671317d6790bb1a7cdcc0
 --
 -- PostgreSQL database dump
 --
@@ -181,33 +181,6 @@ CREATE TABLE public.email_adapter (
 
 
 --
--- Name: gmail_ingest_state; Type: TABLE; Schema: public; Owner: -
---
-
-CREATE TABLE public.gmail_ingest_state (
-    id boolean DEFAULT true NOT NULL,
-    last_query text,
-    last_query_window_from timestamp with time zone,
-    last_query_window_to timestamp with time zone,
-    last_query_started_at timestamp with time zone,
-    last_query_finished_at timestamp with time zone,
-    last_query_status text,
-    last_query_error text,
-    last_query_message_count integer DEFAULT 0 NOT NULL,
-    last_query_attachment_count integer DEFAULT 0 NOT NULL,
-    last_successful_message_received_at timestamp with time zone,
-    last_ingested_snapshot_id uuid,
-    last_ingested_catalog_date date,
-    last_ingested_content_hash text,
-    updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT gmail_ingest_state_id_check CHECK (id),
-    CONSTRAINT gmail_ingest_state_last_query_attachment_count_check CHECK ((last_query_attachment_count >= 0)),
-    CONSTRAINT gmail_ingest_state_last_query_message_count_check CHECK ((last_query_message_count >= 0)),
-    CONSTRAINT gmail_ingest_state_last_query_status_check CHECK ((last_query_status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text])))
-);
-
-
---
 -- Name: juno_live_lookup_job; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -290,14 +263,86 @@ CREATE TABLE public.mail_attachment (
 
 
 --
+-- Name: mail_connection; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_connection (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    provider text NOT NULL,
+    auth_type text NOT NULL,
+    credential_type text NOT NULL,
+    credential_secret text,
+    credential_reference text,
+    config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT mail_connection_auth_type_check CHECK ((auth_type = ANY (ARRAY['google_workspace_delegation'::text, 'basic'::text, 'oauth2'::text, 'api_token'::text, 'none'::text]))),
+    CONSTRAINT mail_connection_credential_type_check CHECK ((credential_type = ANY (ARRAY['google_service_account_json'::text, 'password'::text, 'oauth_client_secret'::text, 'api_token'::text, 'none'::text]))),
+    CONSTRAINT mail_connection_gmail_credential_check CHECK (((provider <> 'gmail'::text) OR ((auth_type = 'google_workspace_delegation'::text) AND (credential_type = 'google_service_account_json'::text)))),
+    CONSTRAINT mail_connection_provider_check CHECK ((provider = ANY (ARRAY['gmail'::text, 'imap'::text, 'microsoft_graph'::text, 'generic'::text]))),
+    CONSTRAINT mail_connection_secret_or_reference_check CHECK (((credential_type = 'none'::text) OR (credential_secret IS NOT NULL) OR (credential_reference IS NOT NULL)))
+);
+
+
+--
+-- Name: mail_mailbox_ingest_state; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_mailbox_ingest_state (
+    mailbox_source_id uuid NOT NULL,
+    last_query text,
+    last_query_window_from timestamp with time zone,
+    last_query_window_to timestamp with time zone,
+    last_query_started_at timestamp with time zone,
+    last_query_finished_at timestamp with time zone,
+    last_query_status text,
+    last_query_error text,
+    last_query_message_count integer DEFAULT 0 NOT NULL,
+    last_query_attachment_count integer DEFAULT 0 NOT NULL,
+    last_successful_message_received_at timestamp with time zone,
+    last_ingested_snapshot_id uuid,
+    last_ingested_catalog_date date,
+    last_ingested_content_hash text,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT mail_mailbox_ingest_state_last_query_attachment_count_check CHECK ((last_query_attachment_count >= 0)),
+    CONSTRAINT mail_mailbox_ingest_state_last_query_message_count_check CHECK ((last_query_message_count >= 0)),
+    CONSTRAINT mail_mailbox_ingest_state_last_query_status_check CHECK ((last_query_status = ANY (ARRAY['running'::text, 'succeeded'::text, 'failed'::text])))
+);
+
+
+--
+-- Name: mail_mailbox_source; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.mail_mailbox_source (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    connection_id uuid NOT NULL,
+    mailbox_address text NOT NULL,
+    display_name text,
+    provider_mailbox_id text,
+    ingest_query text NOT NULL,
+    max_results integer DEFAULT 25 NOT NULL,
+    ingest_lookback_ms integer DEFAULT 604800000 NOT NULL,
+    processed_label text DEFAULT 'Wholesale Processed'::text NOT NULL,
+    storage_dir text DEFAULT '.data/mail-attachments'::text NOT NULL,
+    attachment_pattern text DEFAULT 'New Preorders|New Releases In Stock'::text NOT NULL,
+    supplier_code text DEFAULT 'juno'::text NOT NULL,
+    is_active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT mail_mailbox_source_ingest_lookback_ms_check CHECK ((ingest_lookback_ms > 0)),
+    CONSTRAINT mail_mailbox_source_max_results_check CHECK (((max_results > 0) AND (max_results <= 500)))
+);
+
+
+--
 -- Name: mail_message; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.mail_message (
     id uuid DEFAULT gen_random_uuid() NOT NULL,
-    gmail_user_email text NOT NULL,
-    gmail_message_id text NOT NULL,
-    gmail_thread_id text,
     rfc822_message_id text,
     subject text,
     from_address text,
@@ -305,7 +350,13 @@ CREATE TABLE public.mail_message (
     delivered_to text[] DEFAULT '{}'::text[] NOT NULL,
     received_at timestamp with time zone,
     first_seen_at timestamp with time zone DEFAULT now() NOT NULL,
-    payload jsonb NOT NULL
+    payload jsonb NOT NULL,
+    provider text NOT NULL,
+    mailbox_address text NOT NULL,
+    mailbox_source_id uuid,
+    provider_message_id text NOT NULL,
+    provider_thread_id text,
+    CONSTRAINT mail_message_provider_check CHECK ((provider = ANY (ARRAY['gmail'::text, 'imap'::text, 'microsoft_graph'::text, 'generic'::text])))
 );
 
 
@@ -440,18 +491,8 @@ CREATE TABLE public.service_setting (
     juno_live_max_attempts integer,
     juno_live_poll_interval_ms integer,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    gmail_ingest_lookback_ms integer,
     juno_live_auto_enqueue_on_interval boolean,
     juno_live_auto_enqueue_limit integer,
-    google_workspace_delegated_user text,
-    google_service_account_key_json text,
-    google_gmail_scopes text,
-    gmail_ingest_query text,
-    gmail_max_results integer,
-    gmail_processed_label text,
-    gmail_storage_dir text,
-    catalog_attachment_pattern text,
-    supplier_code text,
     auth_base_url text,
     auth_trusted_origins text,
     auth_email_password_enabled boolean,
@@ -474,8 +515,6 @@ CREATE TABLE public.service_setting (
     CONSTRAINT service_setting_auth_secret_length_check CHECK (((auth_secret IS NULL) OR (length(auth_secret) >= 32))),
     CONSTRAINT service_setting_auth_sign_in_method_check CHECK (((auth_email_password_enabled IS DISTINCT FROM false) OR (auth_external_provider_enabled IS TRUE))),
     CONSTRAINT service_setting_data_mode_check CHECK (((data_mode IS NULL) OR (data_mode = ANY (ARRAY['demo'::text, 'real_mailbox'::text])))),
-    CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
-    CONSTRAINT service_setting_gmail_max_results_check CHECK (((gmail_max_results > 0) AND (gmail_max_results <= 500))),
     CONSTRAINT service_setting_id_check CHECK (id),
     CONSTRAINT service_setting_juno_live_auto_enqueue_limit_check CHECK ((juno_live_auto_enqueue_limit > 0)),
     CONSTRAINT service_setting_juno_live_concurrency_check CHECK (((juno_live_concurrency >= 1) AND (juno_live_concurrency <= 10))),
@@ -669,14 +708,6 @@ ALTER TABLE ONLY public.email_adapter
 
 
 --
--- Name: gmail_ingest_state gmail_ingest_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gmail_ingest_state
-    ADD CONSTRAINT gmail_ingest_state_pkey PRIMARY KEY (id);
-
-
---
 -- Name: juno_live_lookup_job juno_live_lookup_job_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -717,11 +748,43 @@ ALTER TABLE ONLY public.mail_attachment
 
 
 --
--- Name: mail_message mail_message_gmail_user_email_gmail_message_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+-- Name: mail_connection mail_connection_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_connection
+    ADD CONSTRAINT mail_connection_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mail_mailbox_ingest_state mail_mailbox_ingest_state_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_ingest_state
+    ADD CONSTRAINT mail_mailbox_ingest_state_pkey PRIMARY KEY (mailbox_source_id);
+
+
+--
+-- Name: mail_mailbox_source mail_mailbox_source_connection_id_mailbox_address_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_source
+    ADD CONSTRAINT mail_mailbox_source_connection_id_mailbox_address_key UNIQUE (connection_id, mailbox_address);
+
+
+--
+-- Name: mail_mailbox_source mail_mailbox_source_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_source
+    ADD CONSTRAINT mail_mailbox_source_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mail_message mail_message_mailbox_provider_message_unique; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
 ALTER TABLE ONLY public.mail_message
-    ADD CONSTRAINT mail_message_gmail_user_email_gmail_message_id_key UNIQUE (gmail_user_email, gmail_message_id);
+    ADD CONSTRAINT mail_message_mailbox_provider_message_unique UNIQUE (provider, mailbox_address, provider_message_id);
 
 
 --
@@ -1016,6 +1079,20 @@ CREATE INDEX idx_mail_attachment_sha256 ON public.mail_attachment USING btree (s
 
 
 --
+-- Name: idx_mail_connection_active_provider; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mail_connection_active_provider ON public.mail_connection USING btree (is_active, provider, created_at);
+
+
+--
+-- Name: idx_mail_mailbox_source_active; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_mail_mailbox_source_active ON public.mail_mailbox_source USING btree (is_active, connection_id, created_at);
+
+
+--
 -- Name: idx_mail_message_received_at; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1205,14 +1282,6 @@ ALTER TABLE ONLY public.catalog_snapshot
 
 
 --
--- Name: gmail_ingest_state gmail_ingest_state_last_ingested_snapshot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
---
-
-ALTER TABLE ONLY public.gmail_ingest_state
-    ADD CONSTRAINT gmail_ingest_state_last_ingested_snapshot_id_fkey FOREIGN KEY (last_ingested_snapshot_id) REFERENCES public.catalog_snapshot(id) ON DELETE SET NULL;
-
-
---
 -- Name: juno_live_lookup_job juno_live_lookup_job_catalog_item_raw_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1258,6 +1327,38 @@ ALTER TABLE ONLY public.juno_live_observation
 
 ALTER TABLE ONLY public.mail_attachment
     ADD CONSTRAINT mail_attachment_message_id_fkey FOREIGN KEY (message_id) REFERENCES public.mail_message(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mail_mailbox_ingest_state mail_mailbox_ingest_state_last_ingested_snapshot_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_ingest_state
+    ADD CONSTRAINT mail_mailbox_ingest_state_last_ingested_snapshot_id_fkey FOREIGN KEY (last_ingested_snapshot_id) REFERENCES public.catalog_snapshot(id) ON DELETE SET NULL;
+
+
+--
+-- Name: mail_mailbox_ingest_state mail_mailbox_ingest_state_mailbox_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_ingest_state
+    ADD CONSTRAINT mail_mailbox_ingest_state_mailbox_source_id_fkey FOREIGN KEY (mailbox_source_id) REFERENCES public.mail_mailbox_source(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mail_mailbox_source mail_mailbox_source_connection_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_mailbox_source
+    ADD CONSTRAINT mail_mailbox_source_connection_id_fkey FOREIGN KEY (connection_id) REFERENCES public.mail_connection(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mail_message mail_message_mailbox_source_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.mail_message
+    ADD CONSTRAINT mail_message_mailbox_source_id_fkey FOREIGN KEY (mailbox_source_id) REFERENCES public.mail_mailbox_source(id) ON DELETE RESTRICT;
 
 
 --

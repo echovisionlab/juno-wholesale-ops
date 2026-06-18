@@ -30,9 +30,9 @@ describe("settings response and validation", () => {
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://database.example.test",
-        google_service_account_key_json: "raw-service-account-json",
       },
       nodeEnv: "development",
+      mailSources: [mailSource()],
     });
 
     expect(descriptor(response, "auth_base_url")).toMatchObject({
@@ -46,20 +46,11 @@ describe("settings response and validation", () => {
       value: null,
       secret: true,
     });
-    expect(descriptor(response, "google_service_account_key_json")).toMatchObject({
-      source: "database",
-      displayValue: "Database override configured",
-      value: null,
-      secret: true,
-    });
-    expect(descriptor(response, "google_gmail_scopes")).toMatchObject({
-      source: "default",
-      displayValue: "https://www.googleapis.com/auth/gmail.readonly",
-    });
     expect(descriptor(response, "juno_login_email")).toMatchObject({
       source: "unset",
       state: "disabled",
     });
+    expect(response.units.mail.status).toBe("ready");
     expect(JSON.stringify(response)).not.toContain("raw-service-account-json");
     expect(JSON.stringify(response)).not.toContain("runtime-password");
     expect(JSON.stringify(response)).not.toContain("AUTH_SECRET");
@@ -119,7 +110,7 @@ describe("settings response and validation", () => {
     expect(JSON.stringify(response)).not.toContain("runtime-client-secret");
   });
 
-  it("treats Gmail as optional in demo mode and required in real mailbox mode", () => {
+  it("treats mail sources as optional in demo mode and required in real mailbox mode", () => {
     const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
     });
@@ -131,10 +122,7 @@ describe("settings response and validation", () => {
       nodeEnv: "development",
     });
     expect(demo.dataMode.value).toBe("demo");
-    expect(descriptor(demo, "google_workspace_delegated_user")).toMatchObject({
-      state: "disabled",
-      required: false,
-    });
+    expect(demo.units.mail).toMatchObject({ status: "disabled", configured: false });
 
     const realMailbox = buildSettingsResponse({
       env,
@@ -143,10 +131,16 @@ describe("settings response and validation", () => {
       nodeEnv: "development",
     });
     expect(realMailbox.dataMode.value).toBe("real_mailbox");
-    expect(descriptor(realMailbox, "google_workspace_delegated_user")).toMatchObject({
-      state: "missing",
-      required: true,
+    expect(realMailbox.units.mail).toMatchObject({ status: "missing", configured: false });
+
+    const configured = buildSettingsResponse({
+      env,
+      rawEnv: {},
+      settingsRow: { ...emptySettingsRow(), data_mode: "real_mailbox" },
+      nodeEnv: "development",
+      mailSources: [mailSource()],
     });
+    expect(configured.units.mail).toMatchObject({ status: "ready", configured: true });
   });
 
   it("blocks auth bootstrap when no admin access path exists", () => {
@@ -329,7 +323,7 @@ describe("settings response and validation", () => {
     expect(
       validateSettingsPatch({
         input: {
-          gmail: { google_gmail_scopes: "https://www.googleapis.com/auth/gmail.modify" },
+          mail: { legacy_mail_setting: "not-supported" },
           juno: { juno_live_concurrency: 11, juno_live_poll_interval_ms: 0 },
         },
         currentRow: emptySettingsRow(),
@@ -339,10 +333,8 @@ describe("settings response and validation", () => {
       }),
     ).toMatchObject({
       ok: false,
-      warnings: expect.arrayContaining([
-        expect.objectContaining({ id: "gmail_modify_scope", severity: "warning" }),
-      ]),
       issues: expect.arrayContaining([
+        "legacy_mail_setting is not an editable setting",
         "juno_live_concurrency must be between 1 and 10",
         "juno_live_poll_interval_ms must be null or a positive integer",
       ]),
@@ -381,16 +373,6 @@ function emptySettingsRow(): ServiceSettingsRow {
     juno_live_poll_interval_ms: null,
     juno_live_auto_enqueue_on_interval: null,
     juno_live_auto_enqueue_limit: null,
-    gmail_ingest_lookback_ms: null,
-    google_workspace_delegated_user: null,
-    google_service_account_key_json: null,
-    google_gmail_scopes: null,
-    gmail_ingest_query: null,
-    gmail_max_results: null,
-    gmail_processed_label: null,
-    gmail_storage_dir: null,
-    catalog_attachment_pattern: null,
-    supplier_code: null,
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
@@ -409,5 +391,29 @@ function emptySettingsRow(): ServiceSettingsRow {
     auth_external_admin_claim: null,
     auth_external_admin_claim_value: null,
     updated_at: null,
+  };
+}
+
+function mailSource() {
+  return {
+    id: "source-1",
+    connectionId: "connection-1",
+    name: "Gmail source",
+    provider: "gmail" as const,
+    authType: "google_workspace_delegation" as const,
+    credentialType: "google_service_account_json" as const,
+    credentialReference: null,
+    credentialConfigured: true,
+    scopes: "https://www.googleapis.com/auth/gmail.readonly",
+    mailboxAddress: "operator@example.test",
+    displayName: "Operator",
+    query: "filename:xlsx",
+    maxResults: 25,
+    lookbackMs: 604800000,
+    processedLabel: "Processed",
+    storageDir: ".data/mail",
+    attachmentPattern: "xlsx",
+    supplierCode: "juno",
+    isActive: true,
   };
 }

@@ -7,11 +7,6 @@ import {
   type JunoLiveServiceSettingsRow,
 } from "./settings";
 
-const requiredEnv = {
-  GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/tmp/key.json",
-};
-
 function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
   return loadRuntimeEnv({
     DATABASE_URL: "postgres://user:pass@localhost:5432/app",
@@ -22,7 +17,6 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 describe("resolveJunoLiveSettings", () => {
   it("uses env values when the service settings row is empty", () => {
     const env = runtimeEnv({
-      ...requiredEnv,
       JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
       JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
@@ -46,7 +40,6 @@ describe("resolveJunoLiveSettings", () => {
       retryDelayMs: 300000,
       autoEnqueueOnInterval: false,
       autoEnqueueLimit: 1000,
-      gmailIngestLookbackMs: 604800000,
     });
     expect(shouldContinueAutomaticLookup(settings)).toBe(true);
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
@@ -54,7 +47,6 @@ describe("resolveJunoLiveSettings", () => {
 
   it("enables interval enqueue only when explicitly configured with credentials", () => {
     const env = runtimeEnv({
-      ...requiredEnv,
       JUNO_LOGIN_EMAIL: "catalog@example.com",
       JUNO_LOGIN_PASSWORD: "secret",
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
@@ -68,14 +60,12 @@ describe("resolveJunoLiveSettings", () => {
 
   it("lets database settings override env values", () => {
     const env = runtimeEnv({
-      ...requiredEnv,
       JUNO_LOGIN_EMAIL: "env@example.com",
       JUNO_LOGIN_PASSWORD: "env-secret",
       JUNO_LIVE_CONCURRENCY: "3",
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
       JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
       JUNO_LIVE_AUTO_ENQUEUE_LIMIT: "1000",
-      GMAIL_INGEST_LOOKBACK_MS: "604800000",
     });
 
     const settings = resolveJunoLiveSettings(env, {
@@ -93,7 +83,6 @@ describe("resolveJunoLiveSettings", () => {
       juno_live_poll_interval_ms: 600000,
       juno_live_auto_enqueue_on_interval: false,
       juno_live_auto_enqueue_limit: 25,
-      gmail_ingest_lookback_ms: 86400000,
     });
 
     expect(settings).toMatchObject({
@@ -111,13 +100,12 @@ describe("resolveJunoLiveSettings", () => {
       retryDelayMs: 600000,
       autoEnqueueOnInterval: false,
       autoEnqueueLimit: 25,
-      gmailIngestLookbackMs: 86400000,
     });
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
   });
 
   it("disables automatic polling when both database and env omit the interval", () => {
-    const env = runtimeEnv(requiredEnv);
+    const env = runtimeEnv();
     const settings = resolveJunoLiveSettings(env, null);
 
     expect(settings.pollIntervalMs).toBeNull();
@@ -128,7 +116,6 @@ describe("resolveJunoLiveSettings", () => {
 
   it("requires credentials for automatic interval enqueue", () => {
     const env = runtimeEnv({
-      ...requiredEnv,
       JUNO_LIVE_POLL_INTERVAL_MS: "300000",
     });
     const settings = resolveJunoLiveSettings(env, null);
@@ -154,16 +141,6 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     juno_live_poll_interval_ms: null,
     juno_live_auto_enqueue_on_interval: null,
     juno_live_auto_enqueue_limit: null,
-    gmail_ingest_lookback_ms: null,
-    google_workspace_delegated_user: null,
-    google_service_account_key_json: null,
-    google_gmail_scopes: null,
-    gmail_ingest_query: null,
-    gmail_max_results: null,
-    gmail_processed_label: null,
-    gmail_storage_dir: null,
-    catalog_attachment_pattern: null,
-    supplier_code: null,
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,

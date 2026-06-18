@@ -206,7 +206,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
               </Text>
               <Title order={1}>Settings Center</Title>
               <Text c="dimmed">
-                Read-only: no cart, no ordering, no checkout. Runtime env is fallback/bootstrap; saved operator settings live in the database row.
+                Read-only observation only. Runtime env is bootstrap only for infrastructure; operator settings and mail sources live in the database.
               </Text>
             </Stack>
             <Button component="a" href="/" variant="light">
@@ -242,7 +242,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                 <Tabs.List>
                   <Tabs.Tab value="overview">Overview</Tabs.Tab>
                   <Tabs.Tab value="auth">Auth</Tabs.Tab>
-                  <Tabs.Tab value="gmail">Gmail Ingest</Tabs.Tab>
+                  <Tabs.Tab value="mail">Mail Sources</Tabs.Tab>
                   <Tabs.Tab value="juno">Juno Live</Tabs.Tab>
                   <Tabs.Tab value="notifications">Notifications</Tabs.Tab>
                   <Tabs.Tab value="advanced">Advanced</Tabs.Tab>
@@ -265,11 +265,12 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                   </SimpleGrid>
                 </Tabs.Panel>
 
-                {(["auth", "gmail", "juno", "notifications", "advanced"] as const).map((groupId) => (
+                {(["auth", "mail", "juno", "notifications", "advanced"] as const).map((groupId) => (
                   <Tabs.Panel key={groupId} value={groupId} pt="md">
                     {groupsById[groupId] ? (
                       <Stack gap="md">
                         {groupId === "auth" ? <AuthProviderCard settings={settings} /> : null}
+                        {groupId === "mail" ? <MailSourcesCard settings={settings} /> : null}
                         <SettingsGroupCard
                           group={groupsById[groupId]}
                           draft={draft}
@@ -312,7 +313,7 @@ function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
       <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
       <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
-      <StatusCard icon={Settings} label="DB overrides" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} runtime fallback values`} />
+      <StatusCard icon={Settings} label="DB overrides" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} bootstrap runtime values`} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </SimpleGrid>
   );
@@ -383,7 +384,7 @@ function DiagnosticsPanel({ deploymentMode, pending, result, onRun }: {
         </Group>
         <Group gap="xs">
           <Button size="xs" loading={pending === "test-gmail"} onClick={() => onRun("test-gmail")}>
-            Test Gmail
+            Test Mail Source
           </Button>
           <Button size="xs" variant="light" loading={pending === "test-juno-session"} onClick={() => onRun("test-juno-session")}>
             Test Juno session
@@ -401,7 +402,7 @@ function DiagnosticsPanel({ deploymentMode, pending, result, onRun }: {
           <Code block>{JSON.stringify(result, null, 2)}</Code>
         ) : (
           <Text size="sm" c="dimmed">
-            Actions never place catalog rows into cart, wishlist, checkout, or ordering flows.
+            Diagnostics only observe configuration and catalog state; they do not mutate supplier accounts.
           </Text>
         )}
       </Stack>
@@ -482,6 +483,79 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
   );
 }
 
+function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
+  const sources = settings.mailSources;
+  return (
+    <Card>
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4}>
+            <Text fw={700}>Mail Sources</Text>
+            <Text size="sm" c="dimmed">
+              Multiple mailboxes are represented as separate source records. Gmail uses Google Workspace delegation with a JSON service account credential; other provider adapters are configuration-only until implemented.
+            </Text>
+          </Stack>
+          <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
+            {settings.units.mail.status}
+          </Badge>
+        </Group>
+
+        {sources.length === 0 ? (
+          <Alert color={settings.dataMode.value === "real_mailbox" ? "red" : "blue"} title="No mail sources configured">
+            Real mailbox mode requires an active Gmail mail source. Demo mode can run without external mail.
+          </Alert>
+        ) : (
+          <Table.ScrollContainer minWidth={840}>
+            <Table>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Mailbox</Table.Th>
+                  <Table.Th>Provider</Table.Th>
+                  <Table.Th>Auth</Table.Th>
+                  <Table.Th>Credential</Table.Th>
+                  <Table.Th>Query</Table.Th>
+                  <Table.Th>Storage</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {sources.map((source) => (
+                  <Table.Tr key={source.id}>
+                    <Table.Td>
+                      <Text fw={600}>{source.displayName ?? source.mailboxAddress}</Text>
+                      <Text size="xs" c="dimmed">{source.mailboxAddress}</Text>
+                    </Table.Td>
+                    <Table.Td>{source.provider}</Table.Td>
+                    <Table.Td>{source.authType}</Table.Td>
+                    <Table.Td>
+                      <Badge color={source.credentialConfigured ? "green" : "red"} variant="light" size="xs">
+                        {source.credentialConfigured ? "configured" : "missing"}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td maw={260}>
+                      <Text size="sm" lineClamp={2}>{source.query}</Text>
+                    </Table.Td>
+                    <Table.Td>{source.storageDir}</Table.Td>
+                    <Table.Td>
+                      <Badge color={source.isActive ? "green" : "gray"} variant="light" size="xs">
+                        {source.isActive ? "active" : "inactive"}
+                      </Badge>
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
+
+        <Text size="sm" c="dimmed">
+          {settings.units.mail.detail}
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
 function SignalFact({ label, value }: { label: string; value: string }) {
   return (
     <Box>
@@ -509,7 +583,7 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
         <Stack gap={4}>
           <Text fw={700}>{group.label}</Text>
           <Text size="sm" c="dimmed">
-            Source badges show database overrides, runtime fallback, schema defaults, or unset values.
+            Source badges show database overrides, bootstrap runtime values, schema defaults, or unset values.
           </Text>
         </Stack>
         <Badge color={groupStateColor(group.state)} variant="light">

@@ -11,17 +11,19 @@ import {
   type GmailMessage,
 } from "@/lib/ingest/gmail";
 import { buildGmailIngestQueryPlan } from "@/lib/ingest/gmail-query";
-import { getDelegatedAccessToken, loadServiceAccountKey } from "@/lib/ingest/google-auth";
+import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
 import { parseJunoCatalog } from "@/lib/ingest/juno-parser";
 import {
-  getGmailIngestState,
+  getMailboxIngestState,
   recordCatalogAttachment,
   recordGmailIngestFinished,
   recordGmailIngestStarted,
 } from "@/lib/ingest/repository";
 import {
-  assertRunnableGmailIngestSettings,
-  resolveGmailIngestSettings,
+  assertRunnableGmailMailboxSource,
+  getRunnableGmailSources,
+  listActiveMailboxSources,
+  type RunnableGmailMailboxSource,
 } from "@/lib/ingest/settings";
 import { processInsightsForSnapshot } from "@/lib/insights/repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
@@ -40,28 +42,99 @@ async function main() {
     writeMode
       ? resolveJunoLiveSettings(env, settingsRow)
       : resolveJunoLiveSettings(env, null);
-  const gmailSettings = resolveGmailIngestSettings(env, settingsRow);
-  assertRunnableGmailIngestSettings(gmailSettings);
-  if (labelMode && !hasGmailModifyScope(gmailSettings.scopes)) {
-    throw new Error(`Gmail label mode requires ${GOOGLE_GMAIL_MODIFY_SCOPE}`);
+
+  const sources = await listActiveMailboxSources(databaseUrl);
+  const gmailSources = getRunnableGmailSources(sources);
+  if (sources.length === 0) {
+    throw new Error("No active mail sources are configured. Create a Gmail mailbox source before running ingest.");
   }
-  const ingestState = writeMode ? await getGmailIngestState(databaseUrl) : null;
+  if (gmailSources.length === 0) {
+    throw new Error("No runnable Gmail mailbox sources are configured. Other mail providers are not implemented yet.");
+  }
+
+  const sourceResults: SourceRunResult[] = [];
+  for (const source of gmailSources) {
+    assertRunnableGmailMailboxSource(source);
+    if (labelMode && !hasGmailModifyScope(source.scopes)) {
+      throw new Error(`Gmail label mode for ${source.mailboxAddress} requires ${GOOGLE_GMAIL_MODIFY_SCOPE}`);
+    }
+    sourceResults.push(await processSource({
+      databaseUrl,
+      source,
+      writeMode,
+      labelMode,
+      liveSettings,
+    }));
+  }
+
+  console.log(
+    JSON.stringify(
+      {
+        dryRun: !writeMode,
+        labelMode,
+        sourceCount: gmailSources.length,
+        totals: totalResults(sourceResults),
+        sources: sourceResults,
+      },
+      null,
+      2,
+    ),
+  );
+}
+
+type SourceRunResult = {
+  sourceId: string;
+  mailboxAddress: string;
+  query: string;
+  queryWindowFrom: string | null;
+  queryWindowTo: string;
+  incrementalQuery: boolean;
+  attachmentPattern: string;
+  messages: number;
+  attachments: number;
+  parsedRows: number;
+  duplicateSnapshots: number;
+  duplicateContent: number;
+  liveLookupJobs: number;
+  insights: {
+    identityUpserts: number;
+    watchMatches: number;
+    signals: number;
+  };
+  lastSuccessfulMessageReceivedAt: string | null;
+  lastIngestedSnapshotId: string | null;
+  lastIngestedCatalogDate: string | null;
+  lastIngestedContentHash: string | null;
+  results: Array<Record<string, unknown>>;
+};
+
+async function processSource(options: {
+  databaseUrl: string;
+  source: RunnableGmailMailboxSource;
+  writeMode: boolean;
+  labelMode: boolean;
+  liveSettings: ReturnType<typeof resolveJunoLiveSettings>;
+}): Promise<SourceRunResult> {
+  const ingestState = options.writeMode
+    ? await getMailboxIngestState(options.databaseUrl, options.source.id)
+    : null;
   const queryPlan = buildGmailIngestQueryPlan({
-    baseQuery: gmailSettings.query,
+    baseQuery: options.source.query,
     lastSuccessfulMessageReceivedAt: ingestState?.lastSuccessfulMessageReceivedAt,
-    lookbackMs: gmailSettings.lookbackMs,
+    lookbackMs: options.source.lookbackMs,
   });
 
-  if (writeMode) {
+  if (options.writeMode) {
     await recordGmailIngestStarted({
-      databaseUrl,
+      databaseUrl: options.databaseUrl,
+      mailboxSourceId: options.source.id,
       query: queryPlan.query,
       windowFrom: queryPlan.windowFrom,
       windowTo: queryPlan.windowTo,
     });
   }
 
-  const attachmentPattern = new RegExp(gmailSettings.attachmentPattern, "i");
+  const attachmentPattern = new RegExp(options.source.attachmentPattern, "i");
   let messages: Awaited<ReturnType<GmailClient["listMessages"]>> = [];
   let attachmentCount = 0;
   let parsedRows = 0;
@@ -78,15 +151,15 @@ async function main() {
   const results: Array<Record<string, unknown>> = [];
 
   try {
-    const key = await loadServiceAccountKey(gmailSettings.serviceAccountKeyJson);
+    const key = parseServiceAccountKeyJson(options.source.credentialSecret);
     const accessToken = await getDelegatedAccessToken({
       key,
-      subject: gmailSettings.delegatedUser,
-      scopes: parseScopes(gmailSettings.scopes),
+      subject: options.source.mailboxAddress,
+      scopes: parseScopes(options.source.scopes),
     });
-    const gmail = new GmailClient(gmailSettings.delegatedUser, accessToken);
-    messages = await gmail.listMessages(queryPlan.query, gmailSettings.maxResults);
-    const processedLabelId = labelMode ? await gmail.getOrCreateLabel(gmailSettings.processedLabel) : null;
+    const gmail = new GmailClient(options.source.mailboxAddress, accessToken);
+    messages = await gmail.listMessages(queryPlan.query, options.source.maxResults);
+    const processedLabelId = options.labelMode ? await gmail.getOrCreateLabel(options.source.processedLabel) : null;
 
     for (const messageRef of messages) {
       const message = await gmail.getMessage(messageRef.id);
@@ -110,17 +183,17 @@ async function main() {
         }
 
         const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-        const storageUri = await saveAttachment(gmailSettings.storageDir, sha256, attachment.filename, bytes);
+        const storageUri = await saveAttachment(options.source.storageDir, sha256, attachment.filename, bytes);
         const catalog = await parseJunoCatalog(bytes, attachment.filename);
         attachmentCount += 1;
         parsedRows += catalog.rowCount;
 
         let dbResult: Record<string, unknown> | null = null;
-        if (writeMode) {
+        if (options.writeMode) {
           dbResult = await recordCatalogAttachment({
-            databaseUrl,
-            supplierCode: gmailSettings.supplierCode,
-            message: buildMessageRecord(gmailSettings.delegatedUser, message),
+            databaseUrl: options.databaseUrl,
+            supplierCode: options.source.supplierCode,
+            message: buildMessageRecord(options.source, message),
             attachment: {
               filename: attachment.filename,
               mimeType: attachment.mimeType,
@@ -142,7 +215,7 @@ async function main() {
             lastIngestedContentHash = catalog.contentHash;
 
             const insightsResult = await processInsightsForSnapshot({
-              databaseUrl,
+              databaseUrl: options.databaseUrl,
               snapshotId: dbResult.snapshotId,
             });
             insightIdentityUpserts += insightsResult.identityUpserts;
@@ -153,11 +226,11 @@ async function main() {
               insights: insightsResult,
             };
           }
-          if (liveSettings.enqueueOnIngest && !dbResult.duplicateContent && typeof dbResult.snapshotId === "string") {
+          if (options.liveSettings.enqueueOnIngest && !dbResult.duplicateContent && typeof dbResult.snapshotId === "string") {
             const enqueueResult = await enqueueLiveLookupJobs({
-              databaseUrl,
+              databaseUrl: options.databaseUrl,
               snapshotId: dbResult.snapshotId,
-              maxAttempts: liveSettings.maxAttempts,
+              maxAttempts: options.liveSettings.maxAttempts,
             });
             liveLookupJobs += enqueueResult.enqueued;
             dbResult = { ...dbResult, liveLookupJobs: enqueueResult.enqueued };
@@ -184,9 +257,10 @@ async function main() {
       }
     }
 
-    if (writeMode) {
+    if (options.writeMode) {
       await recordGmailIngestFinished({
-        databaseUrl,
+        databaseUrl: options.databaseUrl,
+        mailboxSourceId: options.source.id,
         status: "succeeded",
         error: null,
         messageCount: messages.length,
@@ -197,42 +271,11 @@ async function main() {
         lastIngestedContentHash,
       });
     }
-
-    console.log(
-      JSON.stringify(
-        {
-          dryRun: !writeMode,
-          labelMode,
-          query: queryPlan.query,
-          queryWindowFrom: queryPlan.windowFrom,
-          queryWindowTo: queryPlan.windowTo,
-          incrementalQuery: queryPlan.incremental,
-          attachmentPattern: gmailSettings.attachmentPattern,
-          messages: messages.length,
-          attachments: attachmentCount,
-          parsedRows,
-          duplicateSnapshots,
-          duplicateContent,
-          liveLookupJobs,
-          insights: {
-            identityUpserts: insightIdentityUpserts,
-            watchMatches: insightWatchMatches,
-            signals: insightSignals,
-          },
-          lastSuccessfulMessageReceivedAt,
-          lastIngestedSnapshotId,
-          lastIngestedCatalogDate,
-          lastIngestedContentHash,
-          results,
-        },
-        null,
-        2,
-      ),
-    );
   } catch (error) {
-    if (writeMode) {
+    if (options.writeMode) {
       await recordGmailIngestFinished({
-        databaseUrl,
+        databaseUrl: options.databaseUrl,
+        mailboxSourceId: options.source.id,
         status: "failed",
         error: error instanceof Error ? error.message : String(error),
         messageCount: messages.length,
@@ -245,6 +288,32 @@ async function main() {
     }
     throw error;
   }
+
+  return {
+    sourceId: options.source.id,
+    mailboxAddress: options.source.mailboxAddress,
+    query: queryPlan.query,
+    queryWindowFrom: queryPlan.windowFrom,
+    queryWindowTo: queryPlan.windowTo,
+    incrementalQuery: queryPlan.incremental,
+    attachmentPattern: options.source.attachmentPattern,
+    messages: messages.length,
+    attachments: attachmentCount,
+    parsedRows,
+    duplicateSnapshots,
+    duplicateContent,
+    liveLookupJobs,
+    insights: {
+      identityUpserts: insightIdentityUpserts,
+      watchMatches: insightWatchMatches,
+      signals: insightSignals,
+    },
+    lastSuccessfulMessageReceivedAt,
+    lastIngestedSnapshotId,
+    lastIngestedCatalogDate,
+    lastIngestedContentHash,
+    results,
+  };
 }
 
 main().catch((error: unknown) => {
@@ -270,12 +339,14 @@ async function saveAttachment(
   return filePath;
 }
 
-function buildMessageRecord(userEmail: string, message: GmailMessage) {
+function buildMessageRecord(source: RunnableGmailMailboxSource, message: GmailMessage) {
   const internalDate = message.internalDate ? Number(message.internalDate) : null;
   return {
-    userEmail,
-    gmailMessageId: message.id,
-    gmailThreadId: message.threadId ?? null,
+    provider: "gmail" as const,
+    mailboxAddress: source.mailboxAddress,
+    mailboxSourceId: source.id,
+    providerMessageId: message.id,
+    providerThreadId: message.threadId ?? null,
     rfc822MessageId: getHeader(message, "Message-ID") ?? null,
     subject: getHeader(message, "Subject") ?? null,
     fromAddress: getHeader(message, "From") ?? null,
@@ -284,6 +355,37 @@ function buildMessageRecord(userEmail: string, message: GmailMessage) {
     receivedAt: internalDate ? new Date(internalDate).toISOString() : null,
     payload: message,
   };
+}
+
+function totalResults(results: SourceRunResult[]) {
+  return results.reduce(
+    (totals, result) => ({
+      messages: totals.messages + result.messages,
+      attachments: totals.attachments + result.attachments,
+      parsedRows: totals.parsedRows + result.parsedRows,
+      duplicateSnapshots: totals.duplicateSnapshots + result.duplicateSnapshots,
+      duplicateContent: totals.duplicateContent + result.duplicateContent,
+      liveLookupJobs: totals.liveLookupJobs + result.liveLookupJobs,
+      insights: {
+        identityUpserts: totals.insights.identityUpserts + result.insights.identityUpserts,
+        watchMatches: totals.insights.watchMatches + result.insights.watchMatches,
+        signals: totals.insights.signals + result.insights.signals,
+      },
+    }),
+    {
+      messages: 0,
+      attachments: 0,
+      parsedRows: 0,
+      duplicateSnapshots: 0,
+      duplicateContent: 0,
+      liveLookupJobs: 0,
+      insights: {
+        identityUpserts: 0,
+        watchMatches: 0,
+        signals: 0,
+      },
+    },
+  );
 }
 
 function getMessageReceivedAt(message: GmailMessage): string | null {

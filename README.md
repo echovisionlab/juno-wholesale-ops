@@ -16,7 +16,7 @@ with read-only live observations, and surfacing observed signals for operators.
 ## What it is
 
 This project is read-only catalog intelligence for self-hosted operators. It
-collects catalog attachments from a configured Gmail mailbox, parses the XLSX
+collects catalog attachments from configured mailbox sources, parses the XLSX
 rows, deduplicates snapshots, stores raw catalog data, and shows watch hits,
 catalog trends, movement signals, operator digest data, and read-only
 notifications.
@@ -38,8 +38,8 @@ are intentionally out of scope for this release.
 
 ## Features
 
-- Gmail XLSX ingestion through Google Workspace service account delegation.
-- Duplicate protection by Gmail message id, RFC822 id, attachment SHA-256, and
+- Gmail XLSX ingestion through DB-backed mailbox source records.
+- Duplicate protection by provider message id, RFC822 id, attachment SHA-256, and
   catalog content hash.
 - Append-only Postgres migrations with generated schema drift checks.
 - Catalog item identity normalization and watch rule matching.
@@ -66,7 +66,7 @@ The short version:
 ## Architecture
 
 ```text
-Gmail mailbox
+Mailbox source
   -> XLSX attachment archive outside git
   -> Juno XLSX parser
   -> Postgres catalog snapshots
@@ -168,15 +168,14 @@ Important values:
 - `JUNO_WHOLESALE_OPS_DATA_MODE`
 - `AUTH_SECRET` optional runtime override for the internal Better Auth secret
 - `AUTH_BASE_URL` bootstrap fallback for the Settings Center Site address
-- `GOOGLE_WORKSPACE_DELEGATED_USER`
-- `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`
-- `GMAIL_INGEST_QUERY`
-- `GMAIL_STORAGE_DIR`
 - `JUNO_LOGIN_EMAIL`
 - `JUNO_LOGIN_PASSWORD`
 
-Settings resolve from env and the singleton `service_setting` row. Secret values
-are never shown in the dashboard; only configured/unset status is shown.
+Operator settings resolve from env and the singleton `service_setting` row
+where those settings explicitly support runtime bootstrap. Mail ingest
+configuration does not use env fallback or legacy Gmail settings. It lives in
+`mail_connection` and `mail_mailbox_source` records. Secret values are never
+shown in the dashboard; only configured/unset status is shown.
 
 The app Settings Center at `/settings` is the primary operator UX for runtime
 readiness, DB overrides, reset-to-runtime actions, and diagnostics. Resolution
@@ -194,16 +193,18 @@ app URL is the DB-primary `Site address` setting;
 always enabled. If `AUTH_SECRET` is absent, startup creates an internal random
 Better Auth secret in the database; it is not an operator-facing setting. At
 least one admin bootstrap path is still required. Secret fields such as
-service account references, Juno passwords, OIDC client secrets, and webhook
+mail source credentials, Juno passwords, OIDC client secrets, and webhook
 configuration are write-only and masked in API responses.
 
-## Gmail ingestion
+## Mail ingestion
 
-The default Gmail scope is read-only:
-
-```text
-GOOGLE_GMAIL_SCOPES=https://www.googleapis.com/auth/gmail.readonly
-```
+Mail ingestion uses configured mailbox sources. Multiple mailboxes are separate
+`mail_mailbox_source` records. Gmail sources require Google Workspace
+delegation and a JSON service account credential stored as a secret DB value.
+Pre-v1.0 releases do not keep compatibility shims for the older singleton Gmail
+settings model; configure each mailbox source explicitly in the Settings Center.
+Other provider rows can be represented for planning, but non-Gmail ingest
+adapters are not implemented in v0.1.x.
 
 Commands:
 
@@ -217,9 +218,9 @@ pnpm gmail:ingest:write
 raw catalog rows in Postgres, then runs insight processing only when a new
 snapshot is inserted.
 
-Raw XLSX attachments are stored in `GMAIL_STORAGE_DIR`, which defaults to a
-local `.data` path. Keep that directory out of git and include it in private
-backup planning.
+Raw XLSX attachments are stored in the mailbox source `storage_dir`, which is
+usually a local `.data` path. Keep that directory out of git and include it in
+private backup planning.
 
 ## Live stock observation
 

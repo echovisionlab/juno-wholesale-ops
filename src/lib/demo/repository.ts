@@ -18,6 +18,8 @@ import {
 
 const demoSupplierCode = "demo";
 const demoMessageUser = "demo.local";
+const demoMailConnectionId = "10000000-0000-4000-8000-000000009000";
+const demoMailboxSourceId = "10000000-0000-4000-8000-000000009001";
 export const demoNotificationChannelName = "Demo in-app notifications";
 const demoNotificationRuleName = "Demo read-only signal queue";
 export const demoResetConfirmFlag = "--confirm-demo-reset";
@@ -100,8 +102,10 @@ export async function seedDemoData(options: {
   assertSyntheticDemoCatalogFixtures(fixtures);
 
   await ensureDemoWatchRules(options.databaseUrl);
+  await ensureDemoMailSource(options.databaseUrl);
   await recordGmailIngestStarted({
     databaseUrl: options.databaseUrl,
+    mailboxSourceId: demoMailboxSourceId,
     query: "synthetic-demo-fixtures",
     windowFrom: null,
     windowTo: new Date().toISOString(),
@@ -134,6 +138,7 @@ export async function seedDemoData(options: {
 
   await recordGmailIngestFinished({
     databaseUrl: options.databaseUrl,
+    mailboxSourceId: demoMailboxSourceId,
     status: "succeeded",
     error: null,
     messageCount: fixtures.length,
@@ -197,6 +202,40 @@ async function ensureDemoWatchRules(databaseUrl: string): Promise<void> {
   }
 }
 
+async function ensureDemoMailSource(databaseUrl: string): Promise<void> {
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  try {
+    await pool.query(
+      `
+        INSERT INTO mail_connection (id, name, provider, auth_type, credential_type, is_active, config)
+        VALUES ($1, 'Synthetic demo mail source', 'generic', 'none', 'none', true, '{"demo":true}')
+        ON CONFLICT (id) DO NOTHING
+      `,
+      [demoMailConnectionId],
+    );
+    await pool.query(
+      `
+        INSERT INTO mail_mailbox_source (
+          id,
+          connection_id,
+          mailbox_address,
+          display_name,
+          ingest_query,
+          storage_dir,
+          attachment_pattern,
+          supplier_code,
+          is_active
+        )
+        VALUES ($1,$2,$3,'Synthetic demo mailbox','synthetic-demo-fixtures','.data/demo-mail-attachments','synthetic-demo', $4, true)
+        ON CONFLICT (id) DO NOTHING
+      `,
+      [demoMailboxSourceId, demoMailConnectionId, demoMessageUser, demoSupplierCode],
+    );
+  } finally {
+    await pool.end();
+  }
+}
+
 async function recordDemoFixture(databaseUrl: string, fixture: DemoCatalogFixture) {
   return recordCatalogAttachment({
     databaseUrl,
@@ -209,9 +248,11 @@ async function recordDemoFixture(databaseUrl: string, fixture: DemoCatalogFixtur
 function demoMessage(fixture: DemoCatalogFixture): MessageRecord {
   const messageId = `demo-${fixture.filename.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
   return {
-    userEmail: demoMessageUser,
-    gmailMessageId: messageId,
-    gmailThreadId: `thread-${messageId}`,
+    provider: "generic",
+    mailboxAddress: "synthetic-demo@example.invalid",
+    mailboxSourceId: demoMailboxSourceId,
+    providerMessageId: messageId,
+    providerThreadId: `thread-${messageId}`,
     rfc822MessageId: `<${messageId}>`,
     subject: `Synthetic demo catalog ${fixture.catalog.kind}`,
     fromAddress: "synthetic-demo-source",
@@ -428,9 +469,9 @@ async function deleteDemoRows(client: PoolClient): Promise<DemoResetResult> {
     DELETE FROM catalog_snapshot
     WHERE supplier_id IN (SELECT id FROM supplier WHERE code = $1)
   `, [demoSupplierCode]);
-  const mailMessagesDeleted = await deleteCount(client, "DELETE FROM mail_message WHERE gmail_user_email = $1", [
-    demoMessageUser,
-  ]);
+  const mailMessagesDeleted = await deleteCount(client, "DELETE FROM mail_message WHERE mailbox_source_id = $1", [demoMailboxSourceId]);
+  await client.query("DELETE FROM mail_mailbox_source WHERE id = $1", [demoMailboxSourceId]);
+  await client.query("DELETE FROM mail_connection WHERE id = $1", [demoMailConnectionId]);
   const suppliersDeleted = await deleteCount(client, "DELETE FROM supplier WHERE code = $1", [demoSupplierCode]);
 
   return {

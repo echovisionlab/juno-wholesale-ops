@@ -38,20 +38,6 @@ const serverEnvSchema = {
   AUTH_INITIAL_ADMIN_EMAIL: z.string().email().optional(),
   AUTH_INITIAL_ADMIN_PASSWORD: z.string().min(8).optional(),
   AUTH_INITIAL_ADMIN_NAME: z.string().min(1).default("Initial Admin"),
-  GOOGLE_WORKSPACE_DELEGATED_USER: z.string().email().optional(),
-  GOOGLE_SERVICE_ACCOUNT_KEY_JSON: z.string().min(1).optional(),
-  GOOGLE_GMAIL_SCOPES: z
-    .string()
-    .default(GOOGLE_GMAIL_READONLY_SCOPE),
-  GMAIL_INGEST_QUERY: z
-    .string()
-    .default("has:attachment filename:xlsx newer_than:30d"),
-  GMAIL_MAX_RESULTS: z.coerce.number().int().positive().max(500).default(25),
-  GMAIL_INGEST_LOOKBACK_MS: z.coerce.number().int().positive().default(604800000),
-  GMAIL_PROCESSED_LABEL: z.string().min(1).default("Wholesale Processed"),
-  GMAIL_STORAGE_DIR: z.string().min(1).default(".data/mail-attachments"),
-  CATALOG_ATTACHMENT_PATTERN: z.string().min(1).default("New Preorders|New Releases In Stock"),
-  SUPPLIER_CODE: z.string().min(1).default("juno"),
   JUNO_LIVE_ENQUEUE_ON_INGEST: stringBoolean.default(false),
   JUNO_LOGIN_EMAIL: z.string().email().optional(),
   JUNO_LOGIN_PASSWORD: z.string().min(1).optional(),

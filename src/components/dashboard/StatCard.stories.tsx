@@ -8,7 +8,7 @@ const meta = {
   args: {
     label: "Mailbox",
     value: "Configured",
-    detail: "delegated Gmail access",
+    detail: "configured mail source access",
     icon: MailSearch,
   },
 } satisfies Meta<typeof StatCard>;

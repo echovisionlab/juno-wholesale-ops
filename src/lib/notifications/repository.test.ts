@@ -5,6 +5,7 @@ import { createWatchRule, processInsightsForSnapshot } from "@/lib/insights/repo
 import {
   resetApplicationTables,
   startMigratedPostgresTestDatabase,
+  testMailboxSourceId,
   type StartedPostgresTestDatabase,
 } from "@/test/postgres";
 import {
@@ -368,9 +369,11 @@ describe("notification repository", () => {
 
 function message(gmailMessageId: string): MessageRecord {
   return {
-    userEmail: "operator@example.com",
-    gmailMessageId,
-    gmailThreadId: null,
+    provider: "gmail",
+    mailboxAddress: "operator@example.com",
+    mailboxSourceId: testMailboxSourceId,
+    providerMessageId: gmailMessageId,
+    providerThreadId: null,
     rfc822MessageId: `<${gmailMessageId}@example.com>`,
     subject: "Daily Juno",
     fromAddress: "juno@example.com",
