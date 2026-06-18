@@ -134,6 +134,54 @@ describe("resolveAppAuthSettings", () => {
     expect(isAppAuthRunnable(settings)).toBe(false);
   });
 
+  it("keeps email/password auth runnable when an enabled external provider is incomplete", () => {
+    const settings = resolveAppAuthSettings(
+      runtimeEnv({
+        AUTH_SECRET: "a".repeat(32),
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "true",
+      }),
+      {
+        ...emptyRow(),
+        auth_external_provider_enabled: true,
+        auth_external_provider_id: "workspace",
+        auth_external_discovery_url: "not-a-url",
+        auth_external_client_id: "client-id",
+      },
+    );
+
+    expect(settings.externalProviderEnabled).toBe(true);
+    expect(settings.externalProvider).toMatchObject({
+      providerId: "workspace",
+      discoveryUrl: "not-a-url",
+      clientId: "client-id",
+      clientSecret: "",
+    });
+    expect(getMissingAppAuthSettings(settings)).toEqual([]);
+    expect(isAppAuthRunnable(settings)).toBe(true);
+  });
+
+  it("blocks auth when external provider is the only sign-in method and its discovery URL is malformed", () => {
+    const settings = resolveAppAuthSettings(
+      runtimeEnv({
+        AUTH_SECRET: "a".repeat(32),
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+      }),
+      {
+        ...emptyRow(),
+        auth_external_provider_enabled: true,
+        auth_external_provider_id: "workspace",
+        auth_external_discovery_url: "not-a-url",
+        auth_external_client_id: "client-id",
+        auth_external_client_secret: "client-secret",
+      },
+    );
+
+    expect(getMissingAppAuthSettings(settings)).toEqual(["auth_external_discovery_url"]);
+    expect(isAppAuthRunnable(settings)).toBe(false);
+  });
+
   it("reports when every sign-in method is disabled", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({

@@ -244,6 +244,10 @@ function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv):
   const clientId = trimOptional(row?.auth_external_client_id ?? env.AUTH_EXTERNAL_CLIENT_ID);
   const discoveryUrl = trimOptional(row?.auth_external_discovery_url ?? env.AUTH_EXTERNAL_DISCOVERY_URL);
   const clientSecretConfigured = hasSettingValue(row?.auth_external_client_secret ?? env.AUTH_EXTERNAL_CLIENT_SECRET);
+  const invalid = [
+    discoveryUrl && !isUrl(discoveryUrl) ? "discovery URL" : null,
+    baseUrl && !isUrl(baseUrl) ? "site address" : null,
+  ].filter(Boolean);
   const missing = [
     providerId ? null : "provider id",
     discoveryUrl ? null : "discovery URL",
@@ -251,7 +255,13 @@ function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv):
     clientSecretConfigured ? null : "client secret",
     baseUrl ? null : "site address",
   ].filter(Boolean);
-  const status: IntegrationUnitStatus = !enabled ? "disabled" : missing.length > 0 ? "missing" : "ready";
+  const status: IntegrationUnitStatus = !enabled
+    ? "disabled"
+    : missing.length > 0
+      ? "missing"
+      : invalid.length > 0
+        ? "invalid"
+        : "ready";
 
   return {
     id: "auth_provider",
@@ -274,9 +284,20 @@ function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv):
     detail: enabled
       ? missing.length > 0
         ? `Missing ${missing.join(", ")}.`
+        : invalid.length > 0
+          ? `Invalid ${invalid.join(", ")}.`
         : "Generic OAuth/OIDC sign-in is ready."
       : "External auth provider is disabled.",
   };
+}
+
+function isUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function buildMailUnit(sources: PublicMailboxSource[], dataMode: DataMode): SettingsResponse["units"]["mail"] {

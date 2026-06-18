@@ -78,7 +78,7 @@ export function getMissingAppAuthSettings(settings: AppAuthSettings): string[] {
     settings.emailPasswordEnabled || settings.externalProviderEnabled
       ? null
       : "auth_email_password_enabled or auth_external_provider_enabled",
-    ...getMissingExternalProviderSettings(settings),
+    ...(!settings.emailPasswordEnabled ? getMissingExternalProviderSettings(settings) : []),
   ].filter((value): value is string => Boolean(value));
 }
 
@@ -94,6 +94,7 @@ function getMissingExternalProviderSettings(settings: AppAuthSettings): string[]
   return [
     requiredSetting("auth_external_provider_id", settings.externalProvider?.providerId),
     requiredSetting("auth_external_discovery_url", settings.externalProvider?.discoveryUrl),
+    invalidUrlSetting("auth_external_discovery_url", settings.externalProvider?.discoveryUrl),
     requiredSetting("auth_external_client_id", settings.externalProvider?.clientId),
     requiredSetting("auth_external_client_secret", settings.externalProvider?.clientSecret),
   ].filter((value): value is string => Boolean(value));
@@ -165,6 +166,18 @@ function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
 
 function requiredSetting(name: string, value: string | undefined): string | null {
   return value?.trim() ? null : name;
+}
+
+function invalidUrlSetting(name: string, value: string | undefined): string | null {
+  if (!value?.trim()) {
+    return null;
+  }
+  try {
+    new URL(value);
+    return null;
+  } catch {
+    return name;
+  }
 }
 
 function trimOptional(value: string | undefined | null): string | undefined {

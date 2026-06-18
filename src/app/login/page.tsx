@@ -72,9 +72,20 @@ function isLoginExternalProviderReady(settings: ReturnType<typeof resolveAppAuth
   return Boolean(
     settings.externalProviderEnabled &&
     settings.baseUrl &&
+    isUrl(settings.baseUrl) &&
     provider?.providerId &&
     provider.discoveryUrl &&
+    isUrl(provider.discoveryUrl) &&
     provider.clientId &&
     provider.clientSecret,
   );
+}
+
+function isUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }

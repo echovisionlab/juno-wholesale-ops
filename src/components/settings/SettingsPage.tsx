@@ -206,8 +206,12 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     if (!diagnosticsPayload) {
       return;
     }
-    await navigator.clipboard?.writeText(JSON.stringify(diagnosticsPayload, null, 2));
-    setCopyStatus("Sanitized diagnostics copied.");
+    try {
+      await navigator.clipboard?.writeText(JSON.stringify(diagnosticsPayload, null, 2));
+      setCopyStatus("Sanitized diagnostics copied.");
+    } catch {
+      setCopyStatus("Browser denied clipboard access. Diagnostics remain visible for manual copy.");
+    }
   }
 
   const groupsById = useMemo(() => {
@@ -615,6 +619,20 @@ function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
 
 function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
   const provider = settings.units.authProvider;
+  const [callbackCopyStatus, setCallbackCopyStatus] = useState<string | null>(null);
+
+  async function copyCallbackUrl() {
+    if (!provider.callbackUrl) {
+      return;
+    }
+    try {
+      await navigator.clipboard?.writeText(provider.callbackUrl);
+      setCallbackCopyStatus("Callback URL copied.");
+    } catch {
+      setCallbackCopyStatus("Browser denied clipboard access. Callback URL remains visible for manual copy.");
+    }
+  }
+
   return (
     <Card>
       <Stack gap="sm">
@@ -655,15 +673,12 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
               variant="light"
               leftSection={<Copy size={14} aria-hidden="true" />}
               disabled={!provider.callbackUrl}
-              onClick={() => {
-                if (provider.callbackUrl) {
-                  void navigator.clipboard?.writeText(provider.callbackUrl);
-                }
-              }}
+              onClick={() => void copyCallbackUrl()}
             >
               Copy callback URL
             </Button>
           </Group>
+          {callbackCopyStatus ? <Text size="xs" c="dimmed" mt={4}>{callbackCopyStatus}</Text> : null}
         </Box>
 
         <Text size="sm" c="dimmed">
