@@ -63,6 +63,23 @@ HARBOR_REGISTRY_USERNAME
 HARBOR_REGISTRY_PASSWORD
 ```
 
+Release tags also run the Komodo production deploy job after image promotion.
+Configure these GitHub `production` environment secrets if you want tagged
+releases to deploy automatically:
+
+```text
+KOMODO_URL
+KOMODO_API_KEY
+KOMODO_API_SECRET
+KOMODO_STACK_NAME
+```
+
+`KOMODO_TOKEN` or `KOMODO_USERNAME` / `KOMODO_PASSWORD` may be used instead of
+API key credentials. The Komodo stack must already exist, and its environment
+must include `DATABASE_URL` before a production deploy can pass. Do not put
+database URLs, supplier credentials, or raw attachment storage paths in GitHub
+Actions secrets.
+
 Production compose should use an immutable image reference such as
 `harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<commit>` or a reviewed release
 tag.

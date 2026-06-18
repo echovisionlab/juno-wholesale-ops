@@ -18,6 +18,10 @@ until the owner explicitly approves those final actions.
 - [ ] GitHub Actions green
 - [ ] Public repository checklist reviewed
 - [ ] Dependabot open alerts are zero, or every remaining alert has an owner-approved accepted risk record with a review deadline
+- [ ] Harbor publish secrets are configured if this release should publish an image
+- [ ] Komodo deploy secrets are configured if this release should deploy after image promotion
+- [ ] Production Komodo stack exists and has runtime-only `DATABASE_URL`
+- [ ] Settings Center shows the effective Gmail scope is read-only unless the owner has explicitly accepted Gmail label mutation
 - [ ] No cart, wishlist, checkout, purchase action, or Juno account mutation added
 - [ ] No sales-volume claims without observed evidence
 
@@ -67,6 +71,9 @@ git push origin v0.1.0
 
 - [ ] Confirm the tag points at the approved release commit.
 - [ ] Confirm GitHub Actions are green for the tagged commit.
+- [ ] Confirm the tagged image was promoted in Harbor.
+- [ ] Confirm the Komodo deploy job updated `JUNO_WHOLESALE_OPS_WEB_IMAGE`.
+- [ ] Confirm production `/api/health` is healthy through the public endpoint.
 - [ ] Prepare the GitHub Release draft from `docs/RELEASE_NOTES_v0.1.0.md`.
 - [ ] Attach no real wholesale data, credentials, cookies, auth headers, webhook URLs, or raw attachments.
 - [ ] Reconfirm repository visibility change approval before switching to public.

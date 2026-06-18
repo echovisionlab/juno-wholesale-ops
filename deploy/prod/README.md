@@ -3,7 +3,7 @@
 Target hostname:
 
 ```text
-catalog.example.com -> app-host.example.com:3006
+inventory.example.com -> app-host.example.com:3006
 ```
 
 The repository owns the canonical Compose and stack files, while the deployment
@@ -25,27 +25,52 @@ The app protects all non-health routes through `src/proxy.ts`.
 
 Create or update a Komodo stack from `deploy/prod/app.stack.yml`.
 
+The expected production stack name is:
+
+```text
+juno-wholesale-ops-app-stack
+```
+
 Set these secrets in the stack environment, not in git:
 
 ```text
 DATABASE_URL
-AUTH_SECRET
 AUTH_BASE_URL
 GOOGLE_SERVICE_ACCOUNT_KEY_JSON
 JUNO_LOGIN_EMAIL
 JUNO_LOGIN_PASSWORD
 ```
 
+`AUTH_SECRET` is normally omitted. If it is absent, startup creates a random
+Better Auth secret in the database. Keep `DATABASE_URL` runtime-only in the
+Komodo stack environment; GitHub Actions must only update the immutable image
+reference and sync the compose file.
+
 Use an immutable image tag for `JUNO_WHOLESALE_OPS_WEB_IMAGE`, for example:
 
 ```text
-registry.example.com/example/juno-wholesale-ops-web:sha-<git-sha>
+harbor.dsub.io/dsub/juno-wholesale-ops-web:v0.1.0
 ```
+
+The release workflow promotes the image tag and deploys that tag through Komodo
+when `v*` tags are pushed. The workflow uses the GitHub `production`
+environment for Komodo credentials and requires these secrets there:
+
+```text
+HARBOR_REGISTRY_USERNAME
+HARBOR_REGISTRY_PASSWORD
+KOMODO_URL
+KOMODO_API_KEY and KOMODO_API_SECRET
+```
+
+`KOMODO_TOKEN` or `KOMODO_USERNAME` / `KOMODO_PASSWORD` may be used instead of
+API key credentials. Do not put production database URLs or supplier credentials
+in GitHub Actions secrets.
 
 The external Caddy/proxy layer must add:
 
 ```caddyfile
-catalog.example.com {
+inventory.example.com {
     reverse_proxy app-host.example.com:3006
 }
 ```
@@ -55,13 +80,13 @@ catalog.example.com {
 Unauthenticated browser request should redirect:
 
 ```bash
-curl -I https://catalog.example.com/
+curl -I https://inventory.example.com/
 ```
 
 Health should stay available for Komodo:
 
 ```bash
-curl -fsS https://catalog.example.com/api/health
+curl -fsS https://inventory.example.com/api/health
 ```
 
 An authenticated admin should render the dashboard in a browser. A non-admin
