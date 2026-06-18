@@ -6,6 +6,7 @@ import { dashboardFixture } from "@/components/dashboard/dashboard.fixtures";
 import type {
   AppSetupStatus,
   CatalogTrendSummary,
+  DashboardResourceIssue,
   GmailIngestState,
   InsightDigest,
   LiveLookupDashboardSummary,
@@ -15,6 +16,7 @@ import type {
   NotificationChannel,
   NotificationDelivery,
   NotificationRule,
+  ResourceState,
   TodayInsight,
   WatchRule,
   WatchRuleDraft,
@@ -33,6 +35,7 @@ export default function Home() {
   const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[] | null>(null);
   const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(null);
   const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
+  const [apiIssues, setApiIssues] = useState<DashboardResourceIssue[]>([]);
   const [workerActionPending, setWorkerActionPending] = useState(false);
   const [watchRuleActionPending, setWatchRuleActionPending] = useState(false);
 
@@ -52,6 +55,7 @@ export default function Home() {
       setNotificationDeliveries,
       setNotificationRules,
       setNotificationChannels,
+      setApiIssues,
     );
     const intervalId = window.setInterval(() => {
       void refreshDashboardState(
@@ -68,6 +72,7 @@ export default function Home() {
         setNotificationDeliveries,
         setNotificationRules,
         setNotificationChannels,
+        setApiIssues,
       );
     }, 30000);
     return () => {
@@ -158,6 +163,7 @@ export default function Home() {
       notificationDeliveries={notificationDeliveries}
       notificationRules={notificationRules}
       notificationChannels={notificationChannels}
+      apiIssues={apiIssues}
       workerActionPending={workerActionPending}
       watchRuleActionPending={watchRuleActionPending}
       onWorkerAction={handleWorkerAction}
@@ -182,6 +188,7 @@ async function refreshDashboardState(
   setNotificationDeliveries: (deliveries: NotificationDelivery[] | null) => void,
   setNotificationRules: (rules: NotificationRule[] | null) => void,
   setNotificationChannels: (channels: NotificationChannel[] | null) => void,
+  setApiIssues: (issues: DashboardResourceIssue[]) => void,
 ) {
   const [
     ingestPayload,
@@ -197,41 +204,89 @@ async function refreshDashboardState(
     notificationRulesPayload,
     notificationChannelsPayload,
   ] = await Promise.all([
-    fetchJson<{ state?: GmailIngestState }>("/api/ingest/status"),
-    fetchJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status"),
-    fetchJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker"),
-    fetchJson<{ setup?: AppSetupStatus }>("/api/settings/status"),
-    fetchJson<{ signals?: TodayInsight[] }>("/api/insights/today?limit=100"),
-    fetchJson<{ signals?: MovementSignal[] }>("/api/insights/movement?limit=100"),
-    fetchJson<{ trends?: CatalogTrendSummary }>("/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20"),
-    fetchJson<{ digest?: InsightDigest }>("/api/insights/digest"),
-    fetchJson<{ rules?: WatchRule[] }>("/api/watch-rules"),
-    fetchJson<{ deliveries?: NotificationDelivery[] }>("/api/notifications/deliveries?limit=100"),
-    fetchJson<{ rules?: NotificationRule[] }>("/api/notifications/rules"),
-    fetchJson<{ channels?: NotificationChannel[] }>("/api/notifications/channels"),
+    fetchDashboardJson<{ state?: GmailIngestState }>("/api/ingest/status", "Gmail ingest status"),
+    fetchDashboardJson<{ summary?: LiveLookupDashboardSummary }>("/api/live-lookups/status", "Live lookup summary"),
+    fetchDashboardJson<{ worker?: LiveWorkerStatus }>("/api/live-lookups/worker", "Live worker"),
+    fetchDashboardJson<{ setup?: AppSetupStatus }>("/api/settings/status", "Setup status"),
+    fetchDashboardJson<{ signals?: TodayInsight[] }>("/api/insights/today?limit=100", "Today signals"),
+    fetchDashboardJson<{ signals?: MovementSignal[] }>("/api/insights/movement?limit=100", "Movement signals"),
+    fetchDashboardJson<{ trends?: CatalogTrendSummary }>("/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20", "Catalog trends"),
+    fetchDashboardJson<{ digest?: InsightDigest }>("/api/insights/digest", "Operator digest"),
+    fetchDashboardJson<{ rules?: WatchRule[] }>("/api/watch-rules", "Watch rules"),
+    fetchDashboardJson<{ deliveries?: NotificationDelivery[] }>("/api/notifications/deliveries?limit=100", "Notification deliveries"),
+    fetchDashboardJson<{ rules?: NotificationRule[] }>("/api/notifications/rules", "Notification rules"),
+    fetchDashboardJson<{ channels?: NotificationChannel[] }>("/api/notifications/channels", "Notification channels"),
   ]);
 
   if (!isCancelled()) {
-    setIngestState(ingestPayload?.state ?? null);
-    setLiveSummary(summaryPayload?.summary ?? null);
-    setWorkerStatus(workerPayload?.worker ?? null);
-    setSetupStatus(setupPayload?.setup ?? null);
-    setTodaySignals(signalsPayload?.signals ?? null);
-    setMovementSignals(movementPayload?.signals ?? null);
-    setCatalogTrends(trendsPayload?.trends ?? null);
-    setOperatorDigest(digestPayload?.digest ?? null);
-    setWatchRules(watchRulesPayload?.rules ?? null);
-    setNotificationDeliveries(notificationDeliveriesPayload?.deliveries ?? null);
-    setNotificationRules(notificationRulesPayload?.rules ?? null);
-    setNotificationChannels(notificationChannelsPayload?.channels ?? null);
+    setIngestState(okData(ingestPayload)?.state ?? null);
+    setLiveSummary(okData(summaryPayload)?.summary ?? null);
+    setWorkerStatus(okData(workerPayload)?.worker ?? null);
+    setSetupStatus(okData(setupPayload)?.setup ?? null);
+    setTodaySignals(okData(signalsPayload)?.signals ?? null);
+    setMovementSignals(okData(movementPayload)?.signals ?? null);
+    setCatalogTrends(okData(trendsPayload)?.trends ?? null);
+    setOperatorDigest(okData(digestPayload)?.digest ?? null);
+    setWatchRules(okData(watchRulesPayload)?.rules ?? null);
+    setNotificationDeliveries(okData(notificationDeliveriesPayload)?.deliveries ?? null);
+    setNotificationRules(okData(notificationRulesPayload)?.rules ?? null);
+    setNotificationChannels(okData(notificationChannelsPayload)?.channels ?? null);
+    const resourceStates: ResourceState<unknown>[] = [
+      ingestPayload,
+      summaryPayload,
+      workerPayload,
+      setupPayload,
+      signalsPayload,
+      movementPayload,
+      trendsPayload,
+      digestPayload,
+      watchRulesPayload,
+      notificationDeliveriesPayload,
+      notificationRulesPayload,
+      notificationChannelsPayload,
+    ];
+    setApiIssues(resourceStates.filter(isResourceIssue));
   }
 }
 
-async function fetchJson<T>(url: string): Promise<T | null> {
+export async function fetchDashboardJson<T>(url: string, label: string): Promise<ResourceState<T>> {
   try {
     const response = await fetch(url);
-    return response.ok ? ((await response.json()) as T) : null;
-  } catch {
-    return null;
+    const payload = (await response.json().catch(() => ({}))) as T & { error?: string; message?: string };
+    if (response.ok) {
+      return { status: "ok", data: payload };
+    }
+    const message = payload.error ?? payload.message ?? `${label} returned ${response.status}`;
+    if (response.status === 401) {
+      return { status: "unauthorized", message, httpStatus: 401, endpoint: url, label };
+    }
+    if (response.status === 403) {
+      return { status: "forbidden", message, httpStatus: 403, endpoint: url, label };
+    }
+    if (response.status >= 500) {
+      return { status: "server_error", message, httpStatus: response.status, endpoint: url, label, error: payload.error };
+    }
+    return { status: "unavailable", message, httpStatus: response.status, endpoint: url, label, error: payload.error };
+  } catch (error: unknown) {
+    return {
+      status: "unavailable",
+      message: `${label} could not be reached`,
+      endpoint: url,
+      label,
+      error: error instanceof Error ? error.message : "network error",
+    };
   }
+}
+
+function okData<T>(state: ResourceState<T>): T | null {
+  return state.status === "ok" ? state.data : null;
+}
+
+function isResourceIssue<T>(state: ResourceState<T>): state is DashboardResourceIssue {
+  return (
+    state.status === "unauthorized" ||
+    state.status === "forbidden" ||
+    state.status === "server_error" ||
+    state.status === "unavailable"
+  );
 }

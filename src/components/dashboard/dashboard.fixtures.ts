@@ -31,6 +31,7 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
     },
   ],
   commands: [
+    "Open /settings",
     "pnpm gmail:smoke",
     "pnpm gmail:ingest",
     "pnpm gmail:ingest:write",

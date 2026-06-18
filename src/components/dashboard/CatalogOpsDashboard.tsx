@@ -53,6 +53,7 @@ import { StatCard } from "./StatCard";
 import type {
   AppSetupStatus,
   CatalogTrendSummary,
+  DashboardResourceIssue,
   GmailIngestState,
   InsightDigest,
   LiveLookupDashboardSummary,
@@ -90,6 +91,7 @@ export type CatalogOpsDashboardProps = {
   notificationDeliveries?: NotificationDelivery[] | null;
   notificationRules?: NotificationRule[] | null;
   notificationChannels?: NotificationChannel[] | null;
+  apiIssues?: DashboardResourceIssue[];
   workerActionPending?: boolean;
   watchRuleActionPending?: boolean;
   onWorkerAction?: (action: LiveWorkerAction) => void;
@@ -114,6 +116,7 @@ export function CatalogOpsDashboard({
   notificationDeliveries,
   notificationRules,
   notificationChannels,
+  apiIssues = [],
   workerActionPending = false,
   watchRuleActionPending = false,
   onWorkerAction,
@@ -121,6 +124,8 @@ export function CatalogOpsDashboard({
   onToggleWatchRule,
   onDeleteWatchRule,
 }: CatalogOpsDashboardProps) {
+  const workerDisabledReason = getLiveWorkerDisabledReason(setupStatus);
+
   return (
     <Box component="main" bg="gray.0" mih="100vh">
       <Box component="section" bg="white">
@@ -157,9 +162,20 @@ export function CatalogOpsDashboard({
       <Container py="xl">
         <Grid gap="lg">
           <Grid.Col span={12}>
-            <SectionHeader icon={ClipboardCheck}>Configuration</SectionHeader>
+            <Group justify="space-between" align="center">
+              <SectionHeader icon={ClipboardCheck}>Configuration</SectionHeader>
+              <Button component="a" href="/settings" variant="light" leftSection={<SlidersHorizontal size={16} aria-hidden="true" />}>
+                Open Settings Center
+              </Button>
+            </Group>
             <SetupChecklist setupStatus={setupStatus} />
           </Grid.Col>
+
+          {apiIssues.length > 0 ? (
+            <Grid.Col span={12}>
+              <ApiIssuePanel issues={apiIssues} />
+            </Grid.Col>
+          ) : null}
 
           <Grid.Col span={{ base: 12, lg: 8 }}>
             <SectionHeader icon={PackageCheck}>Ingestion Pipeline</SectionHeader>
@@ -259,6 +275,7 @@ export function CatalogOpsDashboard({
             <WorkerControlPanel
               status={workerStatus}
               pending={workerActionPending}
+              disabledReason={workerDisabledReason}
               onAction={onWorkerAction}
             />
           </Grid.Col>
@@ -1149,6 +1166,9 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
         <Text size="sm" c="dimmed" mt={4}>
           Configuration status will appear after the server can evaluate runtime settings.
         </Text>
+        <Button component="a" href="/settings" variant="light" mt="md">
+          Open Settings Center
+        </Button>
       </Card>
     );
   }
@@ -1171,6 +1191,43 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
       </SimpleGrid>
     </Stack>
   );
+}
+
+function ApiIssuePanel({ issues }: { issues: DashboardResourceIssue[] }) {
+  return (
+    <Alert color="yellow" icon={<AlertTriangle size={18} aria-hidden="true" />} title="API status issue">
+      <Stack gap="xs">
+        {issues.map((issue) => (
+          <Group key={`${issue.endpoint}-${issue.status}`} justify="space-between" align="flex-start" gap="sm">
+            <Stack gap={2}>
+              <Text size="sm" fw={700}>
+                {issue.label}
+              </Text>
+              <Text size="sm" c="dimmed">
+                {issue.message}
+              </Text>
+            </Stack>
+            <Badge color={apiIssueColor(issue.status)} variant="light">
+              {issue.httpStatus ?? issue.status}
+            </Badge>
+          </Group>
+        ))}
+        <Button component="a" href="/settings" size="xs" variant="light">
+          Review Settings Center
+        </Button>
+      </Stack>
+    </Alert>
+  );
+}
+
+function apiIssueColor(status: DashboardResourceIssue["status"]): string {
+  if (status === "unauthorized" || status === "forbidden") {
+    return "red";
+  }
+  if (status === "server_error") {
+    return "orange";
+  }
+  return "yellow";
 }
 
 function SetupStepCard({ step }: { step: SetupStep }) {
@@ -1333,14 +1390,18 @@ function formatObservedAt(value: string | null | undefined): string {
 function WorkerControlPanel({
   status,
   pending,
+  disabledReason,
   onAction,
 }: {
   status?: LiveWorkerStatus | null;
   pending: boolean;
+  disabledReason?: string | null;
   onAction?: (action: LiveWorkerAction) => void;
 }) {
   const isRunning = status?.state === "running";
   const latestLogs = status?.recentLogs.slice(-4) ?? [];
+  const startDisabled = pending || isRunning || !onAction || Boolean(disabledReason);
+  const restartDisabled = pending || !onAction || Boolean(disabledReason);
 
   return (
     <Card>
@@ -1359,7 +1420,7 @@ function WorkerControlPanel({
       <Group mt="md" gap="xs">
         <Button
           leftSection={<Play size={16} aria-hidden="true" />}
-          disabled={pending || isRunning || !onAction}
+          disabled={startDisabled}
           onClick={() => onAction?.("start")}
         >
           Start
@@ -1376,12 +1437,18 @@ function WorkerControlPanel({
         <Button
           variant="light"
           leftSection={<RotateCw size={16} aria-hidden="true" />}
-          disabled={pending || !onAction}
+          disabled={restartDisabled}
           onClick={() => onAction?.("restart")}
         >
           Restart
         </Button>
       </Group>
+
+      {disabledReason ? (
+        <Alert color="yellow" mt="md" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Start disabled">
+          {disabledReason}
+        </Alert>
+      ) : null}
 
       {status ? (
         <Code mt="md" block>
@@ -1390,6 +1457,25 @@ function WorkerControlPanel({
       ) : null}
     </Card>
   );
+}
+
+function getLiveWorkerDisabledReason(setupStatus?: AppSetupStatus | null): string | null {
+  if (!setupStatus?.steps.length) {
+    return "Start disabled until setup status is available. Open Settings Center to review database and Juno live lookup settings.";
+  }
+  const databaseStep = setupStatus.steps.find((step) => step.id === "database");
+  if (!databaseStep || databaseStep.state === "missing") {
+    return "Start disabled because DATABASE_URL or the service_setting row is unavailable.";
+  }
+  const junoStep = setupStatus.steps.find((step) => step.id === "juno");
+  if (!junoStep || junoStep.state === "missing") {
+    return "Start disabled until Juno read-only login credentials and delay guardrails are configured.";
+  }
+  const blockedGuardrail = junoStep.guardrails.find((guardrail) => guardrail.state === "blocked");
+  if (blockedGuardrail) {
+    return `Start disabled: ${blockedGuardrail.detail}`;
+  }
+  return null;
 }
 
 function formatWorkerDetail(status?: LiveWorkerStatus | null): string {

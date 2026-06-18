@@ -18,7 +18,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
-        <ColorSchemeScript defaultColorScheme="light" />
+        <ColorSchemeScript defaultColorScheme="light" suppressHydrationWarning type="text/javascript" />
         {fontStylesheetUrl ? <link rel="stylesheet" href={fontStylesheetUrl} /> : null}
       </head>
       <body>

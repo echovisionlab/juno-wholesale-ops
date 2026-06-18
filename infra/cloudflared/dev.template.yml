@@ -1,0 +1,13 @@
+# Local Cloudflare Tunnel template.
+# Copy this file to .data/cloudflared/config.yml and replace the placeholders.
+# Keep .data/cloudflared/credentials.json out of git.
+
+tunnel: <cloudflare-tunnel-uuid>
+credentials-file: /etc/cloudflared/credentials.json
+
+ingress:
+  - hostname: <dev-hostname.example.com>
+    service: http://host.docker.internal:3006
+    originRequest:
+      httpHostHeader: localhost:3006
+  - service: http_status:404

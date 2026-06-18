@@ -13,6 +13,7 @@ until the owner explicitly approves those final actions.
 - [ ] Demo fixtures confirmed synthetic
 - [ ] README links checked
 - [ ] Security and privacy docs reviewed
+- [ ] Settings Center reviewed: source badges, secret masking, reset-to-runtime, diagnostics, and production auth warning
 - [ ] Release notes drafted
 - [ ] GitHub Actions green
 - [ ] Public repository checklist reviewed
@@ -37,6 +38,8 @@ Confirm:
 - [ ] Catalog Trends renders.
 - [ ] Operator Digest renders.
 - [ ] Notification Center renders.
+- [ ] Settings Center renders at `/settings` with no raw secrets.
+- [ ] Dashboard links to Settings Center and preserves API status failures.
 - [ ] No external webhook call is made.
 
 Reset demo rows after review:

@@ -6,6 +6,20 @@ export type DashboardIcon = ComponentType<{
   "aria-hidden"?: boolean | "true" | "false";
 }>;
 
+export type ResourceState<T> =
+  | { status: "loading" }
+  | { status: "ok"; data: T }
+  | { status: "empty"; message: string }
+  | { status: "unauthorized"; message: string; httpStatus: 401; endpoint: string; label: string }
+  | { status: "forbidden"; message: string; httpStatus: 403; endpoint: string; label: string }
+  | { status: "server_error"; message: string; httpStatus: number; endpoint: string; label: string; error?: string }
+  | { status: "unavailable"; message: string; endpoint: string; label: string; httpStatus?: number; error?: string };
+
+export type DashboardResourceIssue = Extract<
+  ResourceState<unknown>,
+  { status: "unauthorized" | "forbidden" | "server_error" | "unavailable" }
+>;
+
 export type StatCardData = {
   label: string;
   value: string;

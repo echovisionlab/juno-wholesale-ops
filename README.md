@@ -104,6 +104,26 @@ Open `http://localhost:3006`.
 Local Postgres maps to host port `5437` so it can coexist with another
 development database on `5432`.
 
+Optional local Cloudflare Tunnel:
+
+```bash
+mkdir -p .data/cloudflared
+cp infra/cloudflared/dev.template.yml .data/cloudflared/config.yml
+# Fill .data/cloudflared/config.yml with your local tunnel id and hostname.
+# Keep .data/cloudflared/credentials.json private.
+# Set JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN=http://127.0.0.1:3006
+# and JUNO_WHOLESALE_OPS_DEV_ALLOWED_ORIGINS=<your-dev-hostname>
+# in .env.local if the tunneled hostname is used for the dashboard.
+pnpm tunnel:dev:up
+pnpm dev
+```
+
+The tunnel compose service is local-only and forwards the configured hostname
+to the host Next.js dev server on port `3006`. It is not used by production
+deployment files. Next dev blocks cross-origin dev resources by default, so the
+tunneled hostname must be listed in `JUNO_WHOLESALE_OPS_DEV_ALLOWED_ORIGINS`
+for client-side interactions and HMR to work through the tunnel.
+
 ## Demo mode
 
 Demo mode uses only synthetic catalog workbooks:
@@ -146,6 +166,20 @@ Important values:
 
 Settings resolve from env and the singleton `service_setting` row. Secret values
 are never shown in the dashboard; only configured/unset status is shown.
+
+The app Settings Center at `/settings` is the primary operator UX for runtime
+readiness, DB overrides, reset-to-runtime actions, and diagnostics. Resolution
+is always:
+
+```text
+effective value = database override ?? runtime env fallback ?? default value
+```
+
+`DATABASE_URL` and `AUTH_SECRET` remain runtime-only bootstrap values and cannot
+be persisted through the Settings Center. Production deployments must keep
+`AUTH_ENABLED=true`. Secret fields such as service account references, Juno
+passwords, OIDC client secrets, and webhook configuration are write-only and
+masked in API responses.
 
 ## Gmail ingestion
 

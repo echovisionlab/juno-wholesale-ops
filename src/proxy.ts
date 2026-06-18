@@ -81,7 +81,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
   let sessionResponse: Response;
 
   try {
-    sessionResponse = await fetch(new URL("/api/session/admin", request.url), {
+    sessionResponse = await fetch(buildSessionCheckUrl(request), {
       headers: {
         accept: "application/json",
         cookie: request.headers.get("cookie") ?? "",
@@ -138,6 +138,16 @@ function buildPublicRequestUrl(request: NextRequest): string {
   return url.toString();
 }
 
+function buildSessionCheckUrl(request: NextRequest): URL {
+  const internalOrigin = process.env.JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN?.trim();
+
+  if (internalOrigin) {
+    return new URL("/api/session/admin", internalOrigin);
+  }
+
+  return new URL("/api/session/admin", buildPublicRequestUrl(request));
+}
+
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml).*)"],
+  matcher: ["/((?!_next/|favicon.ico|robots.txt|sitemap.xml).*)"],
 };

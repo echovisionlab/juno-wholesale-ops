@@ -426,6 +426,7 @@ describe("CatalogOpsDashboard", () => {
 
     renderDashboard({
       ...dashboardFixture,
+      setupStatus: readySetupStatus(),
       workerStatus: {
         state: "running",
         pid: 123,
@@ -456,6 +457,7 @@ describe("CatalogOpsDashboard", () => {
 
     renderDashboard({
       ...dashboardFixture,
+      setupStatus: readySetupStatus(),
       workerStatus: {
         state: "stopped",
         pid: null,
@@ -476,6 +478,7 @@ describe("CatalogOpsDashboard", () => {
 
     renderDashboard({
       ...dashboardFixture,
+      setupStatus: readySetupStatus(),
       workerStatus: {
         state: "exited",
         pid: null,
@@ -493,6 +496,7 @@ describe("CatalogOpsDashboard", () => {
 
     renderDashboard({
       ...dashboardFixture,
+      setupStatus: readySetupStatus(),
       workerStatus: {
         state: "running",
         pid: null,
@@ -507,6 +511,132 @@ describe("CatalogOpsDashboard", () => {
       },
     });
     expect(pageText()).toContain("pid N/A since N/A");
+  });
+
+  it("shows API issues and disables live worker start until settings are complete", () => {
+    const onWorkerAction = vi.fn();
+    renderDashboard({
+      ...dashboardFixture,
+      setupStatus: {
+        ready: false,
+        steps: [
+          {
+            id: "database",
+            label: "Database",
+            state: "complete",
+            detail: "database",
+            action: null,
+            missing: [],
+            settings: [],
+            guardrails: [],
+          },
+          {
+            id: "juno",
+            label: "Live stock lookup",
+            state: "missing",
+            detail: "juno",
+            action: null,
+            missing: ["juno_login_password"],
+            settings: [],
+            guardrails: [],
+          },
+        ],
+      },
+      apiIssues: [
+        {
+          status: "forbidden",
+          message: "admin required",
+          httpStatus: 403,
+          endpoint: "/api/settings/status",
+          label: "Setup status",
+        },
+        {
+          status: "server_error",
+          message: "worker route failed",
+          httpStatus: 500,
+          endpoint: "/api/live-lookups/worker",
+          label: "Worker status",
+        },
+        {
+          status: "unavailable",
+          message: "digest unavailable",
+          endpoint: "/api/insights/digest",
+          label: "Operator digest",
+        },
+      ],
+      workerStatus: {
+        state: "stopped",
+        pid: null,
+        startedAt: null,
+        stoppedAt: null,
+        exitCode: null,
+        signal: null,
+        lastError: null,
+        command: "tsx",
+        args: [],
+        recentLogs: [],
+      },
+      onWorkerAction,
+    });
+
+    expect(pageText()).toContain("API status issue");
+    expect(pageText()).toContain("admin required");
+    expect(pageText()).toContain("worker route failed");
+    expect(pageText()).toContain("digest unavailable");
+    expect(pageText()).toContain("Start disabled");
+    expect(pageText()).toContain("Juno read-only login credentials");
+    clickButton("Start");
+    expect(onWorkerAction).not.toHaveBeenCalled();
+
+    renderDashboard({
+      ...dashboardFixture,
+      setupStatus: {
+        ready: false,
+        steps: [
+          {
+            id: "database",
+            label: "Database",
+            state: "complete",
+            detail: "database",
+            action: null,
+            missing: [],
+            settings: [],
+            guardrails: [],
+          },
+          {
+            id: "juno",
+            label: "Live stock lookup",
+            state: "complete",
+            detail: "juno",
+            action: null,
+            missing: [],
+            settings: [],
+            guardrails: [
+              {
+                label: "Delay bounds",
+                state: "blocked",
+                detail: "Delay min must be less than or equal to delay max.",
+              },
+            ],
+          },
+        ],
+      },
+      workerStatus: {
+        state: "stopped",
+        pid: null,
+        startedAt: null,
+        stoppedAt: null,
+        exitCode: null,
+        signal: null,
+        lastError: null,
+        command: "tsx",
+        args: [],
+        recentLogs: [],
+      },
+      onWorkerAction,
+    });
+
+    expect(pageText()).toContain("Start disabled: Delay min must be less than or equal to delay max.");
   });
 });
 
@@ -535,6 +665,40 @@ function emptyIngestState(): NonNullable<CatalogOpsDashboardProps["ingestState"]
     lastIngestedSnapshotId: null,
     lastIngestedCatalogDate: null,
     lastIngestedContentHash: null,
+  };
+}
+
+function readySetupStatus(): NonNullable<CatalogOpsDashboardProps["setupStatus"]> {
+  return {
+    ready: true,
+    steps: [
+      {
+        id: "database",
+        label: "Database",
+        state: "complete",
+        detail: "database ready",
+        action: null,
+        missing: [],
+        settings: [],
+        guardrails: [],
+      },
+      {
+        id: "juno",
+        label: "Live stock lookup",
+        state: "complete",
+        detail: "juno ready",
+        action: null,
+        missing: [],
+        settings: [],
+        guardrails: [
+          {
+            label: "Read-only browser lookup",
+            state: "ok",
+            detail: "Worker can reuse a persistent browser session and avoid cart or wishlist actions.",
+          },
+        ],
+      },
+    ],
   };
 }
 

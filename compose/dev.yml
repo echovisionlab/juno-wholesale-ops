@@ -22,6 +22,19 @@ services:
       timeout: 3s
       retries: 12
 
+  cloudflared:
+    image: ${JUNO_WHOLESALE_OPS_CLOUDFLARED_IMAGE:-cloudflare/cloudflared:2026.3.0}
+    container_name: ${JUNO_WHOLESALE_OPS_CLOUDFLARED_CONTAINER_NAME:-juno-wholesale-ops-cloudflared}
+    profiles:
+      - tunnel
+    command: tunnel --config /etc/cloudflared/config.yml run
+    volumes:
+      - ${JUNO_WHOLESALE_OPS_CLOUDFLARED_CONFIG:-../.data/cloudflared/config.yml}:/etc/cloudflared/config.yml:ro
+      - ${JUNO_WHOLESALE_OPS_CLOUDFLARED_CREDENTIALS:-../.data/cloudflared/credentials.json}:/etc/cloudflared/credentials.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
 volumes:
   postgres-data:
     external: true

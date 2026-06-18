@@ -14,6 +14,7 @@ Accepted surfaces:
 - Gmail read-only catalog attachment ingestion
 - XLSX parsing and dedupe
 - Postgres catalog snapshots
+- Settings Center operator configuration with masked, write-only secrets
 - read-only live product page observation
 - watch hits and movement signals
 - catalog trend and operator digest summaries

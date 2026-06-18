@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Home from "./page";
+import Home, { fetchDashboardJson } from "./page";
 
 vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
   CatalogOpsDashboard: (props: {
@@ -19,6 +19,7 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
     notificationDeliveries: unknown;
     notificationRules: unknown;
     notificationChannels: unknown;
+    apiIssues: unknown;
     workerActionPending: boolean;
     watchRuleActionPending: boolean;
     onWorkerAction: (action: "start" | "stop" | "restart") => void;
@@ -253,6 +254,8 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"notificationDeliveries":null');
     expect(readProps()).toContain('"notificationRules":null');
     expect(readProps()).toContain('"notificationChannels":null');
+    expect(readProps()).toContain('"status":"unavailable"');
+    expect(readProps()).toContain('"status":"server_error"');
 
     await act(async () => {
       clickButton("toggle-rule");
@@ -347,6 +350,24 @@ describe("Home dashboard polling", () => {
     });
 
     expect(readProps()).toBe("");
+  });
+
+  it("preserves dashboard fetch status codes", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "login required" }), { status: 401 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "admin required" }), { status: 403 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "server down" }), { status: 500 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ error: "not found" }), { status: 404 }))
+      .mockResolvedValueOnce(jsonResponse({ ok: true }))
+      .mockRejectedValueOnce("offline");
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(fetchDashboardJson("/api/a", "A")).resolves.toMatchObject({ status: "unauthorized", httpStatus: 401 });
+    await expect(fetchDashboardJson("/api/b", "B")).resolves.toMatchObject({ status: "forbidden", httpStatus: 403 });
+    await expect(fetchDashboardJson("/api/c", "C")).resolves.toMatchObject({ status: "server_error", httpStatus: 500 });
+    await expect(fetchDashboardJson("/api/d", "D")).resolves.toMatchObject({ status: "unavailable", httpStatus: 404 });
+    await expect(fetchDashboardJson("/api/e", "E")).resolves.toMatchObject({ status: "ok", data: { ok: true } });
+    await expect(fetchDashboardJson("/api/f", "F")).resolves.toMatchObject({ status: "unavailable", error: "network error" });
   });
 });
 
