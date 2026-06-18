@@ -133,7 +133,6 @@ function runtime(options: { missing?: string[] }) {
       secret: undefined,
       baseUrl: undefined,
       trustedOrigins: [],
-      emailPasswordEnabled: true,
       externalProviderEnabled: false,
       externalProvider: null,
       adminEmailAllowlist: [],

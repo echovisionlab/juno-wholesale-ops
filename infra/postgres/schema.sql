@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 7dc8b5f31f075cdcf1c1997aa61e2f2c630a16f2344671317d6790bb1a7cdcc0
+-- migration-manifest-sha256: 4e139733ede78db4a12a43ce60192f5e9567e322e8b6dd10ed547091ca29620e
 --
 -- PostgreSQL database dump
 --
@@ -495,7 +495,6 @@ CREATE TABLE public.service_setting (
     juno_live_auto_enqueue_limit integer,
     auth_base_url text,
     auth_trusted_origins text,
-    auth_email_password_enabled boolean,
     auth_external_provider_enabled boolean,
     auth_external_provider_id text,
     auth_external_provider_name text,
@@ -513,7 +512,6 @@ CREATE TABLE public.service_setting (
     auth_login_logo_url text,
     CONSTRAINT service_setting_auth_login_logo_url_asset_check CHECK (((auth_login_logo_url IS NULL) OR (auth_login_logo_url ~* '^https?://[^[:space:]]+\.(png|webp|svg)([?#].*)?$'::text))),
     CONSTRAINT service_setting_auth_secret_length_check CHECK (((auth_secret IS NULL) OR (length(auth_secret) >= 32))),
-    CONSTRAINT service_setting_auth_sign_in_method_check CHECK (((auth_email_password_enabled IS DISTINCT FROM false) OR (auth_external_provider_enabled IS TRUE))),
     CONSTRAINT service_setting_data_mode_check CHECK (((data_mode IS NULL) OR (data_mode = ANY (ARRAY['demo'::text, 'real_mailbox'::text])))),
     CONSTRAINT service_setting_id_check CHECK (id),
     CONSTRAINT service_setting_juno_live_auto_enqueue_limit_check CHECK ((juno_live_auto_enqueue_limit > 0)),

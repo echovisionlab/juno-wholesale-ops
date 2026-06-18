@@ -317,35 +317,6 @@ describe("settings response and validation", () => {
 
     expect(
       validateSettingsPatch({
-        input: { auth: { auth_email_password_enabled: false } },
-        currentRow: emptySettingsRow(),
-        env,
-        rawEnv: {},
-        nodeEnv: "development",
-      }),
-    ).toMatchObject({
-      ok: false,
-      issues: ["auth_email_password_enabled can be disabled only when auth_external_provider_enabled is true"],
-    });
-
-    expect(
-      validateSettingsPatch({
-        input: { auth: { auth_email_password_enabled: false, auth_external_provider_enabled: true } },
-        currentRow: emptySettingsRow(),
-        env,
-        rawEnv: {},
-        nodeEnv: "development",
-      }),
-    ).toMatchObject({
-      ok: true,
-      patch: {
-        auth_email_password_enabled: false,
-        auth_external_provider_enabled: true,
-      },
-    });
-
-    expect(
-      validateSettingsPatch({
         input: {
           mail: { legacy_mail_setting: "not-supported" },
           juno: { juno_live_concurrency: 11, juno_live_poll_interval_ms: 0 },
@@ -400,7 +371,6 @@ function emptySettingsRow(): ServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,

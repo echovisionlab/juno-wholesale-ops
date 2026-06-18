@@ -82,8 +82,6 @@ export function collectSettingsWarnings(options: {
 }): SettingsWarning[] {
   const warnings: SettingsWarning[] = [];
   const authBaseUrl = options.row?.auth_base_url ?? options.env.AUTH_BASE_URL;
-  const emailPasswordEnabled =
-    options.row?.auth_email_password_enabled ?? options.env.AUTH_EMAIL_PASSWORD_ENABLED;
   const externalProviderEnabled =
     options.row?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
   const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins ?? options.env.AUTH_TRUSTED_ORIGINS);
@@ -109,14 +107,6 @@ export function collectSettingsWarnings(options: {
       id: "auth_trusted_origin_missing_current",
       severity: "warning",
       message: `Trusted origins do not include the current origin (${options.currentRequestOrigin}). Add it before testing browser auth flows.`,
-    });
-  }
-
-  if (!emailPasswordEnabled && !externalProviderEnabled) {
-    warnings.push({
-      id: "auth_no_sign_in_method",
-      severity: "critical",
-      message: "At least one admin sign-in method must be enabled.",
     });
   }
 
@@ -237,8 +227,6 @@ function validateResolvedPatch(options: {
   const delayMin = effectiveNumber("juno_live_delay_min_ms", merged, options.env);
   const delayMax = effectiveNumber("juno_live_delay_max_ms", merged, options.env);
   const pollInterval = effectiveNullableNumber("juno_live_poll_interval_ms", merged, options.env);
-  const emailPasswordEnabled = effectiveBoolean("auth_email_password_enabled", merged, options.env);
-  const externalProviderEnabled = effectiveBoolean("auth_external_provider_enabled", merged, options.env);
 
   if (concurrency !== null && (concurrency < 1 || concurrency > 10)) {
     issues.push("juno_live_concurrency must be between 1 and 10");
@@ -255,10 +243,6 @@ function validateResolvedPatch(options: {
   if (pollInterval !== null && pollInterval <= 0) {
     issues.push("juno_live_poll_interval_ms must be null or a positive integer");
   }
-  if (emailPasswordEnabled === false && externalProviderEnabled !== true) {
-    issues.push("auth_email_password_enabled can be disabled only when auth_external_provider_enabled is true");
-  }
-
   return issues;
 }
 
@@ -272,12 +256,6 @@ function effectiveNullableNumber(column: ServiceSettingColumn, row: ServiceSetti
   const definition = definitionsByKey.get(column);
   const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined) ?? null;
   return typeof value === "number" ? value : null;
-}
-
-function effectiveBoolean(column: ServiceSettingColumn, row: ServiceSettingsRow, env: RuntimeEnv): boolean | null {
-  const definition = definitionsByKey.get(column);
-  const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined) ?? null;
-  return typeof value === "boolean" ? value : null;
 }
 
 function isEmail(value: string): boolean {

@@ -25,7 +25,6 @@ describe("resolveAppAuthSettings", () => {
       null,
     );
 
-    expect(settings.emailPasswordEnabled).toBe(true);
     expect(settings.externalProvider).toBeNull();
     expect(getMissingAppAuthSettings(settings)).toEqual(["auth_base_url"]);
     expect(isAppAuthRunnable(settings)).toBe(false);
@@ -37,7 +36,6 @@ describe("resolveAppAuthSettings", () => {
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_TRUSTED_ORIGINS: "https://app.example.com\nhttps://admin.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
         AUTH_EXTERNAL_PROVIDER_ID: "workspace",
         AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
@@ -60,7 +58,6 @@ describe("resolveAppAuthSettings", () => {
       secret: "a".repeat(32),
       baseUrl: "https://app.example.com",
       trustedOrigins: ["https://app.example.com", "https://admin.example.com"],
-      emailPasswordEnabled: false,
       externalProviderEnabled: true,
       externalProvider: {
         providerId: "workspace",
@@ -90,13 +87,11 @@ describe("resolveAppAuthSettings", () => {
       runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://env.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "true",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
       }),
       {
         ...emptyRow(),
         auth_base_url: "https://db.example.com",
-        auth_email_password_enabled: false,
         auth_external_provider_enabled: true,
         auth_external_provider_id: "oidc",
         auth_external_provider_name: "OIDC",
@@ -107,7 +102,6 @@ describe("resolveAppAuthSettings", () => {
     );
 
     expect(settings.baseUrl).toBe("https://db.example.com");
-    expect(settings.emailPasswordEnabled).toBe(false);
     expect(settings.externalProvider).toMatchObject({
       providerId: "oidc",
       name: "OIDC",
@@ -115,23 +109,24 @@ describe("resolveAppAuthSettings", () => {
     });
   });
 
-  it("reports missing runnable external provider settings", () => {
+  it("keeps auth runnable when external provider is enabled but incomplete", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+        AUTH_BASE_URL: "https://app.example.com",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
       }),
       null,
     );
 
-    expect(getMissingAppAuthSettings(settings)).toEqual([
-      "auth_base_url",
-      "auth_external_provider_id",
-      "auth_external_discovery_url",
-      "auth_external_client_id",
-      "auth_external_client_secret",
-    ]);
-    expect(isAppAuthRunnable(settings)).toBe(false);
+    expect(settings.externalProviderEnabled).toBe(true);
+    expect(settings.externalProvider).toMatchObject({
+      providerId: "",
+      discoveryUrl: "",
+      clientId: "",
+      clientSecret: "",
+    });
+    expect(getMissingAppAuthSettings(settings)).toEqual([]);
+    expect(isAppAuthRunnable(settings)).toBe(true);
   });
 
   it("keeps email/password auth runnable when an enabled external provider is incomplete", () => {
@@ -139,7 +134,6 @@ describe("resolveAppAuthSettings", () => {
       runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "true",
       }),
       {
         ...emptyRow(),
@@ -161,12 +155,11 @@ describe("resolveAppAuthSettings", () => {
     expect(isAppAuthRunnable(settings)).toBe(true);
   });
 
-  it("blocks auth when external provider is the only sign-in method and its discovery URL is malformed", () => {
+  it("keeps auth runnable when enabled external provider discovery URL is malformed", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
       }),
       {
         ...emptyRow(),
@@ -178,24 +171,8 @@ describe("resolveAppAuthSettings", () => {
       },
     );
 
-    expect(getMissingAppAuthSettings(settings)).toEqual(["auth_external_discovery_url"]);
-    expect(isAppAuthRunnable(settings)).toBe(false);
-  });
-
-  it("reports when every sign-in method is disabled", () => {
-    const settings = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
-      }),
-      null,
-    );
-
-    expect(getMissingAppAuthSettings(settings)).toEqual([
-      "auth_email_password_enabled or auth_external_provider_enabled",
-    ]);
+    expect(getMissingAppAuthSettings(settings)).toEqual([]);
+    expect(isAppAuthRunnable(settings)).toBe(true);
   });
 
   it("defaults external provider scopes to an empty list", () => {
@@ -206,7 +183,6 @@ describe("resolveAppAuthSettings", () => {
       }),
       {
         ...emptyRow(),
-        auth_email_password_enabled: false,
         auth_external_provider_enabled: true,
         auth_external_provider_id: "workspace",
         auth_external_discovery_url: "https://login.example.com/.well-known/openid-configuration",
@@ -228,7 +204,6 @@ describe("resolveAppAuthSettings", () => {
     const base = resolveAppAuthSettings(
       runtimeEnv({
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EMAIL_PASSWORD_ENABLED: "false",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
         AUTH_EXTERNAL_PROVIDER_ID: "workspace",
         AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
@@ -284,7 +259,6 @@ function emptyRow(): AuthServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,

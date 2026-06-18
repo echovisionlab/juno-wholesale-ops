@@ -236,7 +236,7 @@ export function buildAppSetupStatus(options: {
       label: "Admin auth",
       missing: authMissing,
       detail: "Better Auth admin gate is always enabled",
-      action: authMissing.length > 0 ? "Set the Site address and keep at least one sign-in method enabled." : null,
+      action: authMissing.length > 0 ? "Set the Site address." : null,
       settings: [
         rowBackedSetting({
           key: "auth_base_url",
@@ -244,12 +244,6 @@ export function buildAppSetupStatus(options: {
           rowValue: options.settingsRow?.auth_base_url,
           runtimeValue: options.env.AUTH_BASE_URL,
           required: true,
-        }),
-        rowBackedSetting({
-          key: "auth_email_password_enabled",
-          label: "Email/password login",
-          rowValue: options.settingsRow?.auth_email_password_enabled,
-          runtimeValue: options.env.AUTH_EMAIL_PASSWORD_ENABLED,
         }),
         rowBackedSetting({
           key: "auth_external_provider_enabled",
@@ -274,13 +268,6 @@ export function buildAppSetupStatus(options: {
         }),
       ],
       guardrails: [
-        {
-          label: "Sign-in method",
-          state: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled ? "ok" : "blocked",
-          detail: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled
-            ? "At least one sign-in path is enabled."
-            : "Auth is always enabled, but every sign-in method is disabled.",
-        },
         {
           label: "Admin bootstrap",
           state: adminBootstrapGuardrailState({

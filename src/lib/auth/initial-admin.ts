@@ -35,10 +35,7 @@ export async function seedInitialAdmin(options: {
           betterAuth(
             buildAppAuthOptions({
               database: database.db,
-              settings: {
-                ...options.settings,
-                emailPasswordEnabled: true,
-              },
+              settings: options.settings,
             }),
           ) as AppAuthInstance,
         );

@@ -4,7 +4,6 @@ export type AuthServiceSettingsRow = {
   auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
-  auth_email_password_enabled: boolean | null;
   auth_external_provider_enabled: boolean | null;
   auth_external_provider_id: string | null;
   auth_external_provider_name: string | null;
@@ -34,7 +33,6 @@ export type AppAuthSettings = {
   secret: string | undefined;
   baseUrl: string | undefined;
   trustedOrigins: string[];
-  emailPasswordEnabled: boolean;
   externalProviderEnabled: boolean;
   externalProvider: ExternalAuthProviderSettings | null;
   adminEmailAllowlist: string[];
@@ -62,7 +60,6 @@ export function resolveAppAuthSettings(
     secret: row?.auth_secret ?? env.AUTH_SECRET,
     baseUrl: row?.auth_base_url ?? env.AUTH_BASE_URL ?? options.requestOrigin ?? undefined,
     trustedOrigins: splitList(row?.auth_trusted_origins ?? env.AUTH_TRUSTED_ORIGINS),
-    emailPasswordEnabled: row?.auth_email_password_enabled ?? env.AUTH_EMAIL_PASSWORD_ENABLED,
     externalProviderEnabled,
     externalProvider,
     adminEmailAllowlist: splitList(row?.auth_admin_email_allowlist ?? env.AUTH_ADMIN_EMAIL_ALLOWLIST),
@@ -75,29 +72,11 @@ export function resolveAppAuthSettings(
 export function getMissingAppAuthSettings(settings: AppAuthSettings): string[] {
   return [
     requiredSetting("auth_base_url", settings.baseUrl),
-    settings.emailPasswordEnabled || settings.externalProviderEnabled
-      ? null
-      : "auth_email_password_enabled or auth_external_provider_enabled",
-    ...(!settings.emailPasswordEnabled ? getMissingExternalProviderSettings(settings) : []),
   ].filter((value): value is string => Boolean(value));
 }
 
 export function isAppAuthRunnable(settings: AppAuthSettings): boolean {
   return getMissingAppAuthSettings(settings).length === 0;
-}
-
-function getMissingExternalProviderSettings(settings: AppAuthSettings): string[] {
-  if (!settings.externalProviderEnabled) {
-    return [];
-  }
-
-  return [
-    requiredSetting("auth_external_provider_id", settings.externalProvider?.providerId),
-    requiredSetting("auth_external_discovery_url", settings.externalProvider?.discoveryUrl),
-    invalidUrlSetting("auth_external_discovery_url", settings.externalProvider?.discoveryUrl),
-    requiredSetting("auth_external_client_id", settings.externalProvider?.clientId),
-    requiredSetting("auth_external_client_secret", settings.externalProvider?.clientSecret),
-  ].filter((value): value is string => Boolean(value));
 }
 
 export function splitList(value: string | undefined | null): string[] {
@@ -166,18 +145,6 @@ function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
 
 function requiredSetting(name: string, value: string | undefined): string | null {
   return value?.trim() ? null : name;
-}
-
-function invalidUrlSetting(name: string, value: string | undefined): string | null {
-  if (!value?.trim()) {
-    return null;
-  }
-  try {
-    new URL(value);
-    return null;
-  } catch {
-    return name;
-  }
 }
 
 function trimOptional(value: string | undefined | null): string | undefined {
