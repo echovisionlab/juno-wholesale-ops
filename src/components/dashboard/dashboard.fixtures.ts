@@ -457,24 +457,24 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
       {
         id: "auth",
         label: "Admin auth",
-        state: "disabled",
-        detail: "Better Auth admin gate is disabled",
-        action: "Enable AUTH_ENABLED or auth_enabled when this service is exposed beyond trusted local access.",
+        state: "warning",
+        detail: "Better Auth admin gate is always enabled",
+        action: "Create an admin user or configure an external provider admin allowlist.",
         missing: [],
         settings: [
           {
-            key: "auth_enabled",
-            label: "Admin gate",
+            key: "auth_base_url",
+            label: "Site address",
             source: "runtime",
             state: "configured",
-            value: "disabled",
+            value: "https://inventory-dev.example.test",
           },
         ],
         guardrails: [
           {
-            label: "Protected access",
+            label: "Admin bootstrap",
             state: "warning",
-            detail: "Requests are not gated by Better Auth while this setting is disabled.",
+            detail: "Admin user count is not available yet.",
           },
         ],
       },

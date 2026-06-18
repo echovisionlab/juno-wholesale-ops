@@ -13,23 +13,9 @@ describe("requireAdmin", () => {
     vi.resetAllMocks();
   });
 
-  it("allows requests when the auth gate is disabled", async () => {
+  it("returns auth_unavailable when auth cannot run", async () => {
     getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: false }),
-      auth: null,
-      unavailable: false,
-    });
-
-    await expect(requireAdmin(new Request("http://app.test/api/settings/status"))).resolves.toEqual({
-      authorized: true,
-      enabled: false,
-      user: null,
-    });
-  });
-
-  it("returns auth_unavailable when enabled auth cannot run", async () => {
-    getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: true, missing: ["AUTH_SECRET"] }),
+      runtime: runtime({ missing: ["DATABASE_URL"] }),
       auth: null,
       unavailable: true,
     });
@@ -40,16 +26,15 @@ describe("requireAdmin", () => {
     if (!result.authorized) {
       expect(result.response.status).toBe(503);
       await expect(result.response.json()).resolves.toEqual({
-        enabled: true,
         error: "auth_unavailable",
-        missing: ["AUTH_SECRET"],
+        missing: ["DATABASE_URL"],
       });
     }
   });
 
   it("requires an authenticated session", async () => {
     getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: true }),
+      runtime: runtime({}),
       auth: authWithSession(null),
       unavailable: false,
     });
@@ -60,7 +45,6 @@ describe("requireAdmin", () => {
     if (!result.authorized) {
       expect(result.response.status).toBe(401);
       await expect(result.response.json()).resolves.toEqual({
-        enabled: true,
         error: "authentication_required",
       });
     }
@@ -68,7 +52,7 @@ describe("requireAdmin", () => {
 
   it("rejects non-admin users", async () => {
     getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: true }),
+      runtime: runtime({}),
       auth: authWithSession({ user: { id: "user-1", role: "user" } }),
       unavailable: false,
     });
@@ -79,7 +63,6 @@ describe("requireAdmin", () => {
     if (!result.authorized) {
       expect(result.response.status).toBe(403);
       await expect(result.response.json()).resolves.toEqual({
-        enabled: true,
         error: "admin_required",
       });
     }
@@ -96,7 +79,7 @@ describe("requireAdmin", () => {
       },
     }));
     getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: true }),
+      runtime: runtime({}),
       auth: {
         handler: vi.fn(),
         api: {
@@ -112,7 +95,6 @@ describe("requireAdmin", () => {
 
     await expect(requireAdmin(request)).resolves.toEqual({
       authorized: true,
-      enabled: true,
       user: {
         id: "admin-1",
         email: "admin@example.com",
@@ -124,9 +106,9 @@ describe("requireAdmin", () => {
     expect(getSession).toHaveBeenCalledWith({ headers: request.headers });
   });
 
-  it("treats a missing auth instance as unavailable while auth is enabled", async () => {
+  it("treats a missing auth instance as unavailable", async () => {
     getRuntimeBetterAuthMock.mockResolvedValue({
-      runtime: runtime({ enabled: true, missing: [] }),
+      runtime: runtime({ missing: [] }),
       auth: null,
       unavailable: false,
     });
@@ -137,7 +119,6 @@ describe("requireAdmin", () => {
     if (!result.authorized) {
       expect(result.response.status).toBe(503);
       await expect(result.response.json()).resolves.toEqual({
-        enabled: true,
         error: "auth_unavailable",
         missing: [],
       });
@@ -145,17 +126,19 @@ describe("requireAdmin", () => {
   });
 });
 
-function runtime(options: { enabled: boolean; missing?: string[] }) {
+function runtime(options: { missing?: string[] }) {
   return {
     databaseUrl: "postgres://user:pass@localhost:5432/app",
     settings: {
-      enabled: options.enabled,
       secret: undefined,
       baseUrl: undefined,
       trustedOrigins: [],
       emailPasswordEnabled: true,
       externalProviderEnabled: false,
       externalProvider: null,
+      adminEmailAllowlist: [],
+      externalAdminClaim: undefined,
+      externalAdminClaimValue: undefined,
       initialAdmin: null,
     },
     missing: options.missing ?? [],

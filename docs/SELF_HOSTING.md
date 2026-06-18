@@ -15,9 +15,13 @@ secrets, and lets operators clear DB overrides back to runtime/default values.
 
 ## Production Checklist
 
-- Set `AUTH_ENABLED=true`.
-- Use a strong `AUTH_SECRET`.
-- Set `AUTH_BASE_URL` to the public app URL.
+- Optionally provide a strong `AUTH_SECRET` runtime override. If omitted,
+  startup stores an internal random Better Auth secret in Postgres.
+- Auth is always enabled. Configure an admin bootstrap path through existing
+  admin rows, `AUTH_INITIAL_ADMIN_EMAIL`/`AUTH_INITIAL_ADMIN_PASSWORD`, or
+  external provider admin mapping.
+- Set the Settings Center `Site address` to the public app URL. `AUTH_BASE_URL`
+  may be used only as a bootstrap fallback before the database setting exists.
 - Mount Google service account JSON as a secret.
 - Keep Juno credentials in runtime env or secret storage.
 - Store raw attachments outside the application image.
@@ -25,9 +29,9 @@ secrets, and lets operators clear DB overrides back to runtime/default values.
 - Keep browser profile storage private.
 - Prefer webhook `secret_ref` over inline config.
 
-`DATABASE_URL` and `AUTH_SECRET` remain runtime-only and are not editable in
-the Settings Center. Keep production auth enabled before exposing the service
-beyond trusted local access.
+`DATABASE_URL` remains runtime-only. The internal Better Auth secret is never
+editable or displayed in the Settings Center. Auth is always enabled before the
+service is exposed beyond trusted local access.
 
 ## Docker
 

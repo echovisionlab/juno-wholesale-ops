@@ -29,33 +29,38 @@ describe("buildAppSetupStatus", () => {
         ]),
       }),
       expect.objectContaining({
+        id: "data",
+        state: "warning",
+        missing: [],
+      }),
+      expect.objectContaining({
         id: "gmail",
-        state: "missing",
-        missing: ["google_workspace_delegated_user", "google_service_account_key_json"],
+        state: "warning",
+        missing: [],
       }),
       expect.objectContaining({
         id: "juno",
-        state: "missing",
-        missing: ["juno_login_email", "juno_login_password"],
+        state: "warning",
+        missing: [],
         guardrails: expect.arrayContaining([
+          expect.objectContaining({ label: "Read-only browser lookup", state: "warning" }),
           expect.objectContaining({ label: "Scheduled polling", state: "warning" }),
         ]),
       }),
       expect.objectContaining({
         id: "auth",
-        state: "disabled",
-        missing: [],
-        action: expect.stringContaining("AUTH_ENABLED"),
+        state: "missing",
+        missing: ["auth_base_url"],
       }),
     ]);
+    expect(JSON.stringify(status)).not.toContain("AUTH_SECRET");
+    expect(JSON.stringify(status)).not.toContain("Auth secret");
   });
 
   it("marks setup complete when values come from env and database settings", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_ENABLED: "true",
-        AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
@@ -72,7 +77,7 @@ describe("buildAppSetupStatus", () => {
     });
 
     expect(status.ready).toBe(true);
-    expect(status.steps.map((step) => step.state)).toEqual(["complete", "complete", "complete", "complete"]);
+    expect(status.steps.map((step) => step.state)).toEqual(["complete", "warning", "warning", "complete", "complete"]);
     expect(status.steps.find((step) => step.id === "juno")?.settings).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -90,35 +95,87 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("reports enabled auth as missing when provider settings are absent", () => {
+  it("does not require Gmail settings in demo mode", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_ENABLED: "true",
-        GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
-        GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
+        AUTH_BASE_URL: "https://app.example.com",
+      }),
+      settingsRow: emptyRow(),
+    });
+
+    expect(status.ready).toBe(true);
+    expect(status.steps.find((step) => step.id === "gmail")).toEqual(
+      expect.objectContaining({
+        state: "warning",
+        missing: [],
+        detail: "optional while demo mode is selected",
+      }),
+    );
+  });
+
+  it("requires Gmail settings in real mailbox mode", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
+        AUTH_BASE_URL: "https://app.example.com",
+      }),
+      settingsRow: emptyRow(),
+    });
+
+    expect(status.ready).toBe(false);
+    expect(status.steps.find((step) => step.id === "gmail")).toEqual(
+      expect.objectContaining({
+        state: "missing",
+        missing: ["google_workspace_delegated_user", "google_service_account_key_json"],
+      }),
+    );
+  });
+
+  it("does not block app setup for missing Juno credentials while live lookup is disabled", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_BASE_URL: "https://app.example.com",
+      }),
+      settingsRow: emptyRow(),
+    });
+
+    expect(status.ready).toBe(true);
+    expect(status.steps.find((step) => step.id === "juno")).toEqual(
+      expect.objectContaining({
+        state: "warning",
+        missing: [],
+      }),
+    );
+  });
+
+  it("does not expose the internal auth secret in setup status", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         JUNO_LOGIN_EMAIL: "buyer@example.com",
         JUNO_LOGIN_PASSWORD: "secret",
       }),
       settingsRow: null,
     });
 
-    expect(status.ready).toBe(false);
+    expect(JSON.stringify(status)).not.toContain("AUTH_SECRET");
+    expect(JSON.stringify(status)).not.toContain("Auth secret");
     expect(status.steps.at(-1)).toEqual(
       expect.objectContaining({
         id: "auth",
         state: "missing",
-        missing: ["AUTH_SECRET", "auth_base_url"],
+        missing: ["auth_base_url"],
       }),
     );
   });
 
-  it("blocks enabled auth when every sign-in method is explicitly disabled", () => {
+  it("blocks auth when every sign-in method is explicitly disabled", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_ENABLED: "true",
-        AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
@@ -138,10 +195,88 @@ describe("buildAppSetupStatus", () => {
           expect.objectContaining({
             label: "Sign-in method",
             state: "blocked",
-            detail: "Auth is enabled, but every sign-in method is disabled.",
+            detail: "Auth is always enabled, but every sign-in method is disabled.",
           }),
         ]),
       }),
+    );
+  });
+
+  it("blocks auth when no admin access path is configured", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_BASE_URL: "https://app.example.com",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+
+    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Admin bootstrap",
+          state: "blocked",
+          detail: "Auth bootstrap blocked. No admin access path configured.",
+        }),
+      ]),
+    );
+  });
+
+  it("accepts external provider admin allowlist as an auth bootstrap path", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
+        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
+        AUTH_EXTERNAL_CLIENT_ID: "client-id",
+        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+        AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.com",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+
+    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Admin bootstrap",
+          state: "ok",
+          detail: "External provider admin allowlist or claim mapping can bootstrap admin access.",
+        }),
+      ]),
+    );
+  });
+
+  it("accepts external provider admin claim mapping as an auth bootstrap path", () => {
+    const status = buildAppSetupStatus({
+      env: loadRuntimeEnv({
+        DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
+        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
+        AUTH_EXTERNAL_CLIENT_ID: "client-id",
+        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
+        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops",
+      }),
+      settingsRow: emptyRow(),
+      adminUserCount: 0,
+    });
+
+    expect(status.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          label: "Admin bootstrap",
+          state: "ok",
+          detail: "External provider admin allowlist or claim mapping can bootstrap admin access.",
+        }),
+      ]),
     );
   });
 
@@ -223,6 +358,7 @@ describe("buildAppSetupStatus", () => {
   it("marks a feature missing when required guardrails are blocked even if its own fields are set", () => {
     const status = buildAppSetupStatus({
       env: loadRuntimeEnv({
+        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
         GOOGLE_WORKSPACE_DELEGATED_USER: "operator@example.com",
         GOOGLE_SERVICE_ACCOUNT_KEY_JSON: "/run/secrets/google.json",
       }),
@@ -341,7 +477,9 @@ describe("buildAppSetupStatus", () => {
 
   it("treats blank database strings as unset instead of configured", () => {
     const status = buildAppSetupStatus({
-      env: loadRuntimeEnv({}),
+      env: loadRuntimeEnv({
+        JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox",
+      }),
       settingsRow: {
         ...emptyRow(),
         google_workspace_delegated_user: "   ",
@@ -388,6 +526,7 @@ describe("buildAppSetupStatus", () => {
 
 function emptyRow(): JunoLiveServiceSettingsRow {
   return {
+    data_mode: null,
     juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,
@@ -411,15 +550,22 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     gmail_storage_dir: null,
     catalog_attachment_pattern: null,
     supplier_code: null,
-    auth_enabled: null,
+    auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
     auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,
+    auth_login_logo_url: null,
+    auth_external_provider_logo_url: null,
+    auth_external_provider_button_label: null,
     auth_external_discovery_url: null,
     auth_external_client_id: null,
     auth_external_client_secret: null,
+    auth_external_provider_scopes: null,
+    auth_admin_email_allowlist: null,
+    auth_external_admin_claim: null,
+    auth_external_admin_claim_value: null,
   };
 }

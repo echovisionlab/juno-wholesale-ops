@@ -1,11 +1,13 @@
+import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 
 import { buildAppAuthOptions, createAuthDatabase, type AppAuthInstance } from "./app-auth";
 import type { AppAuthSettings, InitialAdminSettings } from "./settings";
 
 export type SeedInitialAdminResult =
-  | { status: "skipped"; reason: "missing_config" | "duplicate" }
-  | { status: "created"; email: string };
+  | { status: "skipped"; reason: "duplicate" | "existing_admin" }
+  | { status: "created"; source: "env"; email: string }
+  | { status: "created"; source: "generated"; email: string; password: string };
 
 export type SeedAuthDatabase = {
   db: { destroy: () => Promise<void> };
@@ -18,14 +20,13 @@ export async function seedInitialAdmin(options: {
   settings: AppAuthSettings;
   pool?: Pool;
 }): Promise<SeedInitialAdminResult> {
-  const initialAdmin = options.settings.initialAdmin;
-
-  if (!initialAdmin) {
-    return { status: "skipped", reason: "missing_config" };
-  }
-
   const database = createAuthDatabase(options.databaseUrl, options.pool);
   try {
+    const initialAdmin = options.settings.initialAdmin ?? await generatedInitialAdminIfNeeded(database.pool);
+    if (!initialAdmin) {
+      return { status: "skipped", reason: "existing_admin" };
+    }
+    const source = options.settings.initialAdmin ? "env" : "generated";
     return await seedInitialAdminWithPool({
       pool: database.pool,
       initialAdmin,
@@ -36,7 +37,6 @@ export async function seedInitialAdmin(options: {
               database: database.db,
               settings: {
                 ...options.settings,
-                enabled: true,
                 emailPasswordEnabled: true,
               },
             }),
@@ -51,6 +51,7 @@ export async function seedInitialAdmin(options: {
           headers: new Headers(),
         });
       },
+      source,
     });
   } finally {
     await closeSeedAuthDatabase(database);
@@ -58,16 +59,17 @@ export async function seedInitialAdmin(options: {
 }
 
 export async function closeSeedAuthDatabase(database: SeedAuthDatabase): Promise<void> {
-  await database.db.destroy();
-  if (database.ownsPool) {
-    await database.pool.end();
+  if (!database.ownsPool) {
+    return;
   }
+  await database.db.destroy();
 }
 
 export async function seedInitialAdminWithPool(options: {
   pool: Pool;
   initialAdmin: InitialAdminSettings;
   createUser: () => Promise<void>;
+  source?: "env" | "generated";
 }): Promise<SeedInitialAdminResult> {
   const existing = await options.pool.query<{ id: string }>(
     `
@@ -95,5 +97,34 @@ export async function seedInitialAdminWithPool(options: {
     [options.initialAdmin.email],
   );
 
-  return { status: "created", email: options.initialAdmin.email };
+  if (options.source === "generated") {
+    return {
+      status: "created",
+      source: "generated",
+      email: options.initialAdmin.email,
+      password: options.initialAdmin.password,
+    };
+  }
+
+  return { status: "created", source: "env", email: options.initialAdmin.email };
+}
+
+async function generatedInitialAdminIfNeeded(pool: Pool): Promise<InitialAdminSettings | null> {
+  const existing = await pool.query<{ count: string }>(
+    `
+      SELECT count(*)::text AS count
+      FROM auth_user
+      WHERE role = 'admin'
+    `,
+  );
+  if (Number(existing.rows[0]?.count ?? 0) > 0) {
+    return null;
+  }
+
+  const suffix = randomBytes(6).toString("hex");
+  return {
+    email: `admin+${suffix}@localhost.invalid`,
+    password: randomBytes(24).toString("base64url"),
+    name: "Generated Admin",
+  };
 }

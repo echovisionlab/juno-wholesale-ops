@@ -1,5 +1,6 @@
 import { loadRuntimeEnv } from "@/lib/env";
 import { withJunoLiveRepository } from "@/lib/juno-live/repository";
+import { ensureDatabaseAuthSecretClient } from "@/lib/settings/repository";
 import { getCachedAppAuth } from "./app-auth";
 import {
   getMissingAppAuthSettings,
@@ -14,12 +15,26 @@ export type ResolvedRuntimeAuth = {
   missing: string[];
 };
 
-async function resolveRuntimeAuth(): Promise<ResolvedRuntimeAuth> {
+async function resolveRuntimeAuth(options: { requestOrigin?: string | null } = {}): Promise<ResolvedRuntimeAuth> {
   const env = loadRuntimeEnv(process.env);
   const settingsRow = env.DATABASE_URL
-    ? await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow())
+    ? await withJunoLiveRepository(env.DATABASE_URL, async (repository, pool) => {
+        const row = await repository.getServiceSettingsRow();
+        if (!row?.auth_secret && !env.AUTH_SECRET) {
+          const authSecret = await ensureDatabaseAuthSecretClient(pool);
+          const refreshedRow = row ?? await repository.getServiceSettingsRow();
+          if (!refreshedRow) {
+            throw new Error("service_setting row was not available after auth secret initialization");
+          }
+          return {
+            ...refreshedRow,
+            auth_secret: authSecret,
+          };
+        }
+        return row;
+      })
     : null;
-  const settings = resolveAppAuthSettings(env, settingsRow);
+  const settings = resolveAppAuthSettings(env, settingsRow, { requestOrigin: options.requestOrigin });
   const missing = [
     env.DATABASE_URL ? null : "DATABASE_URL",
     ...getMissingAppAuthSettings(settings),
@@ -32,12 +47,8 @@ async function resolveRuntimeAuth(): Promise<ResolvedRuntimeAuth> {
   };
 }
 
-export async function getRuntimeBetterAuth() {
-  const runtime = await resolveRuntimeAuth();
-
-  if (!runtime.settings.enabled) {
-    return { runtime, auth: null, unavailable: false };
-  }
+export async function getRuntimeBetterAuth(options: { requestOrigin?: string | null } = {}) {
+  const runtime = await resolveRuntimeAuth(options);
 
   if (!runtime.databaseUrl || !isAppAuthRunnable(runtime.settings)) {
     return { runtime, auth: null, unavailable: true };

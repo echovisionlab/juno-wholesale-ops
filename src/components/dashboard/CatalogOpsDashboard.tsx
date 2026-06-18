@@ -1468,8 +1468,14 @@ function getLiveWorkerDisabledReason(setupStatus?: AppSetupStatus | null): strin
     return "Start disabled because DATABASE_URL or the service_setting row is unavailable.";
   }
   const junoStep = setupStatus.steps.find((step) => step.id === "juno");
-  if (!junoStep || junoStep.state === "missing") {
+  if (!junoStep) {
     return "Start disabled until Juno read-only login credentials and delay guardrails are configured.";
+  }
+  const missingCredentials = junoStep.settings.some((setting) =>
+    (setting.key === "juno_login_email" || setting.key === "juno_login_password") && setting.state !== "configured",
+  ) || junoStep.missing.some((key) => key === "juno_login_email" || key === "juno_login_password");
+  if (missingCredentials) {
+    return "Start disabled until Juno read-only login credentials are configured.";
   }
   const blockedGuardrail = junoStep.guardrails.find((guardrail) => guardrail.state === "blocked");
   if (blockedGuardrail) {

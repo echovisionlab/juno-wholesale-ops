@@ -5,6 +5,7 @@ import {
   Alert,
   Button,
   Card,
+  Image,
   PasswordInput,
   Stack,
   Text,
@@ -13,7 +14,13 @@ import {
 } from "@mantine/core";
 import { LogIn } from "lucide-react";
 
-export function LoginForm({ redirectTo }: { redirectTo: string }) {
+export function LoginForm({
+  redirectTo,
+  loginLogoUrl = null,
+}: {
+  redirectTo: string;
+  loginLogoUrl?: string | null;
+}) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -52,11 +59,15 @@ export function LoginForm({ redirectTo }: { redirectTo: string }) {
     <Card maw={420} w="100%" shadow="sm">
       <form onSubmit={submit}>
         <Stack>
-          <Stack gap={4}>
-            <Title order={1} size="h2">
-              Admin sign in
-            </Title>
-            <Text size="sm" c="dimmed">
+          <Stack gap={4} align={loginLogoUrl ? "center" : undefined}>
+            {loginLogoUrl ? (
+              <Image src={loginLogoUrl} alt="Sign in" fit="contain" h={64} maw={240} />
+            ) : (
+              <Title order={1} size="h2">
+                Sign in
+              </Title>
+            )}
+            <Text size="sm" c="dimmed" ta={loginLogoUrl ? "center" : undefined}>
               Use an administrator account to access the catalog dashboard.
             </Text>
           </Stack>

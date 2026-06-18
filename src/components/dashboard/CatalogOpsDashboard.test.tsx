@@ -378,6 +378,16 @@ describe("CatalogOpsDashboard", () => {
               },
             ],
           },
+          {
+            id: "gmail",
+            label: "Gmail ingest",
+            state: "disabled",
+            detail: "optional",
+            action: "Optional while demo mode is selected.",
+            missing: [],
+            settings: [],
+            guardrails: [],
+          },
         ],
       },
       liveSummary: {
@@ -587,6 +597,58 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Juno read-only login credentials");
     clickButton("Start");
     expect(onWorkerAction).not.toHaveBeenCalled();
+
+    renderDashboard({
+      ...dashboardFixture,
+      setupStatus: {
+        ready: false,
+        steps: [
+          {
+            id: "database",
+            label: "Database",
+            state: "complete",
+            detail: "database",
+            action: null,
+            missing: [],
+            settings: [],
+            guardrails: [],
+          },
+          {
+            id: "juno",
+            label: "Live stock lookup",
+            state: "missing",
+            detail: "juno",
+            action: null,
+            missing: [],
+            settings: [
+              {
+                key: "juno_login_password",
+                label: "Login password",
+                source: "unset",
+                state: "missing",
+                value: "not set",
+                secret: true,
+              },
+            ],
+            guardrails: [],
+          },
+        ],
+      },
+      workerStatus: {
+        state: "stopped",
+        pid: null,
+        startedAt: null,
+        stoppedAt: null,
+        exitCode: null,
+        signal: null,
+        lastError: null,
+        command: "tsx",
+        args: [],
+        recentLogs: [],
+      },
+      onWorkerAction,
+    });
+    expect(pageText()).toContain("Start disabled until Juno read-only login credentials are configured.");
 
     renderDashboard({
       ...dashboardFixture,

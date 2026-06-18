@@ -10,6 +10,7 @@ import {
   shouldContinueAutomaticLookup,
   type JunoLiveServiceSettingsRow,
 } from "@/lib/juno-live/settings";
+import type { DataMode } from "@/lib/settings/descriptors";
 
 export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
 
@@ -35,7 +36,7 @@ export type SetupGuardrail = {
 };
 
 export type SetupStep = {
-  id: "database" | "gmail" | "juno" | "auth";
+  id: "database" | "data" | "gmail" | "juno" | "auth";
   label: string;
   state: SetupStepState;
   detail: string;
@@ -53,14 +54,17 @@ export type AppSetupStatus = {
 export function buildAppSetupStatus(options: {
   env: RuntimeEnv;
   settingsRow: JunoLiveServiceSettingsRow | null;
+  adminUserCount?: number | null;
 }): AppSetupStatus {
   const databaseMissing = options.env.DATABASE_URL ? [] : ["DATABASE_URL"];
+  const dataMode = resolveDataMode(options.env, options.settingsRow);
   const gmailSettings = resolveGmailIngestSettings(options.env, options.settingsRow);
-  const gmailMissing = getMissingGmailIngestSettings(gmailSettings);
+  const gmailMissing = dataMode === "real_mailbox" ? getMissingGmailIngestSettings(gmailSettings) : [];
   const liveSettings = resolveJunoLiveSettings(options.env, options.settingsRow);
+  const junoLookupEnabled = isJunoLookupEnabled(options.env, options.settingsRow);
   const junoMissing = [
-    liveSettings.loginEmail ? null : "juno_login_email",
-    liveSettings.loginPassword ? null : "juno_login_password",
+    junoLookupEnabled && !liveSettings.loginEmail ? "juno_login_email" : null,
+    junoLookupEnabled && !liveSettings.loginPassword ? "juno_login_password" : null,
     liveSettings.delayMinMs <= liveSettings.delayMaxMs
       ? null
       : "juno_live_delay_min_ms must be <= juno_live_delay_max_ms",
@@ -102,10 +106,35 @@ export function buildAppSetupStatus(options: {
       ],
     }),
     setupStep({
+      id: "data",
+      label: "Data mode",
+      missing: [],
+      detail: dataMode === "demo" ? "synthetic demo data" : "real mailbox ingestion",
+      action: dataMode === "demo" ? "Run demo seed when you want sample catalog rows." : null,
+      settings: [
+        rowBackedSetting({
+          key: "data_mode",
+          label: "Data mode",
+          rowValue: options.settingsRow?.data_mode,
+          runtimeValue: options.env.JUNO_WHOLESALE_OPS_DATA_MODE,
+          emptyValue: "demo",
+        }),
+      ],
+      guardrails: [
+        {
+          label: "Mailbox requirement",
+          state: dataMode === "demo" ? "warning" : "ok",
+          detail: dataMode === "demo"
+            ? "Demo mode does not require Gmail credentials."
+            : "Real mailbox mode requires Gmail delegated mailbox and service account settings.",
+        },
+      ],
+    }),
+    setupStep({
       id: "gmail",
       label: "Gmail ingest",
       missing: gmailMissing,
-      detail: "required for catalog email ingestion",
+      detail: dataMode === "demo" ? "optional while demo mode is selected" : "required for catalog email ingestion",
       action: gmailMissing.length > 0 ? "Configure the delegated mailbox, service account key, query, storage, and supplier defaults." : null,
       settings: [
         rowBackedSetting({
@@ -113,14 +142,14 @@ export function buildAppSetupStatus(options: {
           label: "Delegated mailbox",
           rowValue: options.settingsRow?.google_workspace_delegated_user,
           runtimeValue: options.env.GOOGLE_WORKSPACE_DELEGATED_USER,
-          required: true,
+          required: dataMode === "real_mailbox",
         }),
         rowBackedSetting({
           key: "google_service_account_key_json",
           label: "Service account key",
           rowValue: options.settingsRow?.google_service_account_key_json,
           runtimeValue: options.env.GOOGLE_SERVICE_ACCOUNT_KEY_JSON,
-          required: true,
+          required: dataMode === "real_mailbox",
           secret: true,
         }),
         rowBackedSetting({
@@ -128,28 +157,28 @@ export function buildAppSetupStatus(options: {
           label: "Search query",
           rowValue: options.settingsRow?.gmail_ingest_query,
           runtimeValue: options.env.GMAIL_INGEST_QUERY,
-          required: true,
+          required: dataMode === "real_mailbox",
         }),
         rowBackedSetting({
           key: "catalog_attachment_pattern",
           label: "Attachment pattern",
           rowValue: options.settingsRow?.catalog_attachment_pattern,
           runtimeValue: options.env.CATALOG_ATTACHMENT_PATTERN,
-          required: true,
+          required: dataMode === "real_mailbox",
         }),
         rowBackedSetting({
           key: "gmail_storage_dir",
           label: "Attachment storage",
           rowValue: options.settingsRow?.gmail_storage_dir,
           runtimeValue: options.env.GMAIL_STORAGE_DIR,
-          required: true,
+          required: dataMode === "real_mailbox",
         }),
         rowBackedSetting({
           key: "supplier_code",
           label: "Supplier code",
           rowValue: options.settingsRow?.supplier_code,
           runtimeValue: options.env.SUPPLIER_CODE,
-          required: true,
+          required: dataMode === "real_mailbox",
         }),
         rowBackedSetting({
           key: "google_gmail_scopes",
@@ -167,10 +196,12 @@ export function buildAppSetupStatus(options: {
       guardrails: [
         {
           label: "Cursored Gmail search",
-          state: options.env.DATABASE_URL ? "ok" : "blocked",
-          detail: options.env.DATABASE_URL
-            ? "Ingest can use stored cursor state and content hashes to avoid duplicate sheets."
-            : "Database state is required before ingest can dedupe safely.",
+          state: dataMode === "demo" ? "warning" : options.env.DATABASE_URL ? "ok" : "blocked",
+          detail: dataMode === "demo"
+            ? "Gmail ingest is optional in demo mode."
+            : options.env.DATABASE_URL
+              ? "Ingest can use stored cursor state and content hashes to avoid duplicate sheets."
+              : "Database state is required before ingest can dedupe safely.",
         },
       ],
     }),
@@ -178,7 +209,7 @@ export function buildAppSetupStatus(options: {
       id: "juno",
       label: "Live stock lookup",
       missing: junoMissing,
-      detail: "required for browser-based stock checks",
+      detail: junoLookupEnabled ? "enabled read-only browser-based stock checks" : "optional read-only browser lookup",
       action: junoMissing.length > 0 ? "Configure credentials and keep delay bounds sane before starting the worker." : null,
       settings: [
         rowBackedSetting({
@@ -186,14 +217,14 @@ export function buildAppSetupStatus(options: {
           label: "Login email",
           rowValue: options.settingsRow?.juno_login_email,
           runtimeValue: options.env.JUNO_LOGIN_EMAIL,
-          required: true,
+          required: junoLookupEnabled,
         }),
         rowBackedSetting({
           key: "juno_login_password",
           label: "Login password",
           rowValue: options.settingsRow?.juno_login_password,
           runtimeValue: options.env.JUNO_LOGIN_PASSWORD,
-          required: true,
+          required: junoLookupEnabled,
           secret: true,
         }),
         rowBackedSetting({
@@ -225,10 +256,12 @@ export function buildAppSetupStatus(options: {
       guardrails: [
         {
           label: "Read-only browser lookup",
-          state: liveSettings.loginEmail && liveSettings.loginPassword ? "ok" : "blocked",
-          detail: liveSettings.loginEmail && liveSettings.loginPassword
-            ? "Worker can reuse a persistent browser session and avoid cart or wishlist actions."
-            : "Credentials are required before lookup jobs can run.",
+          state: !junoLookupEnabled ? "warning" : liveSettings.loginEmail && liveSettings.loginPassword ? "ok" : "blocked",
+          detail: !junoLookupEnabled
+            ? "Live lookup is disabled; missing credentials do not block app setup."
+            : liveSettings.loginEmail && liveSettings.loginPassword
+              ? "Worker can reuse a persistent browser session and avoid cart or wishlist actions."
+              : "Credentials are required before lookup jobs can run.",
         },
         {
           label: "Randomized request pacing",
@@ -244,103 +277,73 @@ export function buildAppSetupStatus(options: {
         },
       ],
     }),
-    authSettings.enabled
-      ? setupStep({
-          id: "auth",
-          label: "Admin auth",
-          missing: authMissing,
-          detail: "Better Auth admin gate",
-          action: authMissing.length > 0 ? "Set the auth secret, base URL, and at least one sign-in method." : null,
-          settings: [
-            rowBackedSetting({
-              key: "auth_enabled",
-              label: "Admin gate",
-              rowValue: options.settingsRow?.auth_enabled,
-              runtimeValue: options.env.AUTH_ENABLED,
-            }),
-            runtimeSetting({
-              key: "AUTH_SECRET",
-              label: "Auth secret",
-              value: options.env.AUTH_SECRET,
-              required: true,
-              secret: true,
-            }),
-            rowBackedSetting({
-              key: "auth_base_url",
-              label: "Public base URL",
-              rowValue: options.settingsRow?.auth_base_url,
-              runtimeValue: options.env.AUTH_BASE_URL,
-              required: true,
-            }),
-            rowBackedSetting({
-              key: "auth_email_password_enabled",
-              label: "Email/password login",
-              rowValue: options.settingsRow?.auth_email_password_enabled,
-              runtimeValue: options.env.AUTH_EMAIL_PASSWORD_ENABLED,
-            }),
-            rowBackedSetting({
-              key: "auth_external_provider_enabled",
-              label: "External provider",
-              rowValue: options.settingsRow?.auth_external_provider_enabled,
-              runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ENABLED,
-            }),
-            rowBackedSetting({
-              key: "auth_external_provider_id",
-              label: "External provider id",
-              rowValue: options.settingsRow?.auth_external_provider_id,
-              runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ID,
-              required: authSettings.externalProviderEnabled,
-            }),
-            rowBackedSetting({
-              key: "auth_external_client_secret",
-              label: "External client secret",
-              rowValue: options.settingsRow?.auth_external_client_secret,
-              runtimeValue: options.env.AUTH_EXTERNAL_CLIENT_SECRET,
-              required: authSettings.externalProviderEnabled,
-              secret: true,
-            }),
-          ],
-          guardrails: [
-            {
-              label: "Sign-in method",
-              state: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled ? "ok" : "blocked",
-              detail: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled
-                ? "At least one sign-in path is enabled."
-                : "Auth is enabled, but every sign-in method is disabled.",
-            },
-            {
-              label: "Initial admin seed",
-              state: authSettings.initialAdmin ? "ok" : "warning",
-              detail: authSettings.initialAdmin
-                ? "An initial admin can be inserted idempotently during migration."
-                : "No initial admin env is configured; use an external provider or create an admin separately.",
-            },
-          ],
-        })
-      : {
-          id: "auth",
-          label: "Admin auth",
-          state: "disabled",
-          detail: "Better Auth admin gate is disabled",
-          action: "Enable AUTH_ENABLED or auth_enabled when this service is exposed beyond trusted local access.",
-          missing: [],
-          settings: [
-            rowBackedSetting({
-              key: "auth_enabled",
-              label: "Admin gate",
-              rowValue: options.settingsRow?.auth_enabled,
-              runtimeValue: options.env.AUTH_ENABLED,
-              emptyValue: "disabled",
-            }),
-          ],
-          guardrails: [
-            {
-              label: "Protected access",
-              state: "warning",
-              detail: "Requests are not gated by Better Auth while this setting is disabled.",
-            },
-          ],
+    setupStep({
+      id: "auth",
+      label: "Admin auth",
+      missing: authMissing,
+      detail: "Better Auth admin gate is always enabled",
+      action: authMissing.length > 0 ? "Set the Site address and keep at least one sign-in method enabled." : null,
+      settings: [
+        rowBackedSetting({
+          key: "auth_base_url",
+          label: "Site address",
+          rowValue: options.settingsRow?.auth_base_url,
+          runtimeValue: options.env.AUTH_BASE_URL,
+          required: true,
+        }),
+        rowBackedSetting({
+          key: "auth_email_password_enabled",
+          label: "Email/password login",
+          rowValue: options.settingsRow?.auth_email_password_enabled,
+          runtimeValue: options.env.AUTH_EMAIL_PASSWORD_ENABLED,
+        }),
+        rowBackedSetting({
+          key: "auth_external_provider_enabled",
+          label: "External provider",
+          rowValue: options.settingsRow?.auth_external_provider_enabled,
+          runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ENABLED,
+        }),
+        rowBackedSetting({
+          key: "auth_external_provider_id",
+          label: "External provider id",
+          rowValue: options.settingsRow?.auth_external_provider_id,
+          runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ID,
+          required: authSettings.externalProviderEnabled,
+        }),
+        rowBackedSetting({
+          key: "auth_external_client_secret",
+          label: "External client secret",
+          rowValue: options.settingsRow?.auth_external_client_secret,
+          runtimeValue: options.env.AUTH_EXTERNAL_CLIENT_SECRET,
+          required: authSettings.externalProviderEnabled,
+          secret: true,
+        }),
+      ],
+      guardrails: [
+        {
+          label: "Sign-in method",
+          state: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled ? "ok" : "blocked",
+          detail: authSettings.emailPasswordEnabled || authSettings.externalProviderEnabled
+            ? "At least one sign-in path is enabled."
+            : "Auth is always enabled, but every sign-in method is disabled.",
         },
+        {
+          label: "Admin bootstrap",
+          state: adminBootstrapGuardrailState({
+            adminUserCount: options.adminUserCount ?? null,
+            hasInitialAdmin: Boolean(authSettings.initialAdmin),
+            hasExternalAdminMapping: authSettings.externalProviderEnabled
+              && (authSettings.adminEmailAllowlist.length > 0 || Boolean(authSettings.externalAdminClaim && authSettings.externalAdminClaimValue)),
+          }),
+          detail: adminBootstrapGuardrailDetail({
+            adminUserCount: options.adminUserCount ?? null,
+            hasInitialAdmin: Boolean(authSettings.initialAdmin),
+            hasExternalAdminMapping: authSettings.externalProviderEnabled
+              && (authSettings.adminEmailAllowlist.length > 0 || Boolean(authSettings.externalAdminClaim && authSettings.externalAdminClaimValue)),
+          }),
+        },
+      ],
+    }),
   ];
 
   return {
@@ -361,6 +364,48 @@ function guardrailStepState(guardrails: SetupGuardrail[]): SetupStepState {
     return "missing";
   }
   return guardrails.some((guardrail) => guardrail.state === "warning") ? "warning" : "complete";
+}
+
+function resolveDataMode(env: RuntimeEnv, row: JunoLiveServiceSettingsRow | null): DataMode {
+  return row?.data_mode ?? env.JUNO_WHOLESALE_OPS_DATA_MODE;
+}
+
+function isJunoLookupEnabled(env: RuntimeEnv, row: JunoLiveServiceSettingsRow | null): boolean {
+  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? env.JUNO_LIVE_ENQUEUE_ON_INGEST;
+  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL;
+  const pollInterval = row?.juno_live_poll_interval_ms ?? env.JUNO_LIVE_POLL_INTERVAL_MS;
+  return Boolean(enqueueOnIngest || autoEnqueueOnInterval || pollInterval);
+}
+
+function adminBootstrapGuardrailState(options: {
+  adminUserCount: number | null;
+  hasInitialAdmin: boolean;
+  hasExternalAdminMapping: boolean;
+}): SetupGuardrailState {
+  if ((options.adminUserCount ?? 0) > 0 || options.hasInitialAdmin || options.hasExternalAdminMapping) {
+    return "ok";
+  }
+  return options.adminUserCount === null ? "warning" : "blocked";
+}
+
+function adminBootstrapGuardrailDetail(options: {
+  adminUserCount: number | null;
+  hasInitialAdmin: boolean;
+  hasExternalAdminMapping: boolean;
+}): string {
+  if ((options.adminUserCount ?? 0) > 0) {
+    return "At least one admin user exists.";
+  }
+  if (options.hasInitialAdmin) {
+    return "Initial admin env can bootstrap admin access.";
+  }
+  if (options.hasExternalAdminMapping) {
+    return "External provider admin allowlist or claim mapping can bootstrap admin access.";
+  }
+  if (options.adminUserCount === null) {
+    return "Admin user count is unavailable; configure initial admin env or external provider admin mapping before production exposure.";
+  }
+  return "Auth bootstrap blocked. No admin access path configured.";
 }
 
 function scheduledPollingGuardrail(

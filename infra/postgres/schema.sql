@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 433d707617dc7ab5938800244e56564f9387e748bb420c0603df954c0163d04e
+-- migration-manifest-sha256: 7660a6c6d0af73df7341bcf99ad7167ccb8870280f5fb8d10363fd93b7a1cc22
 --
 -- PostgreSQL database dump
 --
@@ -452,7 +452,6 @@ CREATE TABLE public.service_setting (
     gmail_storage_dir text,
     catalog_attachment_pattern text,
     supplier_code text,
-    auth_enabled boolean,
     auth_base_url text,
     auth_trusted_origins text,
     auth_email_password_enabled boolean,
@@ -462,7 +461,19 @@ CREATE TABLE public.service_setting (
     auth_external_discovery_url text,
     auth_external_client_id text,
     auth_external_client_secret text,
-    CONSTRAINT service_setting_auth_sign_in_method_check CHECK (((auth_enabled IS DISTINCT FROM true) OR (auth_email_password_enabled IS DISTINCT FROM false) OR (auth_external_provider_enabled IS DISTINCT FROM false))),
+    data_mode text,
+    auth_external_provider_logo_url text,
+    auth_external_provider_button_label text,
+    auth_external_provider_scopes text,
+    auth_admin_email_allowlist text,
+    auth_external_admin_claim text,
+    auth_external_admin_claim_value text,
+    auth_secret text,
+    auth_login_logo_url text,
+    CONSTRAINT service_setting_auth_login_logo_url_asset_check CHECK (((auth_login_logo_url IS NULL) OR (auth_login_logo_url ~* '^https?://[^[:space:]]+\.(png|webp|svg)([?#].*)?$'::text))),
+    CONSTRAINT service_setting_auth_secret_length_check CHECK (((auth_secret IS NULL) OR (length(auth_secret) >= 32))),
+    CONSTRAINT service_setting_auth_sign_in_method_check CHECK (((auth_email_password_enabled IS DISTINCT FROM false) OR (auth_external_provider_enabled IS TRUE))),
+    CONSTRAINT service_setting_data_mode_check CHECK (((data_mode IS NULL) OR (data_mode = ANY (ARRAY['demo'::text, 'real_mailbox'::text])))),
     CONSTRAINT service_setting_gmail_ingest_lookback_ms_check CHECK ((gmail_ingest_lookback_ms > 0)),
     CONSTRAINT service_setting_gmail_max_results_check CHECK (((gmail_max_results > 0) AND (gmail_max_results <= 500))),
     CONSTRAINT service_setting_id_check CHECK (id),

@@ -45,6 +45,18 @@ describe("SettingsPage", () => {
 
     expect(pageText()).toContain("Settings Center");
     expect(pageText()).toContain("Read-only: no cart, no ordering, no checkout");
+    expect(pageText()).toContain("Auth bootstrap");
+    expect(pageText()).not.toContain("AUTH_SECRET");
+    expect(pageText()).not.toContain("Auth secret");
+    clickButton("Auth");
+    expect(pageText()).toContain("Login logo URL");
+    expect(pageText()).toContain("Continue with Workspace");
+    expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/callback/workspace");
+    expect(pageText()).toContain("Copy callback URL");
+    expect(pageText()).toContain("Client secret");
+    expect(pageText()).toContain("configured");
+    expect(pageText()).not.toContain("raw-db-secret");
+    clickButton("Overview");
     expect(pageText()).toContain("database");
     expect(pageText()).toContain("runtime");
     expect(pageText()).toContain("default");
@@ -101,9 +113,70 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
     environment: {
       nodeEnv: "development",
       appBaseUrl: "https://inventory-dev.example.test",
+      currentRequestOrigin: "https://inventory-dev.example.test",
       deploymentMode: "development",
       lastUpdatedAt: "2026-06-18T00:00:00.000Z",
       readOnlyBoundary: { noCart: true, noOrdering: true, noCheckout: true },
+    },
+    dataMode: {
+      value: "demo",
+      source: "default",
+      status: "demo",
+      detail: "Synthetic demo data mode. Gmail credentials are optional.",
+    },
+    units: {
+      authProvider: {
+        id: "auth_provider",
+        label: "Auth Provider",
+        providerType: "generic_oauth_oidc",
+        enabled: true,
+        status: "ready",
+        displayName: "Workspace",
+        buttonLabel: "Continue with Workspace",
+        providerId: "workspace",
+        logoUrl: null,
+        discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+        clientId: "client-id",
+        clientSecretConfigured: true,
+        scopes: ["openid", "email", "profile"],
+        callbackUrl: "https://inventory-dev.example.test/api/auth/callback/workspace",
+        adminEmailAllowlistConfigured: true,
+        adminClaimMappingConfigured: false,
+        detail: "Generic OAuth/OIDC sign-in is ready.",
+      },
+      gmail: {
+        id: "gmail",
+        label: "Gmail workspace ingest",
+        status: "missing",
+        detail: "Real mailbox mode requires the delegated mailbox and service account key.",
+        configured: false,
+        optional: false,
+      },
+      junoLive: {
+        id: "juno_live",
+        label: "Read-only live lookup",
+        status: "missing",
+        detail: "Worker start is blocked until read-only login credentials and safe pacing are configured.",
+        configured: false,
+        optional: true,
+      },
+      notifications: {
+        id: "notifications",
+        label: "Notification delivery",
+        status: "ready",
+        detail: "In-app notifications are available. External webhook delivery remains opt-in.",
+        configured: true,
+        optional: true,
+      },
+    },
+    security: {
+      authBootstrap: {
+        status: "ready",
+        adminUserCount: 1,
+        hasInitialAdminEnv: false,
+        hasExternalAdminMapping: true,
+        detail: "At least one admin user exists.",
+      },
     },
     warnings: [],
     nextActions: [
@@ -122,7 +195,6 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         state: "complete",
         settings: [
           setting("database_url", "Database URL", "runtime", "configured", "Runtime fallback configured", true, false),
-          setting("auth_secret", "Auth secret", "runtime", "configured", "Runtime fallback configured", true, false),
         ],
       },
       {
@@ -131,6 +203,8 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         state: "complete",
         settings: [
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
+          setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
+          setting("auth_external_client_secret", "External client secret", "database", "configured", "Database override configured", true, true),
         ],
       },
       {
@@ -170,6 +244,8 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         settings: [
           setting("database_url", "Database URL", "runtime", "configured", "Runtime fallback configured", true, false),
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
+          setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
+          setting("auth_external_client_secret", "External client secret", "database", "configured", "Database override configured", true, true),
           setting("google_gmail_scopes", "Gmail scopes", "default", "configured", "https://www.googleapis.com/auth/gmail.readonly", false, true, "csv"),
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
           setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", junoPasswordSource === "database" ? "Database override configured" : "Runtime fallback configured", true, true),
@@ -202,6 +278,8 @@ function setting(
     required: state === "missing",
     help: `${label} help`,
     type,
+    runtimeOnly: !editable,
+    advanced: false,
   };
 }
 

@@ -154,9 +154,9 @@ Copy `.env.example` to `.env.local` for local development. Do not commit
 Important values:
 
 - `DATABASE_URL`
-- `AUTH_ENABLED`
-- `AUTH_SECRET`
-- `AUTH_BASE_URL`
+- `JUNO_WHOLESALE_OPS_DATA_MODE`
+- `AUTH_SECRET` optional runtime override for the internal Better Auth secret
+- `AUTH_BASE_URL` bootstrap fallback for the Settings Center Site address
 - `GOOGLE_WORKSPACE_DELEGATED_USER`
 - `GOOGLE_SERVICE_ACCOUNT_KEY_JSON`
 - `GMAIL_INGEST_QUERY`
@@ -175,11 +175,14 @@ is always:
 effective value = database override ?? runtime env fallback ?? default value
 ```
 
-`DATABASE_URL` and `AUTH_SECRET` remain runtime-only bootstrap values and cannot
-be persisted through the Settings Center. Production deployments must keep
-`AUTH_ENABLED=true`. Secret fields such as service account references, Juno
-passwords, OIDC client secrets, and webhook configuration are write-only and
-masked in API responses.
+`DATABASE_URL` remains runtime-only and cannot be persisted through the Settings
+Center. The public app URL is the DB-primary `Site address` setting;
+`AUTH_BASE_URL` is only a bootstrap fallback before that row is saved. Auth is
+always enabled. If `AUTH_SECRET` is absent, startup creates an internal random
+Better Auth secret in the database; it is not an operator-facing setting. At
+least one admin bootstrap path is still required. Secret fields such as
+service account references, Juno passwords, OIDC client secrets, and webhook
+configuration are write-only and masked in API responses.
 
 ## Gmail ingestion
 

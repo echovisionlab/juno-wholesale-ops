@@ -58,6 +58,7 @@ export function buildAppAuthOptions(options: {
             clientId: options.settings.externalProvider.clientId,
             clientSecret: options.settings.externalProvider.clientSecret,
             discoveryUrl: options.settings.externalProvider.discoveryUrl,
+            scopes: options.settings.externalProvider.scopes,
           },
         ],
       }),
@@ -93,7 +94,6 @@ export async function getCachedAppAuth(options: {
   const key = JSON.stringify({
     databaseUrl: options.databaseUrl,
     settings: {
-      enabled: options.settings.enabled,
       baseUrl: options.settings.baseUrl,
       trustedOrigins: options.settings.trustedOrigins,
       emailPasswordEnabled: options.settings.emailPasswordEnabled,
@@ -103,6 +103,7 @@ export async function getCachedAppAuth(options: {
             providerId: options.settings.externalProvider.providerId,
             discoveryUrl: options.settings.externalProvider.discoveryUrl,
             clientId: options.settings.externalProvider.clientId,
+            scopes: options.settings.externalProvider.scopes,
           }
         : null,
     },

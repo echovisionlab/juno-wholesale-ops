@@ -1,4 +1,5 @@
 import { Pool } from "pg";
+import { randomBytes } from "node:crypto";
 import {
   serviceSettingColumns,
   type ServiceSettingsPatch,
@@ -69,6 +70,55 @@ export async function clearServiceSettingOverrides(
 ): Promise<ServiceSettingsRow> {
   const patch = Object.fromEntries(keys.map((key) => [key, null])) as ServiceSettingsPatch;
   return updateServiceSettings(databaseUrl, patch);
+}
+
+export async function countAdminUsers(databaseUrl: string): Promise<number> {
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  try {
+    const result = await pool.query<{ count: string }>(
+      `
+        SELECT count(*)::text AS count
+        FROM auth_user
+        WHERE role = 'admin'
+      `,
+    );
+    return Number(result.rows[0]?.count ?? 0);
+  } finally {
+    await pool.end();
+  }
+}
+
+export async function ensureDatabaseAuthSecretClient(queryable: Pool): Promise<string> {
+  await ensureServiceSettingsRowClient(queryable);
+  const generatedSecret = randomBytes(48).toString("base64url");
+  const updated = await queryable.query<{ auth_secret: string }>(
+    `
+      UPDATE service_setting
+      SET auth_secret = $1,
+          updated_at = now()
+      WHERE id = true
+        AND auth_secret IS NULL
+      RETURNING auth_secret
+    `,
+    [generatedSecret],
+  );
+  if (updated.rows[0]?.auth_secret) {
+    return updated.rows[0].auth_secret;
+  }
+
+  const existing = await queryable.query<{ auth_secret: string }>(
+    `
+      SELECT auth_secret
+      FROM service_setting
+      WHERE id = true
+      LIMIT 1
+    `,
+  );
+  const authSecret = existing.rows[0]?.auth_secret;
+  if (!authSecret) {
+    throw new Error("auth_secret was not available after initialization");
+  }
+  return authSecret;
 }
 
 async function getServiceSettingsClient(queryable: Pool): Promise<ServiceSettingsRow | null> {

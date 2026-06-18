@@ -23,14 +23,14 @@ beforeEach(() => {
 });
 
 describe("closeSeedAuthDatabase", () => {
-  it("closes owned pools after destroying the Kysely instance", async () => {
+  it("destroys owned Kysely databases", async () => {
     const db = { destroy: vi.fn().mockResolvedValue(undefined) };
     const pool = { end: vi.fn().mockResolvedValue(undefined) };
 
     await closeSeedAuthDatabase({ db, pool, ownsPool: true });
 
     expect(db.destroy).toHaveBeenCalledOnce();
-    expect(pool.end).toHaveBeenCalledOnce();
+    expect(pool.end).not.toHaveBeenCalled();
   });
 
   it("keeps borrowed pools open", async () => {
@@ -39,19 +39,60 @@ describe("closeSeedAuthDatabase", () => {
 
     await closeSeedAuthDatabase({ db, pool, ownsPool: false });
 
-    expect(db.destroy).toHaveBeenCalledOnce();
+    expect(db.destroy).not.toHaveBeenCalled();
     expect(pool.end).not.toHaveBeenCalled();
   });
 });
 
 describe("seedInitialAdmin", () => {
-  it("skips when initial admin env is absent", async () => {
+  it("skips when initial admin env is absent and an admin already exists", async () => {
+    const pool = fakePool([{ rows: [{ count: "1" }] }]);
+
     await expect(
       seedInitialAdmin({
         databaseUrl: "postgres://user:pass@localhost:5432/app",
         settings: authSettings({ initialAdmin: null }),
+        pool,
       }),
-    ).resolves.toEqual({ status: "skipped", reason: "missing_config" });
+    ).resolves.toEqual({ status: "skipped", reason: "existing_admin" });
+    expect(signUpEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("generates an initial admin when env is absent and the database has no admin", async () => {
+    const pool = fakePool([{ rows: [{ count: "0" }] }, { rows: [] }, { rows: [] }]);
+
+    const result = await seedInitialAdmin({
+      databaseUrl: "postgres://user:pass@localhost:5432/app",
+      settings: authSettings({ initialAdmin: null }),
+      pool,
+    });
+
+    expect(result).toEqual({
+      status: "created",
+      source: "generated",
+      email: expect.stringMatching(/^admin\+[a-f0-9]{12}@localhost\.invalid$/),
+      password: expect.any(String),
+    });
+    expect(signUpEmailMock).toHaveBeenCalledWith({
+      body: {
+        email: expect.stringMatching(/^admin\+[a-f0-9]{12}@localhost\.invalid$/),
+        password: expect.any(String),
+        name: "Generated Admin",
+      },
+      headers: expect.any(Headers),
+    });
+  });
+
+  it("treats an empty admin count result as no existing admin", async () => {
+    const pool = fakePool([{ rows: [] }, { rows: [] }, { rows: [] }]);
+
+    await expect(
+      seedInitialAdmin({
+        databaseUrl: "postgres://user:pass@localhost:5432/app",
+        settings: authSettings({ initialAdmin: null }),
+        pool,
+      }),
+    ).resolves.toMatchObject({ status: "created", source: "generated" });
   });
 
   it("creates the configured initial admin through Better Auth", async () => {
@@ -61,7 +102,6 @@ describe("seedInitialAdmin", () => {
       seedInitialAdmin({
         databaseUrl: "postgres://user:pass@localhost:5432/app",
         settings: authSettings({
-          enabled: true,
           secret: "a".repeat(32),
           baseUrl: "https://app.example.com",
           initialAdmin: {
@@ -72,7 +112,7 @@ describe("seedInitialAdmin", () => {
         }),
         pool,
       }),
-    ).resolves.toEqual({ status: "created", email: "admin@example.com" });
+    ).resolves.toEqual({ status: "created", source: "env", email: "admin@example.com" });
     expect(signUpEmailMock).toHaveBeenCalledWith({
       body: {
         email: "admin@example.com",
@@ -110,7 +150,7 @@ describe("seedInitialAdminWithPool", () => {
         initialAdmin: { email: "admin@example.com", password: "password123", name: "Admin" },
         createUser,
       }),
-    ).resolves.toEqual({ status: "created", email: "admin@example.com" });
+    ).resolves.toEqual({ status: "created", source: "env", email: "admin@example.com" });
     expect(createUser).toHaveBeenCalledOnce();
     expect(pool.query).toHaveBeenLastCalledWith(expect.stringContaining("UPDATE auth_user"), [
       "admin@example.com",
@@ -120,13 +160,15 @@ describe("seedInitialAdminWithPool", () => {
 
 function authSettings(overrides: Partial<AppAuthSettings>): AppAuthSettings {
   return {
-    enabled: false,
     secret: undefined,
     baseUrl: undefined,
     trustedOrigins: [],
     emailPasswordEnabled: true,
     externalProviderEnabled: false,
     externalProvider: null,
+    adminEmailAllowlist: [],
+    externalAdminClaim: undefined,
+    externalAdminClaimValue: undefined,
     initialAdmin: null,
     ...overrides,
   };

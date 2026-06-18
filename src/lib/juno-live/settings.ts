@@ -4,6 +4,7 @@ import { clampLiveConcurrency } from "./delay";
 const DEFAULT_RETRY_DELAY_MS = 300000;
 
 export type JunoLiveServiceSettingsRow = {
+  data_mode: "demo" | "real_mailbox" | null;
   juno_live_enqueue_on_ingest: boolean | null;
   juno_login_email: string | null;
   juno_login_password: string | null;
@@ -27,16 +28,23 @@ export type JunoLiveServiceSettingsRow = {
   gmail_storage_dir: string | null;
   catalog_attachment_pattern: string | null;
   supplier_code: string | null;
-  auth_enabled: boolean | null;
+  auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
   auth_email_password_enabled: boolean | null;
   auth_external_provider_enabled: boolean | null;
   auth_external_provider_id: string | null;
   auth_external_provider_name: string | null;
+  auth_login_logo_url: string | null;
+  auth_external_provider_logo_url: string | null;
+  auth_external_provider_button_label: string | null;
   auth_external_discovery_url: string | null;
   auth_external_client_id: string | null;
   auth_external_client_secret: string | null;
+  auth_external_provider_scopes: string | null;
+  auth_admin_email_allowlist: string | null;
+  auth_external_admin_claim: string | null;
+  auth_external_admin_claim_value: string | null;
 };
 
 export type JunoLiveSettings = {

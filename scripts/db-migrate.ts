@@ -5,6 +5,7 @@ import { resolveAppAuthSettings } from "@/lib/auth/settings";
 import { applyMigrations } from "@/lib/db/migrations";
 import { loadRuntimeEnv } from "@/lib/env";
 import { JunoLiveRepository } from "@/lib/juno-live/repository";
+import { ensureDatabaseAuthSecretClient } from "@/lib/settings/repository";
 
 async function main() {
   const env = loadRuntimeEnv();
@@ -16,6 +17,9 @@ async function main() {
   try {
     const applied = await applyMigrations(pool, path.join(process.cwd(), "infra/postgres/migrations"));
     const repository = new JunoLiveRepository(pool);
+    if (!env.AUTH_SECRET) {
+      await ensureDatabaseAuthSecretClient(pool);
+    }
     const settings = resolveAppAuthSettings(env, await repository.getServiceSettingsRow());
     const initialAdmin = await seedInitialAdmin({
       databaseUrl: env.DATABASE_URL,

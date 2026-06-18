@@ -1,10 +1,11 @@
 import { loadRuntimeEnv } from "@/lib/env";
-import { ensureServiceSettingsRow, updateServiceSettings } from "@/lib/settings/repository";
+import { countAdminUsers, ensureServiceSettingsRow, updateServiceSettings } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import { validateSettingsPatch } from "@/lib/settings/validation";
 import {
   authorizeSettingsRequest,
   databaseUrlResponse,
+  getRequestOrigin,
   parseOptionalJson,
   safeSettingsActionError,
 } from "./_shared";
@@ -24,12 +25,15 @@ export async function GET(request: Request) {
 
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
+  const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
   return Response.json(
     buildSettingsResponse({
       env,
       rawEnv: process.env,
       settingsRow,
       nodeEnv: process.env.NODE_ENV ?? "development",
+      currentRequestOrigin: getRequestOrigin(request),
+      adminUserCount,
     }),
   );
 }
@@ -64,11 +68,14 @@ export async function PATCH(request: Request) {
     const settingsRow = validation.changed.length > 0
       ? await updateServiceSettings(database.databaseUrl, validation.patch)
       : currentRow;
+    const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
     const settings = buildSettingsResponse({
       env,
       rawEnv: process.env,
       settingsRow,
       nodeEnv: process.env.NODE_ENV ?? "development",
+      currentRequestOrigin: getRequestOrigin(request),
+      adminUserCount,
     });
 
     return Response.json({

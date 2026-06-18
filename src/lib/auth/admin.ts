@@ -21,7 +21,6 @@ export type AdminUser = {
 export type AdminAuthorization =
   | {
       authorized: true;
-      enabled: boolean;
       user: AdminUser | null;
     }
   | {
@@ -30,17 +29,13 @@ export type AdminAuthorization =
     };
 
 export async function requireAdmin(request: Request): Promise<AdminAuthorization> {
-  const { auth, runtime, unavailable } = await getRuntimeBetterAuth();
-
-  if (!runtime.settings.enabled) {
-    return { authorized: true, enabled: false, user: null };
-  }
+  const { auth, runtime, unavailable } = await getRuntimeBetterAuth({ requestOrigin: getRequestOrigin(request) });
 
   if (unavailable || !auth) {
     return {
       authorized: false,
       response: Response.json(
-        { enabled: true, error: "auth_unavailable", missing: runtime.missing },
+        { error: "auth_unavailable", missing: runtime.missing },
         { status: 503 },
       ),
     };
@@ -54,20 +49,19 @@ export async function requireAdmin(request: Request): Promise<AdminAuthorization
   if (!user?.id) {
     return {
       authorized: false,
-      response: Response.json({ enabled: true, error: "authentication_required" }, { status: 401 }),
+      response: Response.json({ error: "authentication_required" }, { status: 401 }),
     };
   }
 
   if (user.role !== "admin") {
     return {
       authorized: false,
-      response: Response.json({ enabled: true, error: "admin_required" }, { status: 403 }),
+      response: Response.json({ error: "admin_required" }, { status: 403 }),
     };
   }
 
   return {
     authorized: true,
-    enabled: true,
     user: {
       id: user.id,
       email: user.email,
@@ -76,4 +70,17 @@ export async function requireAdmin(request: Request): Promise<AdminAuthorization
       role: "admin",
     },
   };
+}
+
+function getRequestOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const forwardedProto = firstForwardedHeader(request.headers.get("x-forwarded-proto"));
+  const forwardedHost = firstForwardedHeader(request.headers.get("x-forwarded-host"));
+  const host = forwardedHost ?? request.headers.get("host") ?? url.host;
+  const proto = forwardedProto ?? url.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
+}
+
+function firstForwardedHeader(value: string | null): string | null {
+  return value?.split(",")[0]?.trim() || null;
 }

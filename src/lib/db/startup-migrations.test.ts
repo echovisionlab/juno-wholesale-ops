@@ -2,7 +2,8 @@ import path from "node:path";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool } from "pg";
 import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
-import { runStartupMigrations, type StartupMigrationLogger } from "./startup-migrations";
+import { applyMigrations } from "./migrations";
+import { logInitialAdminResult, runStartupMigrations, type StartupMigrationLogger } from "./startup-migrations";
 
 const testPostgresImage = "postgres:16-alpine";
 
@@ -42,13 +43,19 @@ describe("runStartupMigrations", () => {
 
     await expect(
       runStartupMigrations({
-        env: { DATABASE_URL: container.getConnectionUri() },
+        env: {
+          DATABASE_URL: container.getConnectionUri(),
+          AUTH_SECRET: "a".repeat(32),
+          AUTH_BASE_URL: "https://app.example.test",
+          AUTH_INITIAL_ADMIN_EMAIL: "admin@example.test",
+          AUTH_INITIAL_ADMIN_PASSWORD: "password123",
+        },
         logger,
       }),
     ).resolves.toEqual({
       status: "applied",
-      migrationCount: 11,
-      latestVersion: 11,
+      migrationCount: 15,
+      latestVersion: 15,
     });
 
     const pool = new Pool({ connectionString: container.getConnectionUri(), max: 1 });
@@ -60,16 +67,31 @@ describe("runStartupMigrations", () => {
       await pool.end();
     }
     expect(logger.infoMessages).toEqual([
-      JSON.stringify({ event: "database_migrations_ready", migrationCount: 11, latestVersion: 11 }),
+      JSON.stringify({ event: "database_migrations_ready", migrationCount: 15, latestVersion: 15 }),
+      JSON.stringify({ event: "initial_admin_seeded", email: "admin@example.test" }),
     ]);
   });
 
   it("uses the default logger and reports an empty migration list", async () => {
+    const container = await new PostgreSqlContainer(testPostgresImage).start();
+    containers.push(container);
+    const pool = new Pool({ connectionString: container.getConnectionUri(), max: 1 });
+    try {
+      await applyMigrations(pool, path.join(process.cwd(), "infra/postgres/migrations"));
+      await pool.query(
+        `
+          INSERT INTO auth_user (id, name, email, role)
+          VALUES ('existing-admin', 'Existing Admin', 'admin@example.test', 'admin')
+        `,
+      );
+    } finally {
+      await pool.end();
+    }
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
 
     await expect(
       runStartupMigrations({
-        env: { DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops" },
+        env: { DATABASE_URL: container.getConnectionUri() },
         migrate: async () => [],
       }),
     ).resolves.toEqual({
@@ -81,6 +103,33 @@ describe("runStartupMigrations", () => {
     expect(info).toHaveBeenCalledWith(
       JSON.stringify({ event: "database_migrations_ready", migrationCount: 0, latestVersion: null }),
     );
+    expect(info).toHaveBeenCalledWith(
+      JSON.stringify({ event: "initial_admin_ready", status: "skipped", reason: "existing_admin" }),
+    );
+  });
+
+  it("logs generated initial admin credentials only when the account is created", () => {
+    const logger = createLogger();
+
+    logInitialAdminResult(logger, {
+      status: "created",
+      source: "generated",
+      email: "admin+abc123abc123@localhost.invalid",
+      password: "generated-password",
+    });
+
+    const generated = JSON.parse(logger.infoMessages[0] ?? "{}") as {
+      event?: string;
+      email?: string;
+      password?: string;
+      message?: string;
+    };
+    expect(generated).toMatchObject({
+      event: "initial_admin_generated",
+      email: "admin+abc123abc123@localhost.invalid",
+      password: "generated-password",
+      message: "Store this generated admin password now. It is logged only when the account is created.",
+    });
   });
 
   it("logs and rethrows migration failures without logging the database URL", async () => {

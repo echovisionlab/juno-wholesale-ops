@@ -26,7 +26,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(11);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(15);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -39,6 +39,10 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 9, filename: "0009_insights_foundation.sql" }),
       expect.objectContaining({ version: 10, filename: "0010_stock_movement_insights.sql" }),
       expect.objectContaining({ version: 11, filename: "0011_notification_delivery.sql" }),
+      expect.objectContaining({ version: 12, filename: "0012_settings_model_operator_ux.sql" }),
+      expect.objectContaining({ version: 13, filename: "0013_remove_auth_enabled_setting.sql" }),
+      expect.objectContaining({ version: 14, filename: "0014_auth_sign_in_guardrail.sql" }),
+      expect.objectContaining({ version: 15, filename: "0015_login_logo_url.sql" }),
     ]);
   });
 
@@ -67,13 +71,14 @@ describe("JunoLiveRepository", () => {
             gmail_storage_dir = '/storage',
             catalog_attachment_pattern = 'New Releases',
             supplier_code = 'juno-test',
-            auth_enabled = true,
+            auth_secret = 'db-auth-secret-value-that-is-long-enough',
             auth_base_url = 'https://app.example.com',
             auth_trusted_origins = 'https://app.example.com',
             auth_email_password_enabled = true,
             auth_external_provider_enabled = true,
             auth_external_provider_id = 'workspace',
             auth_external_provider_name = 'Workspace',
+            auth_login_logo_url = 'https://assets.example.com/login-logo.svg',
             auth_external_discovery_url = 'https://login.example.com/.well-known/openid-configuration',
             auth_external_client_id = 'client-id',
             auth_external_client_secret = 'client-secret'
@@ -105,13 +110,14 @@ describe("JunoLiveRepository", () => {
       gmail_storage_dir: "/storage",
       catalog_attachment_pattern: "New Releases",
       supplier_code: "juno-test",
-      auth_enabled: true,
+      auth_secret: "db-auth-secret-value-that-is-long-enough",
       auth_base_url: "https://app.example.com",
       auth_trusted_origins: "https://app.example.com",
       auth_email_password_enabled: true,
       auth_external_provider_enabled: true,
       auth_external_provider_id: "workspace",
       auth_external_provider_name: "Workspace",
+      auth_login_logo_url: "https://assets.example.com/login-logo.svg",
       auth_external_discovery_url: "https://login.example.com/.well-known/openid-configuration",
       auth_external_client_id: "client-id",
       auth_external_client_secret: "client-secret",

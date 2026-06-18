@@ -1,10 +1,11 @@
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadRuntimeEnv } from "@/lib/env";
-import { ensureServiceSettingsRow } from "@/lib/settings/repository";
+import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { headers } from "next/headers";
+import { getRequestOrigin } from "@/app/api/settings/_shared";
 
 export const dynamic = "force-dynamic";
 
@@ -28,12 +29,16 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
   try {
     const env = loadRuntimeEnv(process.env);
     const settingsRow = await ensureServiceSettingsRow(databaseUrl);
+    const request = new Request("http://localhost/settings", { headers: requestHeaders });
+    const adminUserCount = await countAdminUsers(databaseUrl).catch(() => null);
     return {
       settings: buildSettingsResponse({
         env,
         rawEnv: process.env,
         settingsRow,
         nodeEnv: process.env.NODE_ENV ?? "development",
+        currentRequestOrigin: getRequestOrigin(request),
+        adminUserCount,
       }),
       error: null,
     };

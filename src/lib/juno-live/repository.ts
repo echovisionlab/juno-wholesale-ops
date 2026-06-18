@@ -78,6 +78,7 @@ export class JunoLiveRepository {
     const result = await this.pool.query<JunoLiveServiceSettingsRow>(
       `
         SELECT
+          data_mode,
           juno_live_enqueue_on_ingest,
           juno_login_email,
           juno_login_password,
@@ -101,16 +102,23 @@ export class JunoLiveRepository {
           gmail_storage_dir,
           catalog_attachment_pattern,
           supplier_code,
-          auth_enabled,
+          auth_secret,
           auth_base_url,
           auth_trusted_origins,
           auth_email_password_enabled,
           auth_external_provider_enabled,
           auth_external_provider_id,
           auth_external_provider_name,
+          auth_login_logo_url,
+          auth_external_provider_logo_url,
+          auth_external_provider_button_label,
           auth_external_discovery_url,
           auth_external_client_id,
-          auth_external_client_secret
+          auth_external_client_secret,
+          auth_external_provider_scopes,
+          auth_admin_email_allowlist,
+          auth_external_admin_claim,
+          auth_external_admin_claim_value
         FROM service_setting
         WHERE id = true
         LIMIT 1

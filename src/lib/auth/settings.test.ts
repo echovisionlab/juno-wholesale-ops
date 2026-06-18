@@ -4,25 +4,24 @@ import {
   getMissingAppAuthSettings,
   isAppAuthRunnable,
   resolveAppAuthSettings,
+  splitScopeList,
   splitList,
   type AuthServiceSettingsRow,
 } from "./settings";
 
 describe("resolveAppAuthSettings", () => {
-  it("defaults to disabled auth with local email/password available when enabled later", () => {
+  it("defaults to always-on auth with local email/password without exposing the internal secret as an operator setting", () => {
     const settings = resolveAppAuthSettings(loadRuntimeEnv({}), null);
 
-    expect(settings.enabled).toBe(false);
     expect(settings.emailPasswordEnabled).toBe(true);
     expect(settings.externalProvider).toBeNull();
-    expect(getMissingAppAuthSettings(settings)).toEqual([]);
-    expect(isAppAuthRunnable(settings)).toBe(true);
+    expect(getMissingAppAuthSettings(settings)).toEqual(["auth_base_url"]);
+    expect(isAppAuthRunnable(settings)).toBe(false);
   });
 
   it("resolves complete env-based external provider settings", () => {
     const settings = resolveAppAuthSettings(
       loadRuntimeEnv({
-        AUTH_ENABLED: "true",
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_TRUSTED_ORIGINS: "https://app.example.com\nhttps://admin.example.com",
@@ -30,9 +29,15 @@ describe("resolveAppAuthSettings", () => {
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
         AUTH_EXTERNAL_PROVIDER_ID: "workspace",
         AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
+        AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL: "Sign in with Workspace",
+        AUTH_EXTERNAL_PROVIDER_LOGO_URL: "https://login.example.com/logo.png",
         AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
         AUTH_EXTERNAL_CLIENT_ID: "client-id",
         AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+        AUTH_EXTERNAL_PROVIDER_SCOPES: "openid email profile groups",
+        AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.com",
+        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
+        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
@@ -40,7 +45,6 @@ describe("resolveAppAuthSettings", () => {
     );
 
     expect(settings).toMatchObject({
-      enabled: true,
       secret: "a".repeat(32),
       baseUrl: "https://app.example.com",
       trustedOrigins: ["https://app.example.com", "https://admin.example.com"],
@@ -49,10 +53,16 @@ describe("resolveAppAuthSettings", () => {
       externalProvider: {
         providerId: "workspace",
         name: "Workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: "https://login.example.com/logo.png",
         discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
         clientId: "client-id",
         clientSecret: "client-secret",
+        scopes: ["openid", "email", "profile", "groups"],
       },
+      adminEmailAllowlist: ["admin@example.com"],
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "ops",
       initialAdmin: {
         email: "admin@example.com",
         password: "password123",
@@ -66,7 +76,6 @@ describe("resolveAppAuthSettings", () => {
   it("lets database settings override env auth settings", () => {
     const settings = resolveAppAuthSettings(
       loadRuntimeEnv({
-        AUTH_ENABLED: "false",
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://env.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "true",
@@ -74,7 +83,6 @@ describe("resolveAppAuthSettings", () => {
       }),
       {
         ...emptyRow(),
-        auth_enabled: true,
         auth_base_url: "https://db.example.com",
         auth_email_password_enabled: false,
         auth_external_provider_enabled: true,
@@ -86,7 +94,6 @@ describe("resolveAppAuthSettings", () => {
       },
     );
 
-    expect(settings.enabled).toBe(true);
     expect(settings.baseUrl).toBe("https://db.example.com");
     expect(settings.emailPasswordEnabled).toBe(false);
     expect(settings.externalProvider).toMatchObject({
@@ -96,10 +103,9 @@ describe("resolveAppAuthSettings", () => {
     });
   });
 
-  it("reports missing runnable auth settings only when auth is enabled", () => {
+  it("reports missing runnable external provider settings", () => {
     const settings = resolveAppAuthSettings(
       loadRuntimeEnv({
-        AUTH_ENABLED: "true",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
         AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
       }),
@@ -107,7 +113,6 @@ describe("resolveAppAuthSettings", () => {
     );
 
     expect(getMissingAppAuthSettings(settings)).toEqual([
-      "AUTH_SECRET",
       "auth_base_url",
       "auth_external_provider_id",
       "auth_external_discovery_url",
@@ -117,10 +122,9 @@ describe("resolveAppAuthSettings", () => {
     expect(isAppAuthRunnable(settings)).toBe(false);
   });
 
-  it("reports when auth is enabled without any sign-in method", () => {
+  it("reports when every sign-in method is disabled", () => {
     const settings = resolveAppAuthSettings(
       loadRuntimeEnv({
-        AUTH_ENABLED: "true",
         AUTH_SECRET: "a".repeat(32),
         AUTH_BASE_URL: "https://app.example.com",
         AUTH_EMAIL_PASSWORD_ENABLED: "false",
@@ -133,6 +137,32 @@ describe("resolveAppAuthSettings", () => {
       "auth_email_password_enabled or auth_external_provider_enabled",
     ]);
   });
+
+  it("defaults external provider scopes to an empty list", () => {
+    const settings = resolveAppAuthSettings(
+      loadRuntimeEnv({
+        AUTH_SECRET: "a".repeat(32),
+        AUTH_BASE_URL: "https://app.example.com",
+      }),
+      {
+        ...emptyRow(),
+        auth_email_password_enabled: false,
+        auth_external_provider_enabled: true,
+        auth_external_provider_id: "workspace",
+        auth_external_discovery_url: "https://login.example.com/.well-known/openid-configuration",
+        auth_external_client_id: "client-id",
+        auth_external_client_secret: "client-secret",
+        auth_external_provider_scopes: "",
+      },
+    );
+
+    expect(settings.externalProvider?.scopes).toEqual([]);
+  });
+
+  it("splits blank external provider scopes as an empty list", () => {
+    expect(splitScopeList(null)).toEqual([]);
+    expect(splitScopeList("")).toEqual([]);
+  });
 });
 
 describe("splitList", () => {
@@ -144,15 +174,21 @@ describe("splitList", () => {
 
 function emptyRow(): AuthServiceSettingsRow {
   return {
-    auth_enabled: null,
+    auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
     auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,
+    auth_external_provider_logo_url: null,
+    auth_external_provider_button_label: null,
     auth_external_discovery_url: null,
     auth_external_client_id: null,
     auth_external_client_secret: null,
+    auth_external_provider_scopes: null,
+    auth_admin_email_allowlist: null,
+    auth_external_admin_claim: null,
+    auth_external_admin_claim_value: null,
   };
 }

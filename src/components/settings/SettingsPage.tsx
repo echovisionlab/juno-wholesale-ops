@@ -11,6 +11,7 @@ import {
   Container,
   Divider,
   Group,
+  NativeSelect,
   NumberInput,
   PasswordInput,
   SimpleGrid,
@@ -26,8 +27,9 @@ import {
 import {
   AlertTriangle,
   CheckCircle2,
+  Copy,
   Database,
-  KeyRound,
+  Globe2,
   MailSearch,
   RotateCw,
   Save,
@@ -62,8 +64,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
 
   const loadSettings = useCallback(async () => {
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 15000);
     try {
-      const response = await fetch("/api/settings");
+      const response = await fetch("/api/settings", { signal: controller.signal });
       const payload = (await response.json().catch(() => ({}))) as SettingsResponse & { error?: string };
       if (!response.ok) {
         setError(payload.error ?? `Settings API returned ${response.status}`);
@@ -72,7 +76,11 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       setSettings(payload);
       setDraft({});
     } catch (loadError: unknown) {
-      setError(loadError instanceof Error ? loadError.message : "Settings API unavailable");
+      setError(loadError instanceof Error && loadError.name === "AbortError"
+        ? "Settings API timed out. Check DATABASE_URL and the local Postgres container, then retry."
+        : loadError instanceof Error ? loadError.message : "Settings API unavailable");
+    } finally {
+      window.clearTimeout(timeoutId);
     }
   }, []);
 
@@ -229,6 +237,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
           ) : (
             <>
               <SystemStatusStrip settings={settings} />
+              <SettingsWarningsPanel warnings={settings.warnings} />
               <Tabs defaultValue="overview" keepMounted={false}>
                 <Tabs.List>
                   <Tabs.Tab value="overview">Overview</Tabs.Tab>
@@ -259,14 +268,17 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                 {(["auth", "gmail", "juno", "notifications", "advanced"] as const).map((groupId) => (
                   <Tabs.Panel key={groupId} value={groupId} pt="md">
                     {groupsById[groupId] ? (
-                      <SettingsGroupCard
-                        group={groupsById[groupId]}
-                        draft={draft}
-                        saving={savingGroup === groupId}
-                        onDraftChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
-                        onSave={() => groupsById[groupId] && void saveGroup(groupsById[groupId])}
-                        onClear={(setting) => groupsById[groupId] && void clearSetting(groupsById[groupId], setting)}
-                      />
+                      <Stack gap="md">
+                        {groupId === "auth" ? <AuthProviderCard settings={settings} /> : null}
+                        <SettingsGroupCard
+                          group={groupsById[groupId]}
+                          draft={draft}
+                          saving={savingGroup === groupId}
+                          onDraftChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
+                          onSave={() => groupsById[groupId] && void saveGroup(groupsById[groupId])}
+                          onClear={(setting) => groupsById[groupId] && void clearSetting(groupsById[groupId], setting)}
+                        />
+                      </Stack>
                     ) : null}
                   </Tabs.Panel>
                 ))}
@@ -279,14 +291,29 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   );
 }
 
+function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
+  if (warnings.length === 0) {
+    return null;
+  }
+  return (
+    <Stack gap="xs">
+      {warnings.map((warning) => (
+        <Alert key={warning.id} color={severityColor(warning.severity)} icon={<AlertTriangle size={18} aria-hidden="true" />} title={warning.severity}>
+          {warning.message}
+        </Alert>
+      ))}
+    </Stack>
+  );
+}
+
 function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
   const sourceCounts = countSources(settings.groups.find((group) => group.id === "advanced")?.settings ?? []);
   return (
     <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
-      <StatusCard icon={Database} label="Mode" value={settings.environment.deploymentMode} detail={settings.environment.nodeEnv} />
-      <StatusCard icon={ShieldCheck} label="Read-only boundary" value="Enabled" detail="no cart, no ordering, no checkout" />
+      <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
+      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
       <StatusCard icon={Settings} label="DB overrides" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} runtime fallback values`} />
-      <StatusCard icon={KeyRound} label="Last updated" value={settings.environment.lastUpdatedAt ? "Recorded" : "N/A"} detail={settings.environment.lastUpdatedAt ?? "service row has no update timestamp"} />
+      <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </SimpleGrid>
   );
 }
@@ -399,6 +426,73 @@ function GroupSummaryCard({ group }: { group: SettingsGroup }) {
   );
 }
 
+function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
+  const provider = settings.units.authProvider;
+  return (
+    <Card>
+      <Stack gap="sm">
+        <Group justify="space-between" align="flex-start">
+          <Stack gap={4}>
+            <Text fw={700}>Auth Provider</Text>
+            <Text size="sm" c="dimmed">
+              Generic OAuth/OIDC provider unit. The Site address setting owns the callback URL; runtime env is only a fallback.
+            </Text>
+          </Stack>
+          <Badge color={unitStatusColor(provider.status)} variant="light">
+            {provider.status}
+          </Badge>
+        </Group>
+
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs">
+          <SignalFact label="Provider type" value="Generic OAuth/OIDC" />
+          <SignalFact label="Display name" value={provider.displayName} />
+          <SignalFact label="Button label" value={provider.buttonLabel} />
+          <SignalFact label="Provider ID" value={provider.providerId ?? "not configured"} />
+          <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
+          <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
+          <SignalFact label="Scopes" value={provider.scopes.length > 0 ? provider.scopes.join(" ") : "not configured"} />
+          <SignalFact label="Admin mapping" value={provider.adminEmailAllowlistConfigured || provider.adminClaimMappingConfigured ? "configured" : "not configured"} />
+        </SimpleGrid>
+
+        <Box>
+          <Text size="sm" fw={700}>Callback URL</Text>
+          <Group gap="xs" mt={4} align="center">
+            <Code>{provider.callbackUrl ?? "Set Site address and Provider ID"}</Code>
+            <Button
+              size="xs"
+              variant="light"
+              leftSection={<Copy size={14} aria-hidden="true" />}
+              disabled={!provider.callbackUrl}
+              onClick={() => {
+                if (provider.callbackUrl) {
+                  void navigator.clipboard?.writeText(provider.callbackUrl);
+                }
+              }}
+            >
+              Copy callback URL
+            </Button>
+          </Group>
+        </Box>
+
+        <Text size="sm" c="dimmed">
+          {provider.detail}
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
+function SignalFact({ label, value }: { label: string; value: string }) {
+  return (
+    <Box>
+      <Text size="xs" tt="uppercase" fw={700} c="dimmed">
+        {label}
+      </Text>
+      <Text size="sm">{value}</Text>
+    </Box>
+  );
+}
+
 function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClear }: {
   group: SettingsGroup;
   draft: DraftValues;
@@ -407,7 +501,8 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
   onSave: () => void;
   onClear: (setting: SettingDescriptor) => void;
 }) {
-  const editableSettings = group.settings.filter((setting) => setting.editable);
+  const visibleSettings = group.id === "advanced" ? group.settings : group.settings.filter((setting) => !setting.advanced);
+  const editableSettings = visibleSettings.filter((setting) => setting.editable);
   return (
     <Card>
       <Group justify="space-between" align="flex-start">
@@ -429,7 +524,7 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
       ) : null}
 
       <Stack gap="md" mt="md">
-        {group.settings.map((setting) => (
+        {visibleSettings.map((setting) => (
           <SettingEditor
             key={setting.key}
             setting={setting}
@@ -521,6 +616,16 @@ function renderInput(
         value={typeof value === "number" ? value : value === "" ? "" : Number(value)}
         allowDecimal={false}
         onChange={(nextValue) => onChange(typeof nextValue === "number" ? nextValue : String(nextValue))}
+      />
+    );
+  }
+  if (setting.type === "select") {
+    return (
+      <NativeSelect
+        label="Database override"
+        value={typeof value === "string" ? value : ""}
+        data={setting.options?.map((option) => ({ value: option.value, label: option.label })) ?? []}
+        onChange={(event) => onChange(event.currentTarget.value)}
       />
     );
   }
@@ -619,6 +724,19 @@ function groupStateColor(state: SettingsGroup["state"]): string {
   }
   if (state === "missing") {
     return "red";
+  }
+  return "gray";
+}
+
+function unitStatusColor(status: SettingsResponse["units"]["authProvider"]["status"]): string {
+  if (status === "ready") {
+    return "green";
+  }
+  if (status === "missing" || status === "blocked" || status === "invalid") {
+    return "red";
+  }
+  if (status === "warning") {
+    return "yellow";
   }
   return "gray";
 }

@@ -1,10 +1,11 @@
 import { loadRuntimeEnv } from "@/lib/env";
-import { ensureServiceSettingsRow } from "@/lib/settings/repository";
+import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import { buildAppSetupStatus } from "@/lib/setup/status";
 import {
   authorizeSettingsRequest,
   databaseUrlResponse,
+  getRequestOrigin,
 } from "../../_shared";
 
 export const dynamic = "force-dynamic";
@@ -22,6 +23,7 @@ export async function POST(request: Request) {
 
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
+  const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
 
   return Response.json({
     settings: buildSettingsResponse({
@@ -29,7 +31,9 @@ export async function POST(request: Request) {
       rawEnv: process.env,
       settingsRow,
       nodeEnv: process.env.NODE_ENV ?? "development",
+      currentRequestOrigin: getRequestOrigin(request),
+      adminUserCount,
     }),
-    setup: buildAppSetupStatus({ env, settingsRow }),
+    setup: buildAppSetupStatus({ env, settingsRow, adminUserCount }),
   });
 }

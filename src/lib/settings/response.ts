@@ -1,6 +1,7 @@
 import type { RuntimeEnv } from "@/lib/env";
-import { settingDefinitions, type SettingsGroup, type SettingsResponse } from "./descriptors";
-import { resolveSettingDescriptor, type RawRuntimeEnv } from "./masking";
+import { parseScopes } from "@/lib/env";
+import { settingDefinitions, type SettingsGroup, type SettingsResponse, type DataMode, type IntegrationUnitStatus } from "./descriptors";
+import { resolveSettingDescriptor, hasSettingValue, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
 import type { ServiceSettingsRow, SettingsGroupId, NextAction } from "./descriptors";
 
@@ -11,19 +12,31 @@ export function buildSettingsResponse(options: {
   rawEnv: RawRuntimeEnv;
   settingsRow: ServiceSettingsRow | null;
   nodeEnv: string;
+  currentRequestOrigin?: string | null;
+  adminUserCount?: number | null;
 }): SettingsResponse {
+  const dataMode = resolveDataMode(options.settingsRow, options.env);
+  const externalProviderEnabled = options.settingsRow?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
+  const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow, options.env);
+  const context: SettingResolutionContext = {
+    dataMode,
+    externalProviderEnabled,
+    junoLookupEnabled,
+  };
   const descriptors = settingDefinitions.map((definition) =>
     resolveSettingDescriptor({
       definition,
       row: options.settingsRow,
       env: options.env,
       rawEnv: options.rawEnv,
+      context,
     }),
   );
   const warnings = collectSettingsWarnings({
     row: options.settingsRow,
     env: options.env,
     nodeEnv: options.nodeEnv,
+    currentRequestOrigin: options.currentRequestOrigin ?? null,
   });
   const groups: SettingsGroup[] = groupOrder.map((groupId) => {
     const settings =
@@ -43,6 +56,7 @@ export function buildSettingsResponse(options: {
     environment: {
       nodeEnv: options.nodeEnv,
       appBaseUrl: resolveAppBaseUrl(options.settingsRow, options.env),
+      currentRequestOrigin: options.currentRequestOrigin ?? null,
       deploymentMode: resolveDeploymentMode(options.nodeEnv),
       lastUpdatedAt: options.settingsRow?.updated_at ? new Date(options.settingsRow.updated_at).toISOString() : null,
       readOnlyBoundary: {
@@ -50,6 +64,37 @@ export function buildSettingsResponse(options: {
         noOrdering: true,
         noCheckout: true,
       },
+    },
+    dataMode: {
+      value: dataMode,
+      source: descriptorByKey(descriptors, "data_mode")?.source ?? "default",
+      status: dataMode,
+      detail: dataMode === "demo"
+        ? "Synthetic demo data mode. Gmail credentials are optional."
+        : "Real mailbox mode. Gmail delegated mailbox and service account are required.",
+    },
+    units: {
+      authProvider: buildAuthProviderUnit(options.settingsRow, options.env),
+      gmail: buildGmailUnit(groups),
+      junoLive: buildJunoUnit(groups, junoLookupEnabled),
+      notifications: {
+        id: "notifications",
+        label: "Notification delivery",
+        status: "ready",
+        detail: "In-app notifications are available. External webhook delivery remains opt-in.",
+        configured: true,
+        optional: true,
+      },
+    },
+    security: {
+      authBootstrap: buildAuthBootstrapStatus({
+        initialAdminConfigured: Boolean(options.env.AUTH_INITIAL_ADMIN_EMAIL && options.env.AUTH_INITIAL_ADMIN_PASSWORD),
+        adminUserCount: options.adminUserCount ?? null,
+        externalProviderEnabled,
+        adminAllowlistConfigured: hasSettingValue(options.settingsRow?.auth_admin_email_allowlist ?? options.env.AUTH_ADMIN_EMAIL_ALLOWLIST),
+        adminClaimConfigured: hasSettingValue(options.settingsRow?.auth_external_admin_claim ?? options.env.AUTH_EXTERNAL_ADMIN_CLAIM)
+          && hasSettingValue(options.settingsRow?.auth_external_admin_claim_value ?? options.env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
+      }),
     },
     groups,
     nextActions: buildNextActions(groups, warnings),
@@ -169,4 +214,133 @@ function resolveDeploymentMode(nodeEnv: string): SettingsResponse["environment"]
     return "development";
   }
   return "unknown";
+}
+
+function resolveDataMode(row: ServiceSettingsRow | null, env: RuntimeEnv): DataMode {
+  return row?.data_mode ?? env.JUNO_WHOLESALE_OPS_DATA_MODE;
+}
+
+function isJunoLookupEnabled(row: ServiceSettingsRow | null, env: RuntimeEnv): boolean {
+  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? env.JUNO_LIVE_ENQUEUE_ON_INGEST;
+  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL;
+  const pollInterval = row?.juno_live_poll_interval_ms ?? env.JUNO_LIVE_POLL_INTERVAL_MS;
+  return Boolean(enqueueOnIngest || autoEnqueueOnInterval || pollInterval);
+}
+
+function descriptorByKey(settings: SettingsGroup["settings"], key: string) {
+  return settings.find((setting) => setting.key === key);
+}
+
+function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv): SettingsResponse["units"]["authProvider"] {
+  const enabled = row?.auth_external_provider_enabled ?? env.AUTH_EXTERNAL_PROVIDER_ENABLED;
+  const providerId = trimOptional(row?.auth_external_provider_id ?? env.AUTH_EXTERNAL_PROVIDER_ID);
+  const displayName = trimOptional(row?.auth_external_provider_name ?? env.AUTH_EXTERNAL_PROVIDER_NAME) ?? providerId ?? "External provider";
+  const buttonLabel = trimOptional(row?.auth_external_provider_button_label ?? env.AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL) ?? `Continue with ${displayName}`;
+  const baseUrl = resolveAppBaseUrl(row, env);
+  const clientId = trimOptional(row?.auth_external_client_id ?? env.AUTH_EXTERNAL_CLIENT_ID);
+  const discoveryUrl = trimOptional(row?.auth_external_discovery_url ?? env.AUTH_EXTERNAL_DISCOVERY_URL);
+  const clientSecretConfigured = hasSettingValue(row?.auth_external_client_secret ?? env.AUTH_EXTERNAL_CLIENT_SECRET);
+  const missing = [
+    providerId ? null : "provider id",
+    discoveryUrl ? null : "discovery URL",
+    clientId ? null : "client ID",
+    clientSecretConfigured ? null : "client secret",
+    baseUrl ? null : "site address",
+  ].filter(Boolean);
+  const status: IntegrationUnitStatus = !enabled ? "disabled" : missing.length > 0 ? "missing" : "ready";
+
+  return {
+    id: "auth_provider",
+    label: "Auth Provider",
+    providerType: "generic_oauth_oidc",
+    enabled,
+    status,
+    displayName,
+    buttonLabel,
+    providerId: providerId ?? null,
+    logoUrl: trimOptional(row?.auth_external_provider_logo_url ?? env.AUTH_EXTERNAL_PROVIDER_LOGO_URL) ?? null,
+    discoveryUrl: discoveryUrl ?? null,
+    clientId: clientId ?? null,
+    clientSecretConfigured,
+    scopes: parseScopes(row?.auth_external_provider_scopes ?? env.AUTH_EXTERNAL_PROVIDER_SCOPES),
+    callbackUrl: baseUrl && providerId ? `${baseUrl.replace(/\/+$/, "")}/api/auth/callback/${providerId}` : null,
+    adminEmailAllowlistConfigured: hasSettingValue(row?.auth_admin_email_allowlist ?? env.AUTH_ADMIN_EMAIL_ALLOWLIST),
+    adminClaimMappingConfigured: hasSettingValue(row?.auth_external_admin_claim ?? env.AUTH_EXTERNAL_ADMIN_CLAIM)
+      && hasSettingValue(row?.auth_external_admin_claim_value ?? env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
+    detail: enabled
+      ? missing.length > 0
+        ? `Missing ${missing.join(", ")}.`
+        : "Generic OAuth/OIDC sign-in is ready."
+      : "External auth provider is disabled.",
+  };
+}
+
+function buildGmailUnit(groups: SettingsGroup[]): SettingsResponse["units"]["gmail"] {
+  const gmail = groups.find((group) => group.id === "gmail");
+  const hasMissing = gmail?.settings.some((setting) => setting.state === "missing") ?? false;
+  return {
+    id: "gmail",
+    label: "Gmail workspace ingest",
+    status: hasMissing ? "missing" : "ready",
+    detail: hasMissing
+      ? "Real mailbox mode requires the delegated mailbox and service account key."
+      : "Catalog ingest settings are sufficient for the selected data mode.",
+    configured: !hasMissing,
+    optional: false,
+  };
+}
+
+function buildJunoUnit(groups: SettingsGroup[], junoLookupEnabled: boolean): SettingsResponse["units"]["junoLive"] {
+  const juno = groups.find((group) => group.id === "juno");
+  const hasMissing = juno?.settings.some((setting) => setting.state === "missing") ?? false;
+  return {
+    id: "juno_live",
+    label: "Read-only live lookup",
+    status: !junoLookupEnabled ? "disabled" : hasMissing ? "missing" : "ready",
+    detail: !junoLookupEnabled
+      ? "Live lookup is optional and currently disabled."
+      : hasMissing
+        ? "Worker start is blocked until read-only login credentials and safe pacing are configured."
+        : "Live lookup can run in read-only browser mode.",
+    configured: junoLookupEnabled && !hasMissing,
+    optional: true,
+  };
+}
+
+function buildAuthBootstrapStatus(options: {
+  initialAdminConfigured: boolean;
+  adminUserCount: number | null;
+  externalProviderEnabled: boolean;
+  adminAllowlistConfigured: boolean;
+  adminClaimConfigured: boolean;
+}): SettingsResponse["security"]["authBootstrap"] {
+  const hasExistingAdmin = (options.adminUserCount ?? 0) > 0;
+  const hasExternalAdminMapping = options.externalProviderEnabled && (options.adminAllowlistConfigured || options.adminClaimConfigured);
+
+  if (hasExistingAdmin || options.initialAdminConfigured || hasExternalAdminMapping) {
+    return {
+      status: "ready",
+      adminUserCount: options.adminUserCount,
+      hasInitialAdminEnv: options.initialAdminConfigured,
+      hasExternalAdminMapping,
+      detail: hasExistingAdmin
+        ? "At least one admin user exists."
+        : options.initialAdminConfigured
+          ? "Initial admin env can bootstrap admin access."
+          : "External provider admin allowlist or claim mapping can bootstrap admin access.",
+    };
+  }
+
+  return {
+    status: "blocked",
+    adminUserCount: options.adminUserCount,
+    hasInitialAdminEnv: false,
+    hasExternalAdminMapping: false,
+    detail: "Auth bootstrap blocked. No admin access path configured.",
+  };
+}
+
+function trimOptional(value: string | undefined | null): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
 }

@@ -25,10 +25,11 @@ describe("loadRuntimeEnv", () => {
       GMAIL_STORAGE_DIR: ".data/mail-attachments",
       CATALOG_ATTACHMENT_PATTERN: "New Preorders|New Releases In Stock",
       SUPPLIER_CODE: "juno",
+      JUNO_WHOLESALE_OPS_DATA_MODE: "demo",
       JUNO_LIVE_ENQUEUE_ON_INGEST: false,
-      AUTH_ENABLED: false,
       AUTH_EMAIL_PASSWORD_ENABLED: true,
       AUTH_EXTERNAL_PROVIDER_ENABLED: false,
+      AUTH_EXTERNAL_PROVIDER_SCOPES: "openid email profile",
       AUTH_INITIAL_ADMIN_NAME: "Initial Admin",
       JUNO_BROWSER_PROFILE_DIR: ".data/juno-browser-profile",
       JUNO_BROWSER_HEADLESS: true,
@@ -56,7 +57,6 @@ describe("loadRuntimeEnv", () => {
     const env = loadRuntimeEnv({
       ...configuredEnv,
       DATABASE_URL: "postgres://user:pass@localhost:5432/juno_wholesale_ops",
-      AUTH_ENABLED: "true",
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://app.example.com",
       AUTH_TRUSTED_ORIGINS: "https://app.example.com,https://admin.example.com",
@@ -64,9 +64,15 @@ describe("loadRuntimeEnv", () => {
       AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
       AUTH_EXTERNAL_PROVIDER_ID: "workspace",
       AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
+      AUTH_EXTERNAL_PROVIDER_LOGO_URL: "https://login.example.com/logo.png",
+      AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL: "Sign in",
       AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
       AUTH_EXTERNAL_CLIENT_ID: "client-id",
       AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+      AUTH_EXTERNAL_PROVIDER_SCOPES: "openid email profile groups",
+      AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.com",
+      AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
+      AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops",
       AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
       AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       AUTH_INITIAL_ADMIN_NAME: "Ops Admin",
@@ -86,7 +92,6 @@ describe("loadRuntimeEnv", () => {
     });
 
     expect(env.DATABASE_URL).toBe("postgres://user:pass@localhost:5432/juno_wholesale_ops");
-    expect(env.AUTH_ENABLED).toBe(true);
     expect(env.AUTH_SECRET).toBe("a".repeat(32));
     expect(env.AUTH_BASE_URL).toBe("https://app.example.com");
     expect(env.AUTH_TRUSTED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
@@ -94,9 +99,15 @@ describe("loadRuntimeEnv", () => {
     expect(env.AUTH_EXTERNAL_PROVIDER_ENABLED).toBe(true);
     expect(env.AUTH_EXTERNAL_PROVIDER_ID).toBe("workspace");
     expect(env.AUTH_EXTERNAL_PROVIDER_NAME).toBe("Workspace");
+    expect(env.AUTH_EXTERNAL_PROVIDER_LOGO_URL).toBe("https://login.example.com/logo.png");
+    expect(env.AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL).toBe("Sign in");
     expect(env.AUTH_EXTERNAL_DISCOVERY_URL).toBe("https://login.example.com/.well-known/openid-configuration");
     expect(env.AUTH_EXTERNAL_CLIENT_ID).toBe("client-id");
     expect(env.AUTH_EXTERNAL_CLIENT_SECRET).toBe("client-secret");
+    expect(env.AUTH_EXTERNAL_PROVIDER_SCOPES).toBe("openid email profile groups");
+    expect(env.AUTH_ADMIN_EMAIL_ALLOWLIST).toBe("admin@example.com");
+    expect(env.AUTH_EXTERNAL_ADMIN_CLAIM).toBe("groups");
+    expect(env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE).toBe("ops");
     expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBe("admin@example.com");
     expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBe("password123");
     expect(env.AUTH_INITIAL_ADMIN_NAME).toBe("Ops Admin");

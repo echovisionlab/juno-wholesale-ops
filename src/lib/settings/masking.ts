@@ -4,15 +4,22 @@ import type {
   SettingDefinition,
   SettingDescriptor,
   SettingSource,
+  DataMode,
 } from "./descriptors";
 
 export type RawRuntimeEnv = Record<string, string | undefined>;
+export type SettingResolutionContext = {
+  dataMode: DataMode;
+  externalProviderEnabled: boolean;
+  junoLookupEnabled: boolean;
+};
 
 export function resolveSettingDescriptor(options: {
   definition: SettingDefinition;
   row: ServiceSettingsRow | null;
   env: RuntimeEnv;
   rawEnv: RawRuntimeEnv;
+  context: SettingResolutionContext;
 }): SettingDescriptor {
   const rowValue = options.definition.rowColumn ? options.row?.[options.definition.rowColumn] : undefined;
   const runtimeValue = getRuntimeValue(options.definition, options.env);
@@ -30,6 +37,7 @@ export function resolveSettingDescriptor(options: {
     source,
   });
   const configured = hasSettingValue(value);
+  const required = isDefinitionRequired(options.definition, options.context);
 
   return {
     key: options.definition.key,
@@ -37,13 +45,18 @@ export function resolveSettingDescriptor(options: {
     value: options.definition.secret ? null : normalizeDescriptorValue(value),
     displayValue: displaySettingValue(options.definition, value, source),
     source,
-    state: configured ? "configured" : options.definition.required ? "missing" : "disabled",
+    state: configured ? "configured" : required ? "missing" : "disabled",
     secret: options.definition.secret,
     editable: options.definition.editable,
     clearable: options.definition.editable && hasSettingValue(rowValue),
-    required: options.definition.required,
+    required,
+    requiredWhen: options.definition.requiredWhen,
+    runtimeOnly: options.definition.runtimeOnly ?? false,
+    advanced: options.definition.advanced ?? false,
+    unit: options.definition.unit,
     help: options.definition.help,
     type: options.definition.type,
+    options: options.definition.options,
   };
 }
 
@@ -138,4 +151,23 @@ function displaySettingValue(
     return value ? "Enabled" : "Disabled";
   }
   return String(value);
+}
+
+function isDefinitionRequired(
+  definition: SettingDefinition,
+  context: SettingResolutionContext,
+): boolean {
+  if (definition.requiredWhen === "always") {
+    return true;
+  }
+  if (definition.requiredWhen === "real_mailbox") {
+    return context.dataMode === "real_mailbox";
+  }
+  if (definition.requiredWhen === "external_provider_enabled") {
+    return context.externalProviderEnabled;
+  }
+  if (definition.requiredWhen === "juno_lookup_enabled") {
+    return context.junoLookupEnabled;
+  }
+  return definition.required;
 }

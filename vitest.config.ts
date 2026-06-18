@@ -1,5 +1,5 @@
 import path from "node:path";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
@@ -9,6 +9,7 @@ export default defineConfig({
   },
   test: {
     environment: "node",
+    exclude: [...configDefaults.exclude, ".next/**"],
     hookTimeout: 120000,
     testTimeout: 120000,
     coverage: {
@@ -35,6 +36,7 @@ export default defineConfig({
         "src/instrumentation.ts",
         "src/lib/auth/admin.ts",
         "src/lib/auth/initial-admin.ts",
+        "src/lib/auth/login-logo.ts",
         "src/lib/auth/schema.ts",
         "src/lib/auth/settings.ts",
         "src/lib/db/migrations.ts",

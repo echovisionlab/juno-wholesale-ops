@@ -1,4 +1,5 @@
 import type { RuntimeEnv } from "@/lib/env";
+import { isSupportedLoginLogoUrl, LOGIN_LOGO_URL_REQUIREMENT } from "@/lib/auth/login-logo";
 import { GOOGLE_GMAIL_MODIFY_SCOPE, GOOGLE_GMAIL_READONLY_SCOPE, hasGmailModifyScope } from "@/lib/env";
 import {
   definitionsByKey,
@@ -78,15 +79,16 @@ export function collectSettingsWarnings(options: {
   row: ServiceSettingsRow | null;
   env: RuntimeEnv;
   nodeEnv: string;
+  currentRequestOrigin?: string | null;
 }): SettingsWarning[] {
   const warnings: SettingsWarning[] = [];
-  const authEnabled = options.row?.auth_enabled ?? options.env.AUTH_ENABLED;
   const authBaseUrl = options.row?.auth_base_url ?? options.env.AUTH_BASE_URL;
   const gmailScopes = options.row?.google_gmail_scopes ?? options.env.GOOGLE_GMAIL_SCOPES;
   const emailPasswordEnabled =
     options.row?.auth_email_password_enabled ?? options.env.AUTH_EMAIL_PASSWORD_ENABLED;
   const externalProviderEnabled =
     options.row?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
+  const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins ?? options.env.AUTH_TRUSTED_ORIGINS);
 
   if (gmailScopes && hasGmailModifyScope(gmailScopes)) {
     warnings.push({
@@ -96,35 +98,43 @@ export function collectSettingsWarnings(options: {
     });
   }
 
-  if (options.nodeEnv === "production" && !authEnabled) {
-    warnings.push({
-      id: "production_auth_disabled",
-      severity: "critical",
-      message: "Production deployments must keep admin auth enabled.",
-    });
-  }
-
-  if (authEnabled && !hasSettingValue(options.env.AUTH_SECRET)) {
-    warnings.push({
-      id: "auth_secret_missing",
-      severity: "critical",
-      message: "AUTH_SECRET is runtime-only and required when admin auth is enabled.",
-    });
-  }
-
-  if (authEnabled && !hasSettingValue(authBaseUrl)) {
+  if (!hasSettingValue(authBaseUrl)) {
     warnings.push({
       id: "auth_base_url_missing",
       severity: "critical",
-      message: "AUTH_BASE_URL or auth_base_url is required when admin auth is enabled.",
+      message: "Site address is required before browser auth flows can be tested.",
     });
   }
 
-  if (authEnabled && !emailPasswordEnabled && !externalProviderEnabled) {
+  if (authBaseUrl && options.currentRequestOrigin && normalizeOrigin(authBaseUrl) !== normalizeOrigin(options.currentRequestOrigin)) {
+    warnings.push({
+      id: "auth_base_url_origin_mismatch",
+      severity: "warning",
+      message: `Configured Site address (${authBaseUrl}) does not match the current origin (${options.currentRequestOrigin}). Auth callbacks use the configured Site address.`,
+    });
+  }
+
+  if (options.currentRequestOrigin && trustedOrigins.length > 0 && !trustedOrigins.includes(normalizeOrigin(options.currentRequestOrigin))) {
+    warnings.push({
+      id: "auth_trusted_origin_missing_current",
+      severity: "warning",
+      message: `Trusted origins do not include the current origin (${options.currentRequestOrigin}). Add it before testing browser auth flows.`,
+    });
+  }
+
+  if (!emailPasswordEnabled && !externalProviderEnabled) {
     warnings.push({
       id: "auth_no_sign_in_method",
       severity: "critical",
       message: "At least one admin sign-in method must be enabled.",
+    });
+  }
+
+  if (externalProviderEnabled && !hasSettingValue(options.row?.auth_external_client_secret ?? options.env.AUTH_EXTERNAL_CLIENT_SECRET)) {
+    warnings.push({
+      id: "auth_external_provider_client_secret_missing",
+      severity: "critical",
+      message: "External provider is enabled, but the client secret is not configured.",
     });
   }
 
@@ -200,10 +210,33 @@ function normalizePatchValue(
   if (definition.type === "url" && text.length > 0 && !isUrl(text)) {
     return { kind: "invalid", issue: "must be a valid URL" };
   }
+  if (definition.key === "auth_login_logo_url" && text.length > 0 && !isSupportedLoginLogoUrl(text)) {
+    return { kind: "invalid", issue: LOGIN_LOGO_URL_REQUIREMENT };
+  }
+  if (definition.key === "data_mode" && text !== "demo" && text !== "real_mailbox") {
+    return { kind: "invalid", issue: "must be demo or real_mailbox" };
+  }
   if (definition.key === "google_gmail_scopes" && text.length === 0) {
     return { kind: "invalid", issue: "must include at least the Gmail read-only scope" };
   }
   return { kind: "value", value: text };
+}
+
+function splitOriginList(value: string | undefined | null): string[] {
+  return (
+    value
+      ?.split(/[,\n]+/)
+      .map((item) => normalizeOrigin(item.trim()))
+      .filter(Boolean) ?? []
+  );
+}
+
+function normalizeOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
 }
 
 function validateResolvedPatch(options: {
@@ -218,6 +251,8 @@ function validateResolvedPatch(options: {
   const delayMax = effectiveNumber("juno_live_delay_max_ms", merged, options.env);
   const pollInterval = effectiveNullableNumber("juno_live_poll_interval_ms", merged, options.env);
   const maxResults = effectiveNumber("gmail_max_results", merged, options.env);
+  const emailPasswordEnabled = effectiveBoolean("auth_email_password_enabled", merged, options.env);
+  const externalProviderEnabled = effectiveBoolean("auth_external_provider_enabled", merged, options.env);
 
   if (concurrency !== null && (concurrency < 1 || concurrency > 10)) {
     issues.push("juno_live_concurrency must be between 1 and 10");
@@ -237,6 +272,9 @@ function validateResolvedPatch(options: {
   if (maxResults !== null && (maxResults < 1 || maxResults > 500)) {
     issues.push("gmail_max_results must be between 1 and 500");
   }
+  if (emailPasswordEnabled === false && externalProviderEnabled !== true) {
+    issues.push("auth_email_password_enabled can be disabled only when auth_external_provider_enabled is true");
+  }
 
   return issues;
 }
@@ -251,6 +289,12 @@ function effectiveNullableNumber(column: ServiceSettingColumn, row: ServiceSetti
   const definition = definitionsByKey.get(column);
   const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined) ?? null;
   return typeof value === "number" ? value : null;
+}
+
+function effectiveBoolean(column: ServiceSettingColumn, row: ServiceSettingsRow, env: RuntimeEnv): boolean | null {
+  const definition = definitionsByKey.get(column);
+  const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined) ?? null;
+  return typeof value === "boolean" ? value : null;
 }
 
 function isEmail(value: string): boolean {

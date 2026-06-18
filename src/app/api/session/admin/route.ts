@@ -13,15 +13,11 @@ type BetterAuthSessionPayload = {
 } | null;
 
 export async function GET(request: Request): Promise<Response> {
-  const { auth, runtime, unavailable } = await getRuntimeBetterAuth();
-
-  if (!runtime.settings.enabled) {
-    return Response.json({ enabled: false });
-  }
+  const { auth, runtime, unavailable } = await getRuntimeBetterAuth({ requestOrigin: getRequestOrigin(request) });
 
   if (unavailable || !auth) {
     return Response.json(
-      { enabled: true, error: "auth_unavailable", missing: runtime.missing },
+      { error: "auth_unavailable", missing: runtime.missing },
       { status: 503 },
     );
   }
@@ -32,15 +28,14 @@ export async function GET(request: Request): Promise<Response> {
   const user = session?.user;
 
   if (!user?.id) {
-    return Response.json({ enabled: true, error: "authentication_required" }, { status: 401 });
+    return Response.json({ error: "authentication_required" }, { status: 401 });
   }
 
   if (user.role !== "admin") {
-    return Response.json({ enabled: true, error: "admin_required" }, { status: 403 });
+    return Response.json({ error: "admin_required" }, { status: 403 });
   }
 
   return Response.json({
-    enabled: true,
     user: {
       id: user.id,
       email: user.email,
@@ -49,4 +44,17 @@ export async function GET(request: Request): Promise<Response> {
       role: user.role,
     },
   });
+}
+
+function getRequestOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const forwardedProto = firstForwardedHeader(request.headers.get("x-forwarded-proto"));
+  const forwardedHost = firstForwardedHeader(request.headers.get("x-forwarded-host"));
+  const host = forwardedHost ?? request.headers.get("host") ?? url.host;
+  const proto = forwardedProto ?? url.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
+}
+
+function firstForwardedHeader(value: string | null): string | null {
+  return value?.split(",")[0]?.trim() || null;
 }

@@ -23,8 +23,13 @@ Notes:
   dispatch by default.
 - External webhook delivery requires `pnpm notifications:dispatch -- --send`
   or `pnpm notifications:refresh -- --send`.
-- `DATABASE_URL` and `AUTH_SECRET` stay runtime-only bootstrap values.
-- Production deployments must keep `AUTH_ENABLED=true`.
+- `DATABASE_URL` stays runtime-only.
+- The public Site address is DB-primary in the Settings Center. `AUTH_BASE_URL`
+  remains only a bootstrap fallback before the settings row is saved.
+- Auth is always enabled. `AUTH_SECRET` is an optional runtime override; when it
+  is absent, startup stores an internal random Better Auth secret in the
+  database without exposing it in Settings Center. Production deployments must
+  provide at least one admin bootstrap path.
 - Secret settings are write-only and masked; never expect the UI or API to echo
   service account JSON, Juno passwords, OIDC client secrets, webhook URLs,
   cookies, or auth headers.

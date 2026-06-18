@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadRuntimeEnv } from "@/lib/env";
-import { ensureServiceSettingsRow } from "@/lib/settings/repository";
+import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 
@@ -17,14 +17,17 @@ export function databaseUrlResponse(): { databaseUrl: string } | { response: Res
   return { databaseUrl };
 }
 
-export async function loadSettingsResponse(databaseUrl: string): Promise<SettingsResponse> {
+export async function loadSettingsResponse(databaseUrl: string, request?: Request): Promise<SettingsResponse> {
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(databaseUrl);
+  const adminUserCount = await countAdminUsers(databaseUrl).catch(() => null);
   return buildSettingsResponse({
     env,
     rawEnv: process.env,
     settingsRow,
     nodeEnv: process.env.NODE_ENV ?? "development",
+    currentRequestOrigin: request ? getRequestOrigin(request) : null,
+    adminUserCount,
   });
 }
 
@@ -46,4 +49,17 @@ export function safeSettingsActionError(error: unknown): string {
   }
   const message = error.message.replace(/\{[^{}]*(?:private_key|client_email|token|password|secret)[^{}]*\}/gi, "[redacted]");
   return message.length > 240 ? `${message.slice(0, 237)}...` : message;
+}
+
+export function getRequestOrigin(request: Request): string {
+  const url = new URL(request.url);
+  const forwardedProto = firstForwardedHeader(request.headers.get("x-forwarded-proto"));
+  const forwardedHost = firstForwardedHeader(request.headers.get("x-forwarded-host"));
+  const host = forwardedHost ?? request.headers.get("host") ?? url.host;
+  const proto = forwardedProto ?? url.protocol.replace(/:$/, "");
+  return `${proto}://${host}`;
+}
+
+function firstForwardedHeader(value: string | null): string | null {
+  return value?.split(",")[0]?.trim() || null;
 }

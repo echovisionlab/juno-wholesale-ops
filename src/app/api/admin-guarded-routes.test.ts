@@ -26,7 +26,7 @@ import {
   updateNotificationChannel,
   updateNotificationRule,
 } from "@/lib/notifications/repository";
-import { ensureServiceSettingsRow, updateServiceSettings } from "@/lib/settings/repository";
+import { countAdminUsers, ensureServiceSettingsRow, updateServiceSettings } from "@/lib/settings/repository";
 import type { ServiceSettingsRow } from "@/lib/settings/descriptors";
 import { POST as enqueueLiveLookups } from "./live-lookups/enqueue/route";
 import { GET as getLiveLookupStatus } from "./live-lookups/status/route";
@@ -41,6 +41,7 @@ import { GET as getMovementInsights } from "./insights/movement/route";
 import { GET as getTrendInsights } from "./insights/trends/route";
 import { GET as getSettingsStatus } from "./settings/status/route";
 import { GET as getSettings, PATCH as patchSettings } from "./settings/route";
+import { GET as getSettingsSecurityBootstrap } from "./settings/security/bootstrap/route";
 import { POST as testGmailSettings } from "./settings/actions/test-gmail/route";
 import { POST as testJunoSessionSettings } from "./settings/actions/test-juno-session/route";
 import { POST as refreshSettingsStatus } from "./settings/actions/refresh-status/route";
@@ -124,6 +125,7 @@ vi.mock("@/lib/notifications/repository", () => ({
 }));
 
 vi.mock("@/lib/settings/repository", () => ({
+  countAdminUsers: vi.fn(),
   ensureServiceSettingsRow: vi.fn(),
   updateServiceSettings: vi.fn(),
 }));
@@ -155,6 +157,7 @@ const updateNotificationChannelMock = vi.mocked(updateNotificationChannel);
 const updateNotificationRuleMock = vi.mocked(updateNotificationRule);
 const ensureServiceSettingsRowMock = vi.mocked(ensureServiceSettingsRow);
 const updateServiceSettingsMock = vi.mocked(updateServiceSettings);
+const countAdminUsersMock = vi.mocked(countAdminUsers);
 
 describe("admin guarded API routes", () => {
   const repository = {
@@ -171,9 +174,10 @@ describe("admin guarded API routes", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     vi.stubEnv("DATABASE_URL", "");
-    requireAdminMock.mockResolvedValue({ authorized: true, enabled: false, user: null });
+    requireAdminMock.mockResolvedValue({ authorized: true, user: null });
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
+    countAdminUsersMock.mockResolvedValue(1);
     seedDemoDataMock.mockResolvedValue({ snapshots: 2 } as never);
     withJunoLiveRepositoryMock.mockImplementation(async (_databaseUrl, callback) =>
       callback(repository as never, {} as never),
@@ -194,7 +198,8 @@ describe("admin guarded API routes", () => {
     await expectStatus(getIngestStatus(request()), 403);
     await expectStatus(getSettingsStatus(request()), 403);
     await expectStatus(getSettings(request()), 403);
-    await expectStatus(patchSettings(jsonRequest({ auth: { auth_enabled: true } })), 403);
+    await expectStatus(getSettingsSecurityBootstrap(request()), 403);
+    await expectStatus(patchSettings(jsonRequest({ auth: { auth_base_url: "https://app.example.test" } })), 403);
     await expectStatus(testGmailSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(testJunoSessionSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(refreshSettingsStatus(jsonRequest({})), 403);
@@ -269,17 +274,24 @@ describe("admin guarded API routes", () => {
   });
 
   it("guards settings reads, patch semantics, diagnostics, and secret masking", async () => {
+    await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
+      status: 200,
+      body: {
+        setup: {
+          ready: false,
+        },
+      },
+    });
     await expect(expectJson(getSettings(request()))).resolves.toEqual({
       status: 503,
       body: { error: "DATABASE_URL is not configured" },
     });
-    await expect(expectJson(patchSettings(jsonRequest({ auth: { auth_enabled: true } })))).resolves.toEqual({
+    await expect(expectJson(patchSettings(jsonRequest({ auth: { auth_base_url: "https://app.example.test" } })))).resolves.toEqual({
       status: 503,
       body: { error: "DATABASE_URL is not configured" },
     });
 
     vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
-    vi.stubEnv("AUTH_SECRET", "x".repeat(32));
     vi.stubEnv("AUTH_BASE_URL", "https://inventory-dev.example.test");
     vi.stubEnv("JUNO_LOGIN_PASSWORD", "runtime-juno-password");
     ensureServiceSettingsRowMock.mockResolvedValue({
@@ -296,6 +308,34 @@ describe("admin guarded API routes", () => {
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-service-account-json");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-juno-password");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-client-secret");
+
+    countAdminUsersMock.mockRejectedValueOnce(new Error("count failed"));
+    await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
+      status: 200,
+      body: {
+        setup: {
+          steps: expect.arrayContaining([
+            expect.objectContaining({
+              id: "auth",
+              guardrails: expect.arrayContaining([
+                expect.objectContaining({
+                  label: "Admin bootstrap",
+                  state: "warning",
+                }),
+              ]),
+            }),
+          ]),
+        },
+      },
+    });
+
+    await expect(expectJson(getSettingsSecurityBootstrap(request()))).resolves.toMatchObject({
+      status: 200,
+      body: {
+        status: "ready",
+        adminUserCount: 1,
+      },
+    });
 
     await expect(expectJson(patchSettings(jsonRequest({ juno: { juno_login_password: "" } })))).resolves.toMatchObject({
       status: 200,
@@ -1077,6 +1117,7 @@ async function expectJson(responsePromise: Promise<Response>): Promise<{ status:
 
 function emptySettingsRow(): ServiceSettingsRow {
   return {
+    data_mode: null,
     juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,
@@ -1100,16 +1141,23 @@ function emptySettingsRow(): ServiceSettingsRow {
     gmail_storage_dir: null,
     catalog_attachment_pattern: null,
     supplier_code: null,
-    auth_enabled: null,
+    auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
     auth_email_password_enabled: null,
     auth_external_provider_enabled: null,
     auth_external_provider_id: null,
     auth_external_provider_name: null,
+    auth_login_logo_url: null,
+    auth_external_provider_logo_url: null,
+    auth_external_provider_button_label: null,
     auth_external_discovery_url: null,
     auth_external_client_id: null,
     auth_external_client_secret: null,
+    auth_external_provider_scopes: null,
+    auth_admin_email_allowlist: null,
+    auth_external_admin_claim: null,
+    auth_external_admin_claim_value: null,
     updated_at: null,
   };
 }
