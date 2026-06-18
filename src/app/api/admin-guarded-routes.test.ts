@@ -330,7 +330,7 @@ describe("admin guarded API routes", () => {
 
     const settingsResponse = await expectJson(getSettings(request()));
     expect(settingsResponse.status).toBe(200);
-    expect(JSON.stringify(settingsResponse.body)).toContain("Database override configured");
+    expect(JSON.stringify(settingsResponse.body)).toContain("Saved setting configured");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-juno-password");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-client-secret");
 

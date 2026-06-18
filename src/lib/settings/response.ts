@@ -267,7 +267,7 @@ function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv):
     clientId: clientId ?? null,
     clientSecretConfigured,
     scopes: parseScopes(row?.auth_external_provider_scopes ?? env.AUTH_EXTERNAL_PROVIDER_SCOPES),
-    callbackUrl: baseUrl && providerId ? `${baseUrl.replace(/\/+$/, "")}/api/auth/callback/${providerId}` : null,
+    callbackUrl: baseUrl && providerId ? `${baseUrl.replace(/\/+$/, "")}/api/auth/oauth2/callback/${providerId}` : null,
     adminEmailAllowlistConfigured: hasSettingValue(row?.auth_admin_email_allowlist ?? env.AUTH_ADMIN_EMAIL_ALLOWLIST),
     adminClaimMappingConfigured: hasSettingValue(row?.auth_external_admin_claim ?? env.AUTH_EXTERNAL_ADMIN_CLAIM)
       && hasSettingValue(row?.auth_external_admin_claim_value ?? env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),

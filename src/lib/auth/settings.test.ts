@@ -3,6 +3,7 @@ import { loadRuntimeEnv } from "@/lib/env";
 import {
   getMissingAppAuthSettings,
   isAppAuthRunnable,
+  resolveExternalProfileRole,
   resolveAppAuthSettings,
   splitScopeList,
   splitList,
@@ -173,6 +174,53 @@ describe("resolveAppAuthSettings", () => {
   it("splits blank external provider scopes as an empty list", () => {
     expect(splitScopeList(null)).toEqual([]);
     expect(splitScopeList("")).toEqual([]);
+  });
+
+  it("maps external provider profiles to admin only through configured allowlist or claim mapping", () => {
+    const base = resolveAppAuthSettings(
+      runtimeEnv({
+        AUTH_BASE_URL: "https://app.example.com",
+        AUTH_EMAIL_PASSWORD_ENABLED: "false",
+        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
+        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
+        AUTH_EXTERNAL_CLIENT_ID: "client-id",
+        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
+      }),
+      null,
+    );
+
+    expect(resolveExternalProfileRole({ email: "admin@example.com", groups: ["ops"] }, base)).toBe("user");
+    expect(resolveExternalProfileRole({ email: "admin@example.com" }, {
+      ...base,
+      adminEmailAllowlist: ["admin@example.com"],
+    })).toBe("admin");
+    expect(resolveExternalProfileRole({ email: "user@example.com", groups: ["ops"] }, {
+      ...base,
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "ops",
+    })).toBe("admin");
+    expect(resolveExternalProfileRole({ email: "user@example.com", groups: "ops,staff" }, {
+      ...base,
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "staff",
+    })).toBe("admin");
+    expect(resolveExternalProfileRole(null, {
+      ...base,
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "ops",
+    })).toBe("user");
+    expect(resolveExternalProfileRole(["ops"], {
+      ...base,
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "ops",
+    })).toBe("user");
+    expect(resolveExternalProfileRole({ email: true, groups: 42 }, {
+      ...base,
+      adminEmailAllowlist: ["admin@example.com"],
+      externalAdminClaim: "groups",
+      externalAdminClaimValue: "ops",
+    })).toBe("user");
   });
 });
 

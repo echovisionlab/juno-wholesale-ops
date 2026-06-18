@@ -26,8 +26,8 @@ Notes:
 - External webhook delivery requires `pnpm notifications:dispatch -- --send`
   or `pnpm notifications:refresh -- --send`.
 - `DATABASE_URL` stays runtime-only.
-- The public Site address is DB-primary in the Settings Center. `AUTH_BASE_URL`
-  remains only a bootstrap fallback before the settings row is saved.
+- The public Site address is the primary saved setting in the Settings Center. `AUTH_BASE_URL`
+  remains only a bootstrap fallback before the saved setting exists.
 - Auth is always enabled. `AUTH_SECRET` is an optional runtime override; when it
   is absent, startup stores an internal random Better Auth secret in the
   database without exposing it in Settings Center. Production deployments must

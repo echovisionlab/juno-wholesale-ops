@@ -388,7 +388,7 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
           {
             label: "Migration ledger",
             state: "ok",
-            detail: "Next.js startup applied migrations and the service_setting row is available.",
+            detail: "Next.js startup applied migrations and saved settings are available.",
           },
         ],
       },

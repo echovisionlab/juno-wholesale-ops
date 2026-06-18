@@ -108,6 +108,22 @@ export function splitList(value: string | undefined | null): string[] {
   );
 }
 
+export function resolveExternalProfileRole(profile: unknown, settings: AppAuthSettings): "admin" | "user" {
+  const email = readStringClaim(profile, "email")?.toLowerCase();
+  if (email && settings.adminEmailAllowlist.map((entry) => entry.toLowerCase()).includes(email)) {
+    return "admin";
+  }
+
+  if (settings.externalAdminClaim && settings.externalAdminClaimValue) {
+    const claim = readClaim(profile, settings.externalAdminClaim);
+    if (claimMatchesValue(claim, settings.externalAdminClaimValue)) {
+      return "admin";
+    }
+  }
+
+  return "user";
+}
+
 function resolveExternalProvider(
   env: RuntimeEnv,
   row: AuthServiceSettingsRow | null,
@@ -163,4 +179,26 @@ export function splitScopeList(value: string | undefined | null): string[] {
       .map((item) => item.trim())
       .filter(Boolean) ?? []
   );
+}
+
+function readStringClaim(profile: unknown, key: string): string | undefined {
+  const value = readClaim(profile, key);
+  return typeof value === "string" ? value : undefined;
+}
+
+function readClaim(profile: unknown, key: string): unknown {
+  if (!profile || typeof profile !== "object" || Array.isArray(profile)) {
+    return undefined;
+  }
+  return (profile as Record<string, unknown>)[key];
+}
+
+function claimMatchesValue(claim: unknown, expected: string): boolean {
+  if (Array.isArray(claim)) {
+    return claim.some((entry) => typeof entry === "string" && entry === expected);
+  }
+  if (typeof claim === "string") {
+    return claim === expected || claim.split(",").map((entry) => entry.trim()).includes(expected);
+  }
+  return false;
 }

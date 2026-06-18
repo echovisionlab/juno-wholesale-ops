@@ -51,25 +51,26 @@ describe("SettingsPage", () => {
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
     expect(pageText()).toContain("Continue with Workspace");
-    expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/callback/workspace");
+    expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
     expect(pageText()).toContain("Copy callback URL");
     expect(pageText()).toContain("Client secret");
     expect(pageText()).toContain("configured");
     expect(pageText()).not.toContain("raw-db-secret");
     clickButton("Overview");
-    expect(pageText()).toContain("database");
-    expect(pageText()).toContain("runtime");
-    expect(pageText()).toContain("default");
+    expect(pageText()).toContain("Saved setting");
+    expect(pageText()).toContain("runtime fallback values");
     clickButton("Juno Live");
-    expect(pageText()).toContain("unset");
-    expect(pageText()).toContain("Database override configured");
+    expect(pageText()).toContain("Not set");
+    expect(pageText()).toContain("Saved setting configured");
     clickButton("Advanced");
+    expect(pageText()).toContain("Runtime fallback");
+    expect(pageText()).toContain("Default");
     expect(pageText()).toContain("Runtime fallback configured");
     expect(pageText()).not.toContain("raw-db-secret");
     expect(pageText()).not.toContain("raw-runtime-secret");
   });
 
-  it("clears a database override with a null patch and masks action results", async () => {
+  it("clears a saved setting with a null patch and masks action results", async () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture({ junoPasswordSource: "runtime" }), changed: ["juno_login_password"], warnings: [] }))
       .mockResolvedValueOnce(jsonResponse({ ok: false, status: "missing_settings", service_account: "raw-secret-token" }));
@@ -78,7 +79,7 @@ describe("SettingsPage", () => {
     await renderSettingsPage(settingsFixture());
     clickButton("Juno Live");
     await act(async () => undefined);
-    clickButton("Clear override");
+    clickButton("Clear saved setting");
     await act(async () => undefined);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/settings", {
@@ -139,7 +140,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         clientId: "client-id",
         clientSecretConfigured: true,
         scopes: ["openid", "email", "profile"],
-        callbackUrl: "https://inventory-dev.example.test/api/auth/callback/workspace",
+        callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
         adminEmailAllowlistConfigured: true,
         adminClaimMappingConfigured: false,
         detail: "Generic OAuth/OIDC sign-in is ready.",
@@ -227,7 +228,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         settings: [
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
-          setting("auth_external_client_secret", "External client secret", "database", "configured", "Database override configured", true, true),
+          setting("auth_external_client_secret", "External client secret", "database", "configured", "Saved setting configured", true, true),
         ],
       },
       {
@@ -248,7 +249,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
               "Juno login password",
               junoPasswordSource,
               "configured",
-              junoPasswordSource === "database" ? "Database override configured" : "Runtime fallback configured",
+              junoPasswordSource === "database" ? "Saved setting configured" : "Runtime fallback configured",
               true,
               true,
             ),
@@ -263,11 +264,12 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         state: "missing",
         settings: [
           setting("database_url", "Database URL", "runtime", "configured", "Runtime fallback configured", true, false),
+          setting("juno_browser_headless", "Headless browser", "default", "configured", "Enabled", false, true, "boolean"),
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
-          setting("auth_external_client_secret", "External client secret", "database", "configured", "Database override configured", true, true),
+          setting("auth_external_client_secret", "External client secret", "database", "configured", "Saved setting configured", true, true),
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
-          setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", junoPasswordSource === "database" ? "Database override configured" : "Runtime fallback configured", true, true),
+          setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", junoPasswordSource === "database" ? "Saved setting configured" : "Runtime fallback configured", true, true),
         ],
       },
     ],

@@ -1352,12 +1352,12 @@ function SetupGuardrailRow({ guardrail }: { guardrail: SetupGuardrail }) {
 
 function setupSettingSourcePresentation(setting: SetupSetting): { label: string; color: string } {
   if (setting.source === "database") {
-    return { label: "DB override", color: "blue" };
+    return { label: "Saved setting", color: "blue" };
   }
   if (setting.source === "runtime") {
-    return { label: "Env/default", color: "grape" };
+    return { label: "Runtime fallback", color: "grape" };
   }
-  return { label: "Unset", color: "red" };
+  return { label: "Not set", color: "red" };
 }
 
 function setupSettingStatePresentation(setting: SetupSetting): { label: string; color: string } {
@@ -1465,7 +1465,7 @@ function getLiveWorkerDisabledReason(setupStatus?: AppSetupStatus | null): strin
   }
   const databaseStep = setupStatus.steps.find((step) => step.id === "database");
   if (!databaseStep || databaseStep.state === "missing") {
-    return "Start disabled because DATABASE_URL or the service_setting row is unavailable.";
+    return "Start disabled because the database connection or saved settings are unavailable.";
   }
   const junoStep = setupStatus.steps.find((step) => step.id === "juno");
   if (!junoStep) {

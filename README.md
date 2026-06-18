@@ -171,25 +171,25 @@ Important values:
 - `JUNO_LOGIN_EMAIL`
 - `JUNO_LOGIN_PASSWORD`
 
-Operator settings resolve from env and the singleton `service_setting` row
-where those settings explicitly support runtime bootstrap. Mail ingest
+Operator settings resolve from runtime bootstrap values and saved Postgres
+settings where those settings explicitly support runtime fallback. Mail ingest
 configuration does not use env fallback or legacy Gmail settings. It lives in
 `mail_connection` and `mail_mailbox_source` records. Secret values are never
 shown in the dashboard; only configured/unset status is shown.
 
 The app Settings Center at `/settings` is the primary operator UX for runtime
-readiness, DB overrides, reset-to-runtime actions, and diagnostics. Resolution
+readiness, saved settings, reset-to-runtime actions, and diagnostics. Resolution
 is always:
 
 ```text
-effective value = database override ?? runtime env fallback ?? default value
+effective value = saved setting ?? runtime fallback ?? default value
 ```
 
 `DATABASE_URL` remains runtime-only and cannot be persisted through the Settings
 Center. Export `.env` into the current shell before running local CLI scripts
 such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`. The public
-app URL is the DB-primary `Site address` setting;
-`AUTH_BASE_URL` is only a bootstrap fallback before that row is saved. Auth is
+app URL is the primary saved `Site address` setting;
+`AUTH_BASE_URL` is only a bootstrap fallback before that saved setting exists. Auth is
 always enabled. If `AUTH_SECRET` is absent, startup creates an internal random
 Better Auth secret in the database; it is not an operator-facing setting. At
 least one admin bootstrap path is still required. Secret fields such as
@@ -234,7 +234,7 @@ pnpm juno:live:worker -- --loop
 
 It uses Playwright Chromium with a persistent profile and randomized delays.
 Automatic polling is disabled unless credentials and a poll interval are
-configured. Credentials belong in runtime env or secret mounts, not source.
+configured. Credentials belong in runtime fallback or secret mounts, not source.
 
 ## Insights
 
@@ -308,7 +308,7 @@ Production recommendations:
   release tag.
 - Tagged releases can deploy through Komodo after image promotion when the
   production stack and Komodo GitHub secrets are configured.
-- Use mounted secrets or runtime env for credentials.
+- Use mounted secrets or runtime fallback for credentials.
 - Back up Postgres and raw attachment storage.
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
 - Run `pnpm validate`, `pnpm build`, and Docker build before release.
