@@ -46,6 +46,7 @@ export default defineConfig({
         "src/lib/email/adapter.ts",
         "src/lib/env.ts",
         "src/lib/ingest/gmail-query.ts",
+        "src/lib/ingest/gmail-ingest-runner.ts",
         "src/lib/ingest/gmail.ts",
         "src/lib/ingest/google-auth.ts",
         "src/lib/ingest/juno-parser.ts",
