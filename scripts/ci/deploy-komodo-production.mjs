@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
-import { spawnFile } from "node:child_process";
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -479,7 +479,7 @@ function checkSmokeUrl(url, timeoutMs) {
   const args = ["--fail", "--silent", "--show-error", "--location", "--max-time", String(timeoutSeconds), url];
 
   return new Promise((resolve, reject) => {
-    const child = spawnFile("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
+    const child = spawn("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
     let stderr = "";
 
     child.stderr.setEncoding("utf8");
