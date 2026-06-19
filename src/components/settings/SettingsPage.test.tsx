@@ -142,23 +142,15 @@ describe("SettingsPage", () => {
     expect(pageText()).not.toContain("raw-secret-token");
   });
 
-  it("refreshes status with a short summary instead of raw settings JSON", async () => {
-    const refreshedSettings = settingsFixture({ junoPasswordSource: "runtime" });
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({
-      settings: refreshedSettings,
-      setup: { secret_token: "raw-status-secret", steps: [{ id: "database", state: "ok" }] },
-    }));
-    vi.stubGlobal("fetch", fetchMock);
-
+  it("does not expose a redundant refresh status diagnostics action", async () => {
     await renderSettingsPage(settingsFixture());
-    clickButton("Refresh status");
-    await act(async () => undefined);
 
-    expect(pageText()).toContain("Status refreshed");
-    expect(pageText()).toContain("sections ready");
-    expect(pageText()).not.toContain("raw-status-secret");
-    expect(pageText()).not.toContain('"settings"');
-    expect(pageText()).not.toContain('"setup"');
+    expect(pageText()).not.toContain("Refresh status");
+    expect(pageText()).toContain("Run read-only smoke checks from here.");
+    clickButton("Advanced");
+    expect(pageText()).toContain("Run a read-only smoke check from Overview first.");
+    clickButton("View sanitized JSON");
+    expect(pageText()).not.toContain("Sanitized JSON");
   });
 });
 
