@@ -1,4 +1,4 @@
-import { parseScopes } from "@/lib/env";
+import { GOOGLE_GMAIL_READONLY_SCOPE, parseScopes } from "@/lib/env";
 import { GmailClient } from "@/lib/ingest/gmail";
 import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
 import {
@@ -54,7 +54,7 @@ export async function POST(request: Request) {
       const accessToken = await getDelegatedAccessToken({
         key,
         subject: source.mailboxAddress,
-        scopes: parseScopes(source.scopes),
+        scopes: parseScopes(GOOGLE_GMAIL_READONLY_SCOPE),
       });
       const gmail = new GmailClient(source.mailboxAddress, accessToken);
       const messages = await gmail.listMessages(source.query, Math.min(source.maxResults, 10));
