@@ -63,9 +63,6 @@ export function buildAppSetupStatus(options: {
   const junoMissing = [
     junoLookupEnabled && !liveSettings.loginEmail ? "juno_login_email" : null,
     junoLookupEnabled && !liveSettings.loginPassword ? "juno_login_password" : null,
-    liveSettings.delayMinMs <= liveSettings.delayMaxMs
-      ? null
-      : "juno_live_delay_min_ms must be <= juno_live_delay_max_ms",
   ].filter((value): value is string => Boolean(value));
   const authSettings = resolveAppAuthSettings(options.env, options.settingsRow, {
     ssoProviders: options.ssoProviders ?? [],

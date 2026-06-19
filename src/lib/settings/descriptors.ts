@@ -201,16 +201,16 @@ export const settingDefinitions = [
   dbSetting("juno", "juno_live_enqueue_on_ingest", "Enqueue on ingest", "boolean", false, false, "Queues read-only live lookup jobs after new snapshots.", false, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_email", "Juno login email", "email", true, false, "Login email for read-only product page observation.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_password", "Juno login password", "secret", true, true, "Write-only password for read-only product page observation.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),
-  dbSetting("juno", "juno_browser_profile_dir", "Browser profile dir", "string", false, false, "Persistent Playwright profile path.", ".data/juno-browser-profile", { unit: "juno_live_lookup" }),
-  dbSetting("juno", "juno_browser_headless", "Headless browser", "boolean", false, false, "Runs Chromium headless when enabled.", true, { unit: "juno_live_lookup" }),
+  dbSetting("juno", "juno_browser_profile_dir", "Browser profile dir", "string", false, false, "Persistent Playwright profile path.", ".data/juno-browser-profile", { advanced: true, unit: "juno_live_lookup" }),
+  dbSetting("juno", "juno_browser_headless", "Headless browser", "boolean", false, false, "Runs Chromium headless when enabled.", true, { advanced: true, unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_live_concurrency", "Concurrency", "number", false, false, "Maximum parallel read-only browser pages.", 1, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_live_delay_min_ms", "Delay min", "number", false, false, "Minimum randomized page delay in milliseconds.", 30000, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_live_delay_max_ms", "Delay max", "number", false, false, "Maximum randomized page delay in milliseconds.", 180000, { unit: "juno_live_lookup" }),
-  dbSetting("juno", "juno_live_nav_timeout_ms", "Navigation timeout", "number", false, false, "Read-only page navigation timeout in milliseconds.", 45000, { unit: "juno_live_lookup" }),
-  dbSetting("juno", "juno_live_max_attempts", "Max attempts", "number", false, false, "Maximum attempts for retryable live lookup jobs.", 2, { unit: "juno_live_lookup" }),
+  dbSetting("juno", "juno_live_nav_timeout_ms", "Navigation timeout", "number", false, false, "Read-only page navigation timeout in milliseconds.", 45000, { advanced: true, unit: "juno_live_lookup" }),
+  dbSetting("juno", "juno_live_max_attempts", "Max attempts", "number", false, false, "Maximum attempts for retryable live lookup jobs.", 2, { advanced: true, unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_live_poll_interval_ms", "Poll interval", "number", false, false, "Automatic polling interval. Leave unset for manual operation.", undefined, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_live_auto_enqueue_on_interval", "Auto enqueue on interval", "boolean", false, false, "Allows automatic enqueue only when credentials and interval are configured.", false, { unit: "juno_live_lookup" }),
-  dbSetting("juno", "juno_live_auto_enqueue_limit", "Auto enqueue limit", "number", false, false, "Maximum jobs queued by automatic interval.", 1000, { unit: "juno_live_lookup" }),
+  dbSetting("juno", "juno_live_auto_enqueue_limit", "Auto enqueue limit", "number", false, false, "Maximum jobs queued by automatic interval.", 1000, { advanced: true, unit: "juno_live_lookup" }),
 ] as const satisfies readonly SettingDefinition[];
 
 export const definitionsByKey = new Map(settingDefinitions.map((definition) => [definition.key, definition]));
