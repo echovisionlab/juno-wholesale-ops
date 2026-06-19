@@ -13,7 +13,7 @@ until the owner explicitly approves those final actions.
 - [ ] Demo fixtures confirmed synthetic
 - [ ] README links checked
 - [ ] Security and privacy docs reviewed
-- [ ] Settings Center reviewed: source badges, secret masking, reset-to-runtime, diagnostics, and production auth warning
+- [ ] Settings Center reviewed: editable inputs show current values, secrets stay masked, diagnostics stay Advanced-only, and production auth warning is clear
 - [ ] Release notes drafted
 - [ ] GitHub Actions green
 - [ ] Public repository checklist reviewed

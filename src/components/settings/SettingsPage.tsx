@@ -464,12 +464,13 @@ function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
 }
 
 function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
-  const sourceCounts = countSources(settings.groups.find((group) => group.id === "advanced")?.settings ?? []);
+  const editableSettings = settings.groups.flatMap((group) => group.settings).filter((setting) => setting.editable);
+  const missingSettings = editableSettings.filter((setting) => setting.state === "missing" || setting.state === "invalid");
   return (
     <ResponsiveGrid minWidth={180} gap="sm">
       <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
       <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
-      <StatusCard icon={Settings} label="Saved settings" value={String(sourceCounts.database)} detail={`${sourceCounts.runtime} runtime fallback values`} />
+      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} detail={missingSettings.length === 0 ? "Editable values are ready." : `${missingSettings.length} editable value${missingSettings.length === 1 ? "" : "s"} need attention.`} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </ResponsiveGrid>
   );
@@ -1159,7 +1160,7 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
         <Stack gap={4}>
           <Text fw={700}>{group.label}</Text>
           <Text size="sm" c="dimmed">
-            Source badges show saved settings, runtime fallback values, defaults, or values that are not set.
+            Edit the current values here. Secret fields only show whether a value is configured.
           </Text>
         </Stack>
         <Badge color={groupStateColor(group.state)} variant="light">
@@ -1206,6 +1207,7 @@ function SettingEditor({ setting, draftValue, onChange, onClear }: {
 }) {
   const pendingClear = draftValue === null;
   const value = draftValue !== undefined && draftValue !== null ? draftValue : setting.secret ? "" : setting.value ?? "";
+  const secretStatus = pendingClear ? "Will clear saved secret" : setting.displayValue;
 
   return (
     <Box>
@@ -1213,7 +1215,6 @@ function SettingEditor({ setting, draftValue, onChange, onClear }: {
         <Stack gap={4} maw={520}>
           <Group gap={6}>
             <Text fw={700}>{setting.label}</Text>
-            <SourceBadge source={setting.source} />
             <StateBadge setting={setting} />
             {setting.secret ? (
               <Badge color="gray" variant="outline">
@@ -1224,9 +1225,16 @@ function SettingEditor({ setting, draftValue, onChange, onClear }: {
           <Text size="sm" c="dimmed">
             {setting.help}
           </Text>
-          <Text size="sm">
-            Effective: <Text span fw={700}>{pendingClear ? "Will reset to runtime fallback or default" : setting.displayValue}</Text>
-          </Text>
+          {setting.secret ? (
+            <Text size="xs" c={setting.state === "missing" ? "red.7" : "dimmed"}>
+              Current secret: {secretStatus}
+            </Text>
+          ) : null}
+          {!setting.editable ? (
+            <Text size="sm" c={setting.state === "missing" ? "red.7" : "gray.8"}>
+              {pendingClear ? "Will clear saved value" : setting.displayValue}
+            </Text>
+          ) : null}
         </Stack>
         {setting.clearable ? (
           <Button size="xs" variant="light" color="gray" onClick={onClear}>
@@ -1253,7 +1261,7 @@ function renderInput(
   if (setting.type === "boolean") {
     return (
       <Switch
-        label="Saved setting"
+        aria-label={setting.label}
         checked={Boolean(value)}
         onChange={(event) => onChange(event.currentTarget.checked)}
       />
@@ -1262,7 +1270,7 @@ function renderInput(
   if (setting.type === "number") {
     return (
       <NumberInput
-        label="Saved setting"
+        aria-label={setting.label}
         value={typeof value === "number" ? value : value === "" ? "" : Number(value)}
         allowDecimal={false}
         onChange={(nextValue) => onChange(typeof nextValue === "number" ? nextValue : String(nextValue))}
@@ -1272,7 +1280,7 @@ function renderInput(
   if (setting.type === "select") {
     return (
       <NativeSelect
-        label="Saved setting"
+        aria-label={setting.label}
         value={typeof value === "string" ? value : ""}
         data={setting.options?.map((option) => ({ value: option.value, label: option.label })) ?? []}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -1292,7 +1300,7 @@ function renderInput(
   if (setting.type === "csv" || setting.key === "auth_trusted_origins") {
     return (
       <Textarea
-        label="Saved setting"
+        aria-label={setting.label}
         minRows={2}
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.currentTarget.value)}
@@ -1301,7 +1309,7 @@ function renderInput(
   }
   return (
     <TextInput
-      label="Saved setting"
+      aria-label={setting.label}
       value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
       onChange={(event) => onChange(event.currentTarget.value)}
     />
@@ -1345,10 +1353,10 @@ function SourceBadge({ source }: { source: SettingDescriptor["source"] }) {
     unset: "red",
   } satisfies Record<SettingDescriptor["source"], string>;
   const labels = {
-    database: "Saved setting",
-    runtime: "Runtime fallback",
+    database: "Database",
+    runtime: "Environment",
     default: "Default",
-    unset: "Not set",
+    unset: "Unset",
   } satisfies Record<SettingDescriptor["source"], string>;
   return (
     <Badge color={colors[source]} variant="light" size="xs">
@@ -1405,13 +1413,6 @@ function severityColor(severity: SettingsWarning["severity"]): string {
     return "yellow";
   }
   return "blue";
-}
-
-function countSources(settings: SettingDescriptor[]): Record<SettingDescriptor["source"], number> {
-  return settings.reduce(
-    (counts, setting) => ({ ...counts, [setting.source]: counts[setting.source] + 1 }),
-    { database: 0, runtime: 0, default: 0, unset: 0 },
-  );
 }
 
 function buildOverviewUnits(settings: SettingsResponse): Array<{

@@ -17,11 +17,10 @@ infrastructure and explicitly supported operator settings. Saved Postgres
 settings are the primary operator settings surface. Mail ingest uses separate
 `mail_connection` and `mail_mailbox_source` records, with no env fallback for
 mailbox addresses, Gmail service account JSON, storage directories, or supplier
-codes. The Settings Center shows saved setting/runtime fallback/default/not set
-source badges, masks secrets, and lets operators clear saved settings back to runtime/default
-values. Refresh status updates status cards instead of showing diagnostics
-dumps. Sanitized diagnostics JSON is available only under Advanced and can be
-copied without exposing secrets.
+codes. The Settings Center shows current editable values directly in inputs,
+masks secrets, and keeps storage/source details in Advanced. Sanitized
+diagnostics JSON is available only under Advanced and can be copied without
+exposing secrets.
 
 ## Production Checklist
 
@@ -31,13 +30,13 @@ copied without exposing secrets.
   admin rows, `AUTH_INITIAL_ADMIN_EMAIL`/`AUTH_INITIAL_ADMIN_PASSWORD`, or
   external provider admin mapping.
 - Set the Settings Center `Site address` to the public app URL. `AUTH_BASE_URL`
-  may be used only as a bootstrap fallback before the database setting exists.
+  may be used only as a bootstrap value before the database setting exists.
 - Register the displayed External SSO callback URL in the provider console when
   enabling Generic OAuth/OIDC.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.
-- Keep Juno credentials in runtime fallback or secret storage.
+- Keep Juno credentials in saved secret fields, runtime env, or secret storage.
 - Store raw attachments outside the application image.
 - Back up Postgres and attachment storage.
 - Keep browser profile storage private.

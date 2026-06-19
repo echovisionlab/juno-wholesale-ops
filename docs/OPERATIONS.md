@@ -11,11 +11,11 @@ pnpm notifications:refresh
 
 Use `/settings` as the first operator stop before running commands. The
 Settings Center groups configuration by operating unit: Data Mode, Auth/Admin
-Access, Gmail Workspace Ingest, Juno Live Session, and Notifications. Source
-badges use operator language: Saved setting, Runtime fallback, Default value,
-or Not set. Refresh status updates the cards and next actions; sanitized JSON
-diagnostics live under Advanced and are collapsed by default. Mail ingest
-settings are separate mail source records, not env fallbacks.
+Access, Gmail Workspace Ingest, Juno Live Session, and Notifications. Editable
+settings show the current value directly in the input; source/storage details
+live under Advanced. Sanitized JSON diagnostics live under Advanced and are
+collapsed by default. Mail ingest settings are separate mail source records, not
+env fallbacks.
 
 Notes:
 
@@ -29,7 +29,7 @@ Notes:
   or `pnpm notifications:refresh -- --send`.
 - `DATABASE_URL` stays runtime-only.
 - The public Site address is the primary saved setting in the Settings Center. `AUTH_BASE_URL`
-  remains only a bootstrap fallback before the saved setting exists.
+  remains only a bootstrap value before the saved setting exists.
 - Auth is always enabled. `AUTH_SECRET` is an optional runtime override; when it
   is absent, startup stores an internal random Better Auth secret in the
   database without exposing it in Settings Center. Production deployments must
