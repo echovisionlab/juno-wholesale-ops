@@ -163,6 +163,9 @@ describe("settings response and validation", () => {
       mailSources: [mailSource()],
     });
     expect(configured.units.mail).toMatchObject({ status: "ready", configured: true });
+    expect(configured.groups.find((group) => group.id === "notifications")).toMatchObject({
+      state: "complete",
+    });
   });
 
   it("blocks auth bootstrap when no admin access path exists", () => {

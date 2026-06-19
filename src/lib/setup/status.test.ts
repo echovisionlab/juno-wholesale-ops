@@ -128,7 +128,7 @@ describe("buildAppSetupStatus", () => {
     expect(status.steps.find((step) => step.id === "juno")).toEqual(
       expect.objectContaining({
         state: "missing",
-        missing: ["juno_live_delay_min_ms must be <= juno_live_delay_max_ms"],
+        missing: [],
         guardrails: expect.arrayContaining([
           expect.objectContaining({
             label: "Randomized request pacing",

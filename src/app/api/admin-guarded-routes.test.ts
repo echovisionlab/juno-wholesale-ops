@@ -347,7 +347,7 @@ describe("admin guarded API routes", () => {
     expect(getGmailIngestStateMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app");
   });
 
-  it("guards settings reads, patch semantics, diagnostics, and secret masking", async () => {
+  it("guards settings reads, patch semantics, status, and secret masking", async () => {
     await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
       status: 200,
       body: {

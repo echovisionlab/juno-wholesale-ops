@@ -46,7 +46,11 @@ export function buildSettingsResponse(options: {
     return {
       id: groupId,
       label: groupLabel(groupId),
-      state: groupId === "mail" ? mailGroupState(mailSources) : groupState(settings, warningForGroup),
+      state: groupId === "mail"
+        ? mailGroupState(mailSources)
+        : groupId === "notifications"
+          ? "complete"
+          : groupState(settings, warningForGroup),
       settings,
     };
   });

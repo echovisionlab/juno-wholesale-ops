@@ -97,7 +97,7 @@ export function collectSettingsWarnings(options: {
     warnings.push({
       id: "auth_base_url_missing",
       severity: "critical",
-      message: "Site address is required before browser auth flows can be tested.",
+      message: "Site address is required.",
     });
   }
 
@@ -105,7 +105,7 @@ export function collectSettingsWarnings(options: {
     warnings.push({
       id: "auth_base_url_origin_mismatch",
       severity: "warning",
-      message: `Configured Site address (${authBaseUrl}) does not match the current origin (${options.currentRequestOrigin}). Auth callbacks use the configured Site address.`,
+      message: "Site address does not match current origin.",
     });
   }
 
@@ -113,7 +113,7 @@ export function collectSettingsWarnings(options: {
     warnings.push({
       id: "auth_trusted_origin_missing_current",
       severity: "warning",
-      message: `Trusted origins do not include the current origin (${options.currentRequestOrigin}). Add it before testing browser auth flows.`,
+      message: "Trusted origins do not include current origin.",
     });
   }
 
@@ -125,7 +125,7 @@ export function collectSettingsWarnings(options: {
     warnings.push({
       id: "auth_sso_provider_not_ready",
       severity: "critical",
-      message: `${incompleteProviders.length} enabled SSO provider${incompleteProviders.length === 1 ? "" : "s"} need valid discovery, client, secret, and Site address settings.`,
+      message: `${incompleteProviders.length} enabled SSO provider${incompleteProviders.length === 1 ? "" : "s"} not ready.`,
     });
   }
 

@@ -30,11 +30,9 @@ import {
 import { notifications } from "@mantine/notifications";
 import {
   AlertTriangle,
-  CheckCircle2,
   Copy,
   Database,
   Globe2,
-  MailSearch,
   Save,
   Settings,
   ShieldCheck,
@@ -68,8 +66,6 @@ import type {
 
 type PatchValue = string | number | boolean | null;
 type DraftValues = Record<string, PatchValue>;
-type ActionResult = Record<string, unknown>;
-type SettingsActionName = "test-gmail" | "test-juno-session";
 type SsoProviderProtocol = "oidc" | "oauth2";
 type SsoProviderPreset = "custom_oidc" | "custom_oauth2" | "google_oidc" | "microsoft_entra_oidc" | "auth0_oidc" | "okta_oidc";
 type MailSourceDraft = {
@@ -275,7 +271,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [draft, setDraft] = useState<DraftValues>({});
   const [error, setError] = useState<string | null>(initialError);
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
-  const [actionPending, setActionPending] = useState<string | null>(null);
+  const [junoSessionPending, setJunoSessionPending] = useState(false);
   const [mailSourceDraft, setMailSourceDraft] = useState<MailSourceDraft>(emptyMailSourceDraft);
   const [mailSourceTest, setMailSourceTest] = useState<MailSourceTestState>(null);
   const [editingMailSourceId, setEditingMailSourceId] = useState<string | null>(null);
@@ -368,21 +364,21 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     }
   }
 
-  async function runAction(action: SettingsActionName) {
-    setActionPending(action);
+  async function testJunoSession() {
+    setJunoSessionPending(true);
     setError(null);
     try {
-      const response = await fetch(`/api/settings/actions/${action}`, {
+      const response = await fetch("/api/settings/actions/test-juno-session", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ mode: "smoke" }),
       });
-      const payload = (await response.json().catch(() => ({}))) as ActionResult & {
+      const payload = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
         settings?: SettingsResponse;
         error?: string;
       };
       if (!response.ok) {
-        const message = payload.error ?? `${action} returned ${response.status}`;
+        const message = payload.error ?? `Juno session check returned ${response.status}`;
         setError(message);
         notifications.show({ color: "red", title: "Check failed", message });
       }
@@ -390,10 +386,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         setSettings(payload.settings);
       }
       if (response.ok) {
-        notifications.show({ color: payload.ok === false ? "yellow" : "green", title: summarizeActionTitle(action), message: payload.status ? String(payload.status) : undefined });
+        notifications.show({ color: payload.ok === false ? "yellow" : "green", title: "Juno session check finished", message: payload.status ? String(payload.status) : undefined });
       }
     } finally {
-      setActionPending(null);
+      setJunoSessionPending(false);
     }
   }
 
@@ -788,7 +784,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                 Operator setup
               </Text>
               <Title order={1}>Settings Center</Title>
-              <Text c="dimmed">Read-only operator settings.</Text>
+              <Text c="dimmed">Operator settings.</Text>
             </Stack>
             <Button component="a" href="/" variant="light">
               Dashboard
@@ -805,9 +801,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
             <Card>
               <Text fw={700}>{error ? "Settings unavailable" : "Loading settings..."}</Text>
               <Text size="sm" c="dimmed" mt={4}>
-                {error
-                  ? "The server could not load masked operator configuration. Check DATABASE_URL and Postgres."
-                  : "The Settings Center is asking the server for masked operator configuration."}
+                {error ? "Check DATABASE_URL and Postgres." : "Loading settings."}
               </Text>
               {error ? (
                 <Button size="xs" variant="light" mt="md" onClick={() => void loadSettings()}>
@@ -830,14 +824,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
 
                 <Tabs.Panel value="overview" pt="md">
                   <Stack gap="md">
-                    <OverviewUnitsGrid settings={settings} />
-	                    <ResponsiveGrid minWidth={360} gap="md">
-	                      <NextActionsPanel settings={settings} />
-	                      <SettingsActionsPanel
-	                        pending={actionPending}
-	                        onRun={runAction}
-	                      />
-	                    </ResponsiveGrid>
+                    <OverviewAttentionPanel settings={settings} />
                   </Stack>
                 </Tabs.Panel>
 
@@ -921,7 +908,14 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                           />
                           </>
                         ) : null}
-                        {groupId === "juno" ? <JunoLiveSessionCard settings={settings} group={groupsById[groupId]} /> : null}
+                        {groupId === "juno" ? (
+                          <JunoLiveSessionCard
+                            settings={settings}
+                            group={groupsById[groupId]}
+                            pending={junoSessionPending}
+                            onTest={() => void testJunoSession()}
+                          />
+                        ) : null}
                         {groupId === "notifications" ? (
                           <NotificationsSettingsCard
                             settings={settings}
@@ -1019,9 +1013,9 @@ function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
   const missingSettings = editableSettings.filter((setting) => setting.state === "missing" || setting.state === "invalid");
 	  return (
 	    <ResponsiveGrid minWidth={180} gap="sm">
-	      <StatusCard icon={Database} label="Database" value="Required" detail={settings.environment.lastUpdatedAt ? "Settings row available." : "Waiting for saved settings."} />
-	      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
-	      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} detail={missingSettings.length === 0 ? "Editable values are ready." : `${missingSettings.length} editable value${missingSettings.length === 1 ? "" : "s"} need attention.`} />
+	      <StatusCard icon={Database} label="Database" value={settings.environment.lastUpdatedAt ? "Connected" : "Pending"} />
+	      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} />
+	      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </ResponsiveGrid>
   );
@@ -1045,7 +1039,7 @@ function StatusCard({ icon: Icon, label, value, detail }: {
   icon: typeof Database;
   label: string;
   value: string;
-  detail: string;
+  detail?: string;
 }) {
   return (
     <Card>
@@ -1056,106 +1050,73 @@ function StatusCard({ icon: Icon, label, value, detail }: {
             {label}
           </Text>
           <Text fw={700}>{value}</Text>
-          <Text size="sm" c="dimmed">
-            {detail}
-          </Text>
+          {detail ? (
+            <Text size="sm" c="dimmed">
+              {detail}
+            </Text>
+          ) : null}
         </Stack>
       </Group>
     </Card>
   );
 }
 
-function NextActionsPanel({ settings }: { settings: SettingsResponse }) {
+function OverviewAttentionPanel({ settings }: { settings: SettingsResponse }) {
+  const units = buildOverviewUnits(settings);
+  const attentionUnits = units.filter((unit) => unit.status !== "Ready");
+  const attentionCount = attentionUnits.length + settings.warnings.length;
   return (
     <Card>
       <Stack gap="sm">
-        <Group gap="xs">
-          <CheckCircle2 size={18} aria-hidden="true" />
-          <Text fw={700}>Next Actions</Text>
-        </Group>
-        {settings.nextActions.map((action) => (
-          <Box key={action.id}>
-            <Group gap={6}>
-              <Badge color={severityColor(action.severity)} variant="light">
-                {action.severity}
-              </Badge>
-              <Text fw={700}>{action.label}</Text>
-            </Group>
-            <Text size="sm" c="dimmed" mt={4}>
-              {action.detail}
-            </Text>
-          </Box>
-        ))}
-      </Stack>
-    </Card>
-  );
-}
-
-function OverviewUnitsGrid({ settings }: { settings: SettingsResponse }) {
-  const units = buildOverviewUnits(settings);
-  return (
-    <ResponsiveGrid minWidth={200} gap="md">
-      {units.map((unit) => (
-        <UnitOverviewCard key={unit.label} {...unit} />
-      ))}
-    </ResponsiveGrid>
-  );
-}
-
-function UnitOverviewCard({
-  label,
-  status,
-  detail,
-  action,
-}: {
-  label: string;
-  status: "Ready" | "Needs attention" | "Disabled";
-  detail: string;
-  action: string;
-}) {
-  return (
-    <Card>
-      <Stack gap="xs">
         <Group justify="space-between" align="flex-start">
-          <Text fw={700}>{label}</Text>
-          <Badge color={overviewStatusColor(status)} variant="light">
-            {status}
+          <Text fw={700}>Attention</Text>
+          <Badge color={attentionCount > 0 ? "yellow" : "green"} variant="light">
+            {attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"}` : "clear"}
           </Badge>
         </Group>
-        <Text size="sm" c="dimmed">
-          {detail}
-        </Text>
-        <Text size="sm" fw={700}>
-          Action: <Text span fw={500}>{action}</Text>
-        </Text>
+        {attentionCount === 0 ? (
+          <Text size="sm" c="dimmed">No setup blockers.</Text>
+        ) : (
+          <Table.ScrollContainer minWidth={620}>
+            <Table verticalSpacing="xs">
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Area</Table.Th>
+                  <Table.Th>Status</Table.Th>
+                  <Table.Th>Note</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {attentionUnits.map((unit) => (
+                  <Table.Tr key={unit.label}>
+                    <Table.Td>{unit.label}</Table.Td>
+                    <Table.Td>
+                      <Badge color={overviewStatusColor(unit.status)} variant="light" size="xs">
+                        {unit.status}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>{unit.detail}</Table.Td>
+                  </Table.Tr>
+                ))}
+                {settings.warnings.map((warning) => (
+                  <Table.Tr key={warning.id}>
+                    <Table.Td>Settings</Table.Td>
+                    <Table.Td>
+                      <Badge color={severityColor(warning.severity)} variant="light" size="xs">
+                        {warning.severity}
+                      </Badge>
+                    </Table.Td>
+                    <Table.Td>{warning.message}</Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </Table.ScrollContainer>
+        )}
       </Stack>
     </Card>
   );
 }
-
-function SettingsActionsPanel({ pending, onRun }: {
-  pending: string | null;
-  onRun: (action: SettingsActionName) => void;
-}) {
-  return (
-    <Card>
-      <Stack gap="sm">
-        <Group gap="xs">
-          <MailSearch size={18} aria-hidden="true" />
-          <Text fw={700}>Actions</Text>
-        </Group>
-        <Group gap="xs">
-          <Button size="xs" loading={pending === "test-gmail"} onClick={() => onRun("test-gmail")}>
-            Test Mail Source
-          </Button>
-	          <Button size="xs" variant="light" loading={pending === "test-juno-session"} onClick={() => onRun("test-juno-session")}>
-	            Test Juno session
-	          </Button>
-	        </Group>
-	      </Stack>
-	    </Card>
-	  );
-	}
 
 function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
@@ -1194,7 +1155,6 @@ function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
           <SignalFact label="Admin users" value={formatAdminCount(settings.security.authBootstrap.adminUserCount)} />
           <SignalFact label="Initial admin seed" value={settings.security.authBootstrap.hasInitialAdminEnv ? "configured" : "not configured"} />
           <SignalFact label="External admin mapping" value={settings.security.authBootstrap.hasExternalAdminMapping ? "configured" : "not configured"} />
-          <Text size="sm" c="dimmed">{settings.security.authBootstrap.detail}</Text>
         </Stack>
       </Card>
 
@@ -1203,7 +1163,6 @@ function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
           <Text fw={700}>Sign-in Methods</Text>
           <SignalFact label="Email/password login" value={localLogin?.displayValue ?? "enabled"} />
           <SignalFact label="External SSO providers" value={`${authProvider.readyProviderCount} ready / ${authProvider.enabledProviderCount} enabled / ${authProvider.providerCount} total`} />
-          <SignalFact label="SSO login buttons" value={authProvider.readyProviderCount > 0 ? "shown for ready providers" : "hidden until a provider is ready"} />
         </Stack>
       </Card>
     </ResponsiveGrid>
@@ -1407,7 +1366,7 @@ function AuthProviderCard({
               />
               <PasswordInput
                 label={editingId ? "New client secret" : "Client secret"}
-                placeholder={editingId ? "Current secret stays configured" : undefined}
+                placeholder={editingId ? "Leave blank to keep configured" : undefined}
                 value={draft.clientSecret}
                 onChange={(event) => onDraftChange({ ...draft, clientSecret: event.currentTarget.value })}
               />
@@ -1876,7 +1835,17 @@ function MailSourcesCard({
   );
 }
 
-function JunoLiveSessionCard({ settings, group }: { settings: SettingsResponse; group: SettingsGroup }) {
+function JunoLiveSessionCard({
+  settings,
+  group,
+  pending,
+  onTest,
+}: {
+  settings: SettingsResponse;
+  group: SettingsGroup;
+  pending: boolean;
+  onTest: () => void;
+}) {
   const loginEmail = findGroupSetting(group, "juno_login_email");
   const loginPassword = findGroupSetting(group, "juno_login_password");
   const concurrency = findGroupSetting(group, "juno_live_concurrency");
@@ -1889,12 +1858,7 @@ function JunoLiveSessionCard({ settings, group }: { settings: SettingsResponse; 
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
-            <Text fw={700}>Juno Live Session</Text>
-            <Text size="sm" c="dimmed">
-              Optional read-only browser observation. Missing credentials do not block the app, but worker start stays disabled until session settings are ready.
-            </Text>
-          </Stack>
+          <Text fw={700}>Juno Live Session</Text>
           <Badge color={unitStatusColor(settings.units.junoLive.status)} variant="light">
             {settings.units.junoLive.status}
           </Badge>
@@ -1907,10 +1871,11 @@ function JunoLiveSessionCard({ settings, group }: { settings: SettingsResponse; 
           <SignalFact label="Delay window" value={`${delayMin?.displayValue ?? "Default value"} to ${delayMax?.displayValue ?? "Default value"}`} />
           <SignalFact label="Auto enqueue" value={autoEnqueue?.displayValue ?? "Default value"} />
         </ResponsiveGrid>
-        <Alert color="blue" title="Read-only boundary">
-          No cart, no wishlist, no checkout, no ordering. The browser worker only opens product pages for observed stock status.
-        </Alert>
-        <Text size="sm" c="dimmed">{settings.units.junoLive.detail}</Text>
+        <Group>
+          <Button size="xs" variant="light" loading={pending} onClick={onTest}>
+            Test session
+          </Button>
+        </Group>
       </Stack>
     </Card>
   );
@@ -2398,7 +2363,6 @@ function SettingEditor({ setting, draftValue, onChange }: {
 }) {
   const pendingClear = draftValue === null;
   const value = draftValue !== undefined && draftValue !== null ? draftValue : setting.secret ? "" : setting.value ?? "";
-  const secretStatus = pendingClear ? "Will clear saved secret" : setting.displayValue;
 
   return (
     <Box>
@@ -2407,20 +2371,7 @@ function SettingEditor({ setting, draftValue, onChange }: {
           <Group gap={6}>
             <Text fw={700}>{setting.label}</Text>
             <StateBadge setting={setting} />
-            {setting.secret ? (
-              <Badge color="gray" variant="outline">
-                secret
-              </Badge>
-            ) : null}
           </Group>
-          <Text size="sm" c="dimmed">
-            {setting.help}
-          </Text>
-          {setting.secret ? (
-            <Text size="xs" c={setting.state === "missing" ? "red.7" : "dimmed"}>
-              Current secret: {secretStatus}
-            </Text>
-          ) : null}
           {!setting.editable ? (
             <Text size="sm" c={setting.state === "missing" ? "red.7" : "gray.8"}>
               {pendingClear ? "Will clear saved value" : setting.displayValue}
@@ -2476,8 +2427,8 @@ function renderInput(
   if (setting.secret) {
     return (
       <PasswordInput
-        label="New secret"
-        placeholder="Leave blank to unset"
+        label="Secret value"
+        placeholder="Blank unsets on save"
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
@@ -2556,32 +2507,29 @@ function buildOverviewUnits(settings: SettingsResponse): Array<{
   label: string;
   status: "Ready" | "Needs attention" | "Disabled";
   detail: string;
-  action: string;
 }> {
+  const authGroup = settings.groups.find((group) => group.id === "auth");
+  const authNeedsAttention = settings.security.authBootstrap.status !== "ready" || authGroup?.state === "missing" || authGroup?.state === "warning";
   return [
     {
       label: "Auth & Admin Access",
-      status: settings.security.authBootstrap.status === "ready" ? "Ready" : "Needs attention",
-      detail: settings.security.authBootstrap.detail,
-      action: settings.security.authBootstrap.status === "ready" ? "Keep at least one admin access path configured." : "Add an initial admin, existing admin, or SSO admin mapping.",
+      status: authNeedsAttention ? "Needs attention" : "Ready",
+      detail: authNeedsAttention ? "Review Auth tab." : "Ready.",
     },
     {
       label: "Mail Ingest",
       status: unitOverviewStatus(settings.units.mail.status),
-      detail: settings.units.mail.detail,
-      action: "Add a runnable mail source.",
+      detail: settings.units.mail.status === "ready" ? "Ready." : "Add a mail source.",
     },
     {
       label: "Juno Live",
       status: unitOverviewStatus(settings.units.junoLive.status),
-      detail: settings.units.junoLive.detail,
-      action: settings.units.junoLive.status === "disabled" ? "Leave disabled or configure a read-only session." : "Review pacing before worker start.",
+      detail: settings.units.junoLive.status === "disabled" ? "Disabled." : settings.units.junoLive.status === "ready" ? "Ready." : "Review Juno Live tab.",
     },
     {
       label: "Notifications",
       status: unitOverviewStatus(settings.units.notifications.status),
-      detail: settings.units.notifications.detail,
-      action: "Use in-app alerts; configure webhook only when needed.",
+      detail: settings.units.notifications.status === "ready" ? "Ready." : "Review Notifications tab.",
     },
   ];
 }
@@ -2604,10 +2552,6 @@ function overviewStatusColor(status: "Ready" | "Needs attention" | "Disabled"): 
     return "yellow";
   }
   return "gray";
-}
-
-function summarizeActionTitle(action: SettingsActionName): string {
-  return action === "test-gmail" ? "Mail source check finished" : "Juno session check finished";
 }
 
 function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {

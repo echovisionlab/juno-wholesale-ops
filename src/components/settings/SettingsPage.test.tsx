@@ -48,13 +48,18 @@ describe("SettingsPage", () => {
     await renderSettingsPage(settingsFixture());
 
     expect(pageText()).toContain("Settings Center");
-    expect(pageText()).toContain("Read-only operator settings.");
+    expect(pageText()).toContain("Operator settings.");
+    expect(pageText()).toContain("Attention");
     expect(pageText()).toContain("Auth bootstrap");
+    expect(pageText()).not.toContain("Gmail Ingest");
     expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).not.toContain("Auth secret");
     expect(pageText()).not.toContain("Clear saved setting");
     expect(pageText()).not.toContain("Diagnostics");
     expect(pageText()).not.toContain("No diagnostics captured");
+    expect(pageText()).not.toContain("Next Actions");
+    expect(pageText()).not.toContain("Action:");
+    expect(pageText()).not.toContain("Test Mail Source");
     expect(pageText()).not.toContain("Run demo seed");
     expect(pageText()).not.toContain("Web public port");
     expect(pageText()).not.toContain("Runtime fallback");
@@ -72,7 +77,30 @@ describe("SettingsPage", () => {
 
     clickButton("Juno Live");
     expect(pageText()).toContain("Juno login password");
-    expect(pageText()).toContain("Current secret: Configured");
+    expect(pageText()).toContain("Secret value");
+    expect(pageText()).toContain("Test session");
+    expect(pageText()).not.toContain("Current secret");
+    expect(pageText()).not.toContain("Read-only boundary");
+  });
+
+  it("shows auth warnings in the attention-only overview", async () => {
+    const settings = settingsFixture();
+    settings.groups = settings.groups.map((group) => group.id === "auth" ? { ...group, state: "warning" } : group);
+    settings.warnings = [
+      {
+        id: "auth_base_url_origin_mismatch",
+        severity: "warning",
+        message: "Site address does not match current origin.",
+      },
+    ];
+
+    await renderSettingsPage(settings);
+
+    expect(pageText()).toContain("Attention");
+    expect(pageText()).toContain("Auth & Admin Access");
+    expect(pageText()).toContain("Needs attention");
+    expect(pageText()).toContain("Site address does not match current origin.");
+    expect(pageText()).not.toContain("At least one admin user exists.");
   });
 
   it("saves settings and reports the result with Mantine notifications", async () => {
@@ -420,7 +448,7 @@ function settingsFixture(): SettingsResponse {
           setting("juno_login_password", "Juno login password", "database", "configured", "Configured", true, true),
         ],
       },
-      { id: "notifications", label: "Notifications", state: "disabled", settings: [] },
+      { id: "notifications", label: "Notifications", state: "complete", settings: [] },
     ],
   };
 }
