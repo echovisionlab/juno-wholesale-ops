@@ -1,4 +1,4 @@
-import { SettingsPage } from "@/components/settings/SettingsPage";
+import { SettingsCenter } from "@/features/settings/SettingsCenter";
 import { requireAdmin } from "@/lib/auth/admin";
 import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 
 export default async function Page() {
   const initial = await loadInitialSettings();
-  return <SettingsPage initialSettings={initial.settings} initialError={initial.error} />;
+  return <SettingsCenter initialSettings={initial.settings} initialError={initial.error} />;
 }
 
 async function loadInitialSettings(): Promise<{ settings: SettingsResponse | null; error: string | null }> {
