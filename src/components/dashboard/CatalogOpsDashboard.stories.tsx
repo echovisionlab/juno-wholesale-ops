@@ -3,7 +3,7 @@ import { CatalogOpsDashboard } from "./CatalogOpsDashboard";
 import { dashboardFixture } from "./dashboard.fixtures";
 
 const meta = {
-  title: "Dashboard/CatalogOpsDashboard",
+  title: "Feature/Dashboard/CatalogOpsDashboard",
   component: CatalogOpsDashboard,
   args: dashboardFixture,
 } satisfies Meta<typeof CatalogOpsDashboard>;

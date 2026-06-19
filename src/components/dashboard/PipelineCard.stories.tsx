@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { PipelineCard } from "./PipelineCard";
 
 const meta = {
-  title: "Dashboard/PipelineCard",
+  title: "Feature/Dashboard/PipelineCard",
   component: PipelineCard,
   args: {
     title: "Normalize",

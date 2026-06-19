@@ -6,24 +6,25 @@ import { act } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { ComponentProps } from "react";
 import {
   notificationChannelFixture,
   notificationRuleFixture,
   settingsFixture,
-} from "@/features/settings/settings.fixtures";
+} from "./settings.fixtures";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { theme } from "@/theme";
 import {
   formatJunoSessionCheckStatus,
   formatMailSourceTestStatus,
   formatSettingsActionError,
-  SettingsPage,
-} from "./SettingsPage";
+  SettingsCenter,
+} from "./SettingsCenter";
 
 let root: Root;
 let container: HTMLDivElement;
 
-describe("SettingsPage", () => {
+describe("SettingsCenter", () => {
   beforeEach(() => {
     setReactActEnvironment();
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
@@ -177,6 +178,23 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Needs attention");
     expect(pageText()).toContain("Site address does not match current origin.");
     expect(pageText()).not.toContain("At least one admin user exists.");
+  });
+
+  it("uses fresh server-loaded settings after a route-key remount", async () => {
+    const refreshedSettings = settingsFixture();
+    refreshedSettings.warnings = [
+      {
+        id: "refreshed-settings-warning",
+        severity: "warning",
+        message: "Settings changed after refresh.",
+      },
+    ];
+
+    await renderSettingsPage(settingsFixture(), null, { renderKey: "initial" });
+    expect(pageText()).not.toContain("Settings changed after refresh.");
+
+    await renderSettingsPage(refreshedSettings, null, { renderKey: "refreshed" });
+    expect(pageText()).toContain("Settings changed after refresh.");
   });
 
   it("saves settings and reports the result with Mantine notifications", async () => {
@@ -389,14 +407,35 @@ describe("SettingsPage", () => {
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/rules");
     expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
   });
+
+  it("renders injected notification resources without loading from the API", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderSettingsPage(settingsFixture(), null, {
+      initialTab: "notifications",
+      initialNotificationChannels: [notificationChannelFixture()],
+      initialNotificationRules: [notificationRuleFixture()],
+    });
+
+    expect(pageText()).toContain("Notification Channels");
+    expect(pageText()).toContain("Notification Rules");
+    expect(pageText()).toContain("Watch hits");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });
 
-async function renderSettingsPage(initialSettings: SettingsResponse | null = null, initialError: string | null = null): Promise<void> {
+async function renderSettingsPage(
+  initialSettings: SettingsResponse | null = null,
+  initialError: string | null = null,
+  props: Partial<ComponentProps<typeof SettingsCenter>> & { renderKey?: string } = {},
+): Promise<void> {
+  const { renderKey, ...componentProps } = props;
   await act(async () => {
     root.render(
       <MantineProvider defaultColorScheme="light" theme={theme}>
         <Notifications />
-        <SettingsPage initialSettings={initialSettings} initialError={initialError} />
+        <SettingsCenter key={renderKey} initialSettings={initialSettings} initialError={initialError} {...componentProps} />
       </MantineProvider>,
     );
   });

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { GuardrailList } from "./GuardrailList";
 
 const meta = {
-  title: "Dashboard/GuardrailList",
+  title: "Feature/Dashboard/GuardrailList",
   component: GuardrailList,
   args: {
     items: [
