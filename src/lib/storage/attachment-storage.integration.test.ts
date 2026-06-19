@@ -14,7 +14,7 @@ import {
 const originalFetch = globalThis.fetch;
 
 describe("attachment storage MinIO integration", () => {
-  let minio: StartedMinioTestStorage;
+  let minio: StartedMinioTestStorage | undefined;
   let client: S3Client;
 
   beforeAll(async () => {
@@ -36,11 +36,11 @@ describe("attachment storage MinIO integration", () => {
   });
 
   afterAll(async () => {
-    await minio.stop();
+    await minio?.stop();
   });
 
   it("stores attachments in actual MinIO and leaves no probe objects", async () => {
-    const storage = minioStorage(minio);
+    const storage = minioStorage(minio!);
     const sha256 = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
     const filename = "Juno Wholesale Sample #1.xlsx";
     const bytes = Buffer.from("synthetic xlsx bytes");
@@ -55,10 +55,10 @@ describe("attachment storage MinIO integration", () => {
       sha256,
       filename,
       bytes,
-    })).resolves.toBe(`s3://${minio.bucket}/${key}`);
+    })).resolves.toBe(`s3://${minio!.bucket}/${key}`);
 
     await expect(client.send(new HeadObjectCommand({
-      Bucket: minio.bucket,
+      Bucket: minio!.bucket,
       Key: key,
     }))).resolves.toMatchObject({
       ContentLength: bytes.byteLength,
@@ -68,11 +68,11 @@ describe("attachment storage MinIO integration", () => {
     await expect(testAttachmentStorage(storage)).resolves.toMatchObject({
       ok: true,
       backend: "s3_compatible",
-      target: `s3://${minio.bucket}/${storage.prefix}`,
+      target: `s3://${minio!.bucket}/${storage.prefix}`,
     });
 
     await expect(client.send(new ListObjectsV2Command({
-      Bucket: minio.bucket,
+      Bucket: minio!.bucket,
       Prefix: `${storage.prefix}/.storage-probes/`,
     }))).resolves.toMatchObject({
       KeyCount: 0,
@@ -103,12 +103,12 @@ describe("attachment storage MinIO integration", () => {
       lookbackMs: 604800000,
       processedLabel: "Wholesale Processed",
       storageBackend: "s3_compatible",
-      storageEndpoint: minio.endpoint,
-      storageBucket: minio.bucket,
+      storageEndpoint: minio!.endpoint,
+      storageBucket: minio!.bucket,
       storagePrefix: "mail-source-probes",
-      storageRegion: minio.region,
-      storageAccessKeyId: minio.accessKeyId,
-      storageSecret: minio.secretAccessKey,
+      storageRegion: minio!.region,
+      storageAccessKeyId: minio!.accessKeyId,
+      storageSecret: minio!.secretAccessKey,
       storageForcePathStyle: true,
       attachmentPattern: "xlsx",
       supplierCode: "juno",
@@ -119,7 +119,7 @@ describe("attachment storage MinIO integration", () => {
       storage: {
         ok: true,
         backend: "s3_compatible",
-        target: `s3://${minio.bucket}/mail-source-probes`,
+        target: `s3://${minio!.bucket}/mail-source-probes`,
       },
       messageCount: 1,
     });

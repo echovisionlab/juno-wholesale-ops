@@ -1,9 +1,7 @@
 import { CreateBucketCommand, S3Client } from "@aws-sdk/client-s3";
 import { GenericContainer, Wait, type StartedTestContainer } from "testcontainers";
 
-const testMinioImage =
-  process.env.JUNO_WHOLESALE_OPS_TEST_MINIO_IMAGE ??
-  "minio/minio:RELEASE.2025-04-22T22-12-26Z";
+const testMinioImage = "minio/minio:RELEASE.2025-04-22T22-12-26Z";
 const minioPort = 9000;
 
 export type StartedMinioTestStorage = {
