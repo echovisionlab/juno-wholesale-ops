@@ -46,10 +46,10 @@ async function main() {
   const sources = await listActiveMailboxSources(databaseUrl);
   const gmailSources = getRunnableGmailSources(sources);
   if (sources.length === 0) {
-    throw new Error("No active mail sources are configured. Create a Gmail mailbox source before running ingest.");
+    throw new Error("No active mail sources are configured. Create a mail source with an implemented read-only adapter before running ingest.");
   }
   if (gmailSources.length === 0) {
-    throw new Error("No runnable Gmail mailbox sources are configured. Other mail providers are not implemented yet.");
+    throw new Error("No runnable mail sources are configured. Non-Gmail provider adapters are not implemented yet.");
   }
 
   const sourceResults: SourceRunResult[] = [];

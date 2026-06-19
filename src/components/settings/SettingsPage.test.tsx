@@ -148,6 +148,16 @@ describe("SettingsPage", () => {
 
   it("manages mail sources from the Mail Sources tab", async () => {
     const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({
+        test: {
+          ok: true,
+          status: "connection_ready",
+          provider: "gmail",
+          mailboxAddress: "stock@example.test",
+          query: "filename:xlsx",
+          messageCount: 1,
+        },
+      }))
       .mockResolvedValueOnce(jsonResponse({ source: settingsFixture().mailSources[0] }))
       .mockResolvedValueOnce(jsonResponse(settingsFixture()))
       .mockResolvedValueOnce(jsonResponse({ source: { ...settingsFixture().mailSources[0], isActive: false } }))
@@ -162,13 +172,16 @@ describe("SettingsPage", () => {
 
     await clickButtonAndWait("Add source");
     expect(pageText()).toContain("Add mail source");
+    expect(pageText()).toContain("Provider adapter");
+    expect(pageText()).toContain("Connection");
+    expect(pageText()).toContain("Ingest");
+    expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(true);
     changeInput("Source name", "Supplier inbox");
     changeInput("Mailbox address", "stock@example.test");
     changeInput("Credential secret", "{\"client_email\":\"service@example.test\"}");
-    clickButton("Create source");
+    clickButton("Test connection");
     await act(async () => undefined);
-
-    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/mail-sources");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/mail-sources/test");
     expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
       name: "Supplier inbox",
       provider: "gmail",
@@ -177,8 +190,22 @@ describe("SettingsPage", () => {
       mailboxAddress: "stock@example.test",
       credentialSecret: "{\"client_email\":\"service@example.test\"}",
     });
-    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/settings");
-    expect(pageText()).toContain("Mail source created");
+    expect(pageText()).toContain("Connection ready");
+    expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(false);
+    clickButton("Create source");
+    await act(async () => undefined);
+
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/mail-sources");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toMatchObject({
+      name: "Supplier inbox",
+      provider: "gmail",
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      mailboxAddress: "stock@example.test",
+      credentialSecret: "{\"client_email\":\"service@example.test\"}",
+      connectionTestPassed: true,
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings");
 
     const toggle = document.body.querySelector('input[aria-label="Gmail source active"]') as HTMLInputElement | null;
     if (!toggle) {
@@ -187,8 +214,8 @@ describe("SettingsPage", () => {
     await act(async () => {
       toggle.click();
     });
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/mail-sources");
-    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ id: "source-1", isActive: false });
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/mail-sources");
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({ id: "source-1", isActive: false });
   });
 
   it("manages notification channels and rules from the Notifications tab", async () => {

@@ -104,7 +104,7 @@ export function buildAppSetupStatus(options: {
       label: "Mail sources",
       missing: mailMissing,
       detail: "required for catalog email ingestion",
-      action: mailMissing.length > 0 ? "Create an active Gmail source with Google Workspace delegation and a JSON service account credential." : null,
+      action: mailMissing.length > 0 ? "Create an active mail source with a read-only adapter and verified credential." : null,
       settings: [
         staticSetting({
           key: "active_mail_sources",
@@ -114,7 +114,7 @@ export function buildAppSetupStatus(options: {
         }),
         staticSetting({
           key: "runnable_gmail_sources",
-          label: "Runnable Gmail sources",
+          label: "Runnable mail sources",
           value: String(runnableMailSources.length),
           required: true,
         }),

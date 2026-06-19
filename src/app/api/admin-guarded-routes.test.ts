@@ -7,6 +7,7 @@ import {
   updateSsoProvider,
 } from "@/lib/auth/sso-provider-repository";
 import { createMailboxSource, deleteMailboxSource, listMailboxSources, updateMailboxSource } from "@/lib/ingest/mail-source";
+import { testMailboxSourceConnection } from "@/lib/ingest/mail-source-test";
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
   createWatchRule,
@@ -84,6 +85,7 @@ import {
   PATCH as patchMailSources,
   POST as postMailSources,
 } from "./mail-sources/route";
+import { POST as postMailSourcesTest } from "./mail-sources/test/route";
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: vi.fn(),
@@ -115,6 +117,10 @@ vi.mock("@/lib/ingest/mail-source", () => ({
     return publicSource;
   }),
   updateMailboxSource: vi.fn(),
+}));
+
+vi.mock("@/lib/ingest/mail-source-test", () => ({
+  testMailboxSourceConnection: vi.fn(),
 }));
 
 vi.mock("@/lib/insights/repository", () => ({
@@ -175,6 +181,7 @@ const createMailboxSourceMock = vi.mocked(createMailboxSource);
 const deleteMailboxSourceMock = vi.mocked(deleteMailboxSource);
 const listMailboxSourcesMock = vi.mocked(listMailboxSources);
 const updateMailboxSourceMock = vi.mocked(updateMailboxSource);
+const testMailboxSourceConnectionMock = vi.mocked(testMailboxSourceConnection);
 const getGmailIngestStateMock = vi.mocked(getGmailIngestState);
 const getTodaySignalsMock = vi.mocked(getTodaySignals);
 const getMovementSignalsMock = vi.mocked(getMovementSignals);
@@ -226,6 +233,14 @@ describe("admin guarded API routes", () => {
     createMailboxSourceMock.mockResolvedValue(mailSource());
     updateMailboxSourceMock.mockResolvedValue(mailSource());
     deleteMailboxSourceMock.mockResolvedValue(true);
+    testMailboxSourceConnectionMock.mockResolvedValue({
+      ok: true,
+      status: "connection_ready",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      messageCount: 1,
+    });
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
     countAdminUsersMock.mockResolvedValue(1);
@@ -290,6 +305,8 @@ describe("admin guarded API routes", () => {
     expect(createMailboxSourceMock).not.toHaveBeenCalled();
     expect(updateMailboxSourceMock).not.toHaveBeenCalled();
     expect(deleteMailboxSourceMock).not.toHaveBeenCalled();
+    await expectStatus(postMailSourcesTest(jsonRequest({ provider: "gmail" })), 403);
+    expect(testMailboxSourceConnectionMock).not.toHaveBeenCalled();
     expect(getTodaySignalsMock).not.toHaveBeenCalled();
     expect(getMovementSignalsMock).not.toHaveBeenCalled();
     expect(getCatalogTrendsMock).not.toHaveBeenCalled();
@@ -458,6 +475,55 @@ describe("admin guarded API routes", () => {
     expect(JSON.stringify(getResponse.body)).not.toContain("secret");
     expect(listMailboxSourcesMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app");
 
+    const testResponse = await expectJson(postMailSourcesTest(jsonRequest({
+      name: "Ops Gmail",
+      provider: "gmail",
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      credentialSecret: "{\"client_email\":\"ops@example.test\"}",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      storageDir: ".data/mail",
+      attachmentPattern: "xlsx",
+      supplierCode: "juno",
+    })));
+    expect(testResponse).toEqual({
+      status: 200,
+      body: {
+        test: {
+          ok: true,
+          status: "connection_ready",
+          provider: "gmail",
+          mailboxAddress: "ops@example.test",
+          query: "filename:xlsx",
+          messageCount: 1,
+        },
+      },
+    });
+    expect(testMailboxSourceConnectionMock).toHaveBeenCalledWith(expect.objectContaining({
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      credentialSecret: "{\"client_email\":\"ops@example.test\"}",
+    }));
+
+    await expect(expectJson(postMailSourcesTest(jsonRequest({ id: "source-1", query: "from:vendor filename:xlsx" })))).resolves.toEqual({
+      status: 200,
+      body: {
+        test: {
+          ok: true,
+          status: "connection_ready",
+          provider: "gmail",
+          mailboxAddress: "ops@example.test",
+          query: "filename:xlsx",
+          messageCount: 1,
+        },
+      },
+    });
+    expect(testMailboxSourceConnectionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      credentialSecret: "secret",
+      query: "from:vendor filename:xlsx",
+    }));
+
     const input = {
       name: "Ops Gmail",
       provider: "gmail",
@@ -470,14 +536,48 @@ describe("admin guarded API routes", () => {
       attachmentPattern: "xlsx",
       supplierCode: "juno",
     };
-    const postResponse = await expectJson(postMailSources(jsonRequest(input)));
+    await expect(expectJson(postMailSources(jsonRequest(input)))).resolves.toEqual({
+      status: 400,
+      body: { error: "mail_source_connection_test_required" },
+    });
+    expect(createMailboxSourceMock).not.toHaveBeenCalled();
+
+    testMailboxSourceConnectionMock.mockResolvedValueOnce({
+      ok: false,
+      status: "provider_not_implemented",
+      provider: "imap",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      error: "IMAP connection testing is not implemented yet.",
+    });
+    await expect(expectJson(postMailSources(jsonRequest({
+      ...input,
+      provider: "imap",
+      connectionTestPassed: true,
+    })))).resolves.toEqual({
+      status: 400,
+      body: {
+        error: "mail_source_connection_test_failed",
+        test: {
+          ok: false,
+          status: "provider_not_implemented",
+          provider: "imap",
+          mailboxAddress: "ops@example.test",
+          query: "filename:xlsx",
+          error: "IMAP connection testing is not implemented yet.",
+        },
+      },
+    });
+    expect(createMailboxSourceMock).not.toHaveBeenCalled();
+
+    const postResponse = await expectJson(postMailSources(jsonRequest({ ...input, connectionTestPassed: true })));
     expect(postResponse).toEqual({
       status: 201,
       body: { source: expect.not.objectContaining({ credentialSecret: expect.anything() }) },
     });
     expect(createMailboxSourceMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", input);
 
-    updateMailboxSourceMock.mockResolvedValueOnce(mailSource()).mockResolvedValueOnce(null);
+    updateMailboxSourceMock.mockResolvedValueOnce(mailSource()).mockResolvedValueOnce(mailSource()).mockResolvedValueOnce(null);
     await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", isActive: false })))).resolves.toEqual({
       status: 200,
       body: { source: expect.not.objectContaining({ credentialSecret: expect.anything() }) },
@@ -486,6 +586,16 @@ describe("admin guarded API routes", () => {
       id: "source-1",
       isActive: false,
     });
+
+    await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", isActive: true })))).resolves.toEqual({
+      status: 200,
+      body: { source: expect.not.objectContaining({ credentialSecret: expect.anything() }) },
+    });
+    expect(testMailboxSourceConnectionMock).toHaveBeenLastCalledWith(expect.objectContaining({
+      mailboxAddress: "operator@example.test",
+      credentialSecret: "secret",
+    }));
+
     await expect(expectJson(patchMailSources(jsonRequest({ id: "missing", isActive: false })))).resolves.toEqual({
       status: 404,
       body: { error: "mail_source_not_found" },
@@ -496,6 +606,10 @@ describe("admin guarded API routes", () => {
     });
     updateMailboxSourceMock.mockRejectedValueOnce("bad source");
     await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", provider: "gmail" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "mail_source_connection_test_required" },
+    });
+    await expect(expectJson(patchMailSources(jsonRequest({ id: "source-1", provider: "gmail", connectionTestPassed: true })))).resolves.toEqual({
       status: 400,
       body: { error: "Invalid mail source request" },
     });
@@ -520,7 +634,7 @@ describe("admin guarded API routes", () => {
     });
 
     createMailboxSourceMock.mockRejectedValueOnce("bad source");
-    await expect(expectJson(postMailSources(jsonRequest(input)))).resolves.toEqual({
+    await expect(expectJson(postMailSources(jsonRequest({ ...input, connectionTestPassed: true })))).resolves.toEqual({
       status: 400,
       body: { error: "Invalid mail source request" },
     });

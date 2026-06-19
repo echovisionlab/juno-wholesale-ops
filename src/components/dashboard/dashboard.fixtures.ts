@@ -397,7 +397,7 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
         label: "Mail sources",
         state: "missing",
         detail: "required for catalog email ingestion",
-        action: "Create an active Gmail source with Google Workspace delegation and a JSON service account credential.",
+        action: "Create an active mail source with a read-only adapter and verified credential.",
         missing: ["mail_source"],
         settings: [
           {
