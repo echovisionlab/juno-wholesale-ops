@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
+import { spawnFile } from "node:child_process";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 
@@ -473,6 +474,31 @@ function describeError(error) {
   return details.join("; ");
 }
 
+function checkSmokeUrl(url, timeoutMs) {
+  const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
+  const args = ["--fail", "--silent", "--show-error", "--location", "--max-time", String(timeoutSeconds), url];
+
+  return new Promise((resolve, reject) => {
+    const child = spawnFile("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
+    let stderr = "";
+
+    child.stderr.setEncoding("utf8");
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code === 0) {
+        resolve();
+        return;
+      }
+
+      const reason = stderr.trim();
+      reject(new Error(`curl exited ${code}${reason ? `: ${reason}` : ""}`));
+    });
+  });
+}
+
 async function checkSmokeUrls(urls, label) {
   const attempts = parsePositiveIntegerEnv("KOMODO_SMOKE_ATTEMPTS", DEFAULT_SMOKE_ATTEMPTS);
   const retryDelayMs = parsePositiveIntegerEnv("KOMODO_SMOKE_RETRY_DELAY_MS", DEFAULT_SMOKE_RETRY_DELAY_MS);
@@ -483,20 +509,13 @@ async function checkSmokeUrls(urls, label) {
     let passed = false;
 
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), timeoutMs);
       try {
         console.log(`Smoke ${label} (${attempt}/${attempts}): ${url}`);
-        const response = await fetch(url, { signal: controller.signal });
-        if (response.status >= 200 && response.status < 400) {
-          passed = true;
-          break;
-        }
-        lastFailure = `HTTP ${response.status}`;
+        await checkSmokeUrl(url, timeoutMs);
+        passed = true;
+        break;
       } catch (error) {
         lastFailure = describeError(error);
-      } finally {
-        clearTimeout(timeout);
       }
 
       if (attempt < attempts) {
