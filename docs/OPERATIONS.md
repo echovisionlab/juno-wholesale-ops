@@ -36,3 +36,15 @@ Notes:
 
 Never put credentials, cookies, auth headers, webhook URLs, or raw XLSX contents
 in logs or public issue text.
+
+## Release Automation
+
+Release Please manages release PRs from Conventional Commits merged to `main`.
+Merging a Release Please PR creates the `v*` tag and GitHub Release. The tag
+push, or the Release Please workflow fallback dispatch when using `GITHUB_TOKEN`,
+runs the image publish workflow on that tag. That promotes the Harbor image and
+runs the Komodo production deploy job.
+
+Use `fix:` for patch releases, `feat:` for minor releases, and `!` or a
+`BREAKING CHANGE` footer only for major releases. Do not manually rewrite
+release tags.
