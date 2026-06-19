@@ -70,6 +70,8 @@ describe("mail source repository", () => {
       maxResults: 50,
       credentialConfigured: true,
       scopes: "https://www.googleapis.com/auth/gmail.readonly",
+      storageBackend: "local_drive",
+      storageDir: ".data/ops-mail",
     });
 
     const updated = await updateMailboxSource(databaseUrl, {
@@ -91,6 +93,51 @@ describe("mail source repository", () => {
     await expect(deleteMailboxSource(databaseUrl, created.id)).resolves.toBe(true);
     await expect(listActiveMailboxSources(databaseUrl)).resolves.toHaveLength(1);
     await expect(listMailboxSources(databaseUrl)).resolves.toHaveLength(2);
+  });
+
+  it("stores S3-compatible attachment storage settings and redacts the secret", async () => {
+    const created = await createMailboxSource(databaseUrl, {
+      name: "MinIO Gmail",
+      provider: "gmail",
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      credentialSecret: "{\"client_email\":\"ops@example.com\",\"private_key\":\"key\"}",
+      mailboxAddress: "ops-minio@example.com",
+      query: "filename:xlsx",
+      storageBackend: "s3_compatible",
+      storageEndpoint: "http://localhost:29100",
+      storageBucket: "juno-wholesale-ops",
+      storagePrefix: "mail-attachments",
+      storageRegion: "us-east-1",
+      storageAccessKeyId: "minio",
+      storageSecret: "minio-secret",
+      storageForcePathStyle: true,
+      attachmentPattern: "xlsx",
+      supplierCode: "juno",
+    });
+
+    expect(created).toMatchObject({
+      storageBackend: "s3_compatible",
+      storageEndpoint: "http://localhost:29100",
+      storageBucket: "juno-wholesale-ops",
+      storagePrefix: "mail-attachments",
+      storageAccessKeyId: "minio",
+      storageSecret: "minio-secret",
+      storageSecretConfigured: true,
+    });
+    expect(redactMailboxSource(created)).toEqual(expect.not.objectContaining({
+      storageSecret: expect.anything(),
+    }));
+
+    const updated = await updateMailboxSource(databaseUrl, {
+      id: created.id,
+      storagePrefix: "supplier/catalogs",
+    });
+    expect(updated).toMatchObject({
+      storageBackend: "s3_compatible",
+      storagePrefix: "supplier/catalogs",
+      storageSecretConfigured: true,
+    });
   });
 
   it("rejects invalid source shapes", async () => {

@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import { S3Client } from "@aws-sdk/client-s3";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GOOGLE_GMAIL_READONLY_SCOPE } from "@/lib/env";
 import { testMailboxSourceConnection } from "./mail-source-test";
@@ -63,6 +64,24 @@ describe("testMailboxSourceConnection", () => {
       status: "credential_missing",
       missing: ["credential_secret"],
     });
+
+    await expect(testMailboxSourceConnection(mailSource({ storageDir: "" }))).resolves.toMatchObject({
+      ok: false,
+      status: "invalid_configuration",
+      missing: ["storage_dir"],
+    });
+
+    await expect(testMailboxSourceConnection(mailSource({
+      storageBackend: "s3_compatible",
+      storageEndpoint: "",
+      storageBucket: "",
+      storageAccessKeyId: "",
+      storageSecret: "",
+    }))).resolves.toMatchObject({
+      ok: false,
+      status: "invalid_configuration",
+      missing: expect.arrayContaining(["storage_endpoint", "storage_bucket", "storage_access_key_id", "storage_secret"]),
+    });
   });
 
   it("runs a read-only Gmail list smoke check", async () => {
@@ -79,6 +98,11 @@ describe("testMailboxSourceConnection", () => {
       provider: "gmail",
       mailboxAddress: "ops@example.test",
       query: "filename:xlsx",
+      storage: {
+        ok: true,
+        backend: "local_drive",
+        target: ".data/mail",
+      },
       messageCount: 2,
     });
 
@@ -89,6 +113,10 @@ describe("testMailboxSourceConnection", () => {
 
     await expect(testMailboxSourceConnection(mailSource({ maxResults: undefined, scopes: undefined }))).resolves.toMatchObject({
       ok: true,
+      storage: {
+        ok: true,
+        backend: "local_drive",
+      },
       messageCount: 0,
     });
     expect(String(calls[3][0])).toContain("maxResults=10");
@@ -121,6 +149,34 @@ describe("testMailboxSourceConnection", () => {
       ok: false,
       status: "connection_failed",
       error: "Connection test failed",
+    });
+  });
+
+  it("blocks ready mail sources when attachment storage cannot be probed", async () => {
+    mockFetch([
+      { ok: true, json: { access_token: "access-token" } },
+      { ok: true, json: { messages: [{ id: "m1" }] } },
+    ]);
+    vi.spyOn(S3Client.prototype, "send").mockRejectedValue(new Error("Signature=secret failed"));
+
+    await expect(testMailboxSourceConnection(mailSource({
+      storageBackend: "s3_compatible",
+      storageEndpoint: "http://localhost:29100",
+      storageBucket: "juno-wholesale-ops",
+      storagePrefix: undefined,
+      storageRegion: undefined,
+      storageAccessKeyId: "minio",
+      storageSecret: "minio-secret",
+      storageForcePathStyle: undefined,
+    }))).resolves.toMatchObject({
+      ok: false,
+      status: "storage_failed",
+      storage: {
+        ok: false,
+        backend: "s3_compatible",
+        target: "s3://juno-wholesale-ops/mail-attachments",
+        error: "Signature=[redacted] failed",
+      },
     });
   });
 });

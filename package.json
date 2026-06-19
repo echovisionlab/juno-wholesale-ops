@@ -20,6 +20,11 @@
     "db:dev:down": "docker compose -f compose/dev.yml down",
     "db:dev:logs": "docker compose -f compose/dev.yml logs -f postgres",
     "db:dev:status": "docker compose -f compose/dev.yml ps postgres",
+    "storage:dev:volume": "docker volume inspect juno-wholesale-ops-minio-data >/dev/null 2>&1 || docker volume create juno-wholesale-ops-minio-data >/dev/null",
+    "storage:dev:up": "pnpm storage:dev:volume && docker compose -f compose/dev.yml up -d minio minio-init",
+    "storage:dev:down": "docker compose -f compose/dev.yml stop minio minio-init",
+    "storage:dev:logs": "docker compose -f compose/dev.yml logs -f minio minio-init",
+    "storage:dev:status": "docker compose -f compose/dev.yml ps minio minio-init",
     "tunnel:dev:up": "docker compose -f compose/dev.yml up -d cloudflared",
     "tunnel:dev:down": "docker compose -f compose/dev.yml stop cloudflared",
     "tunnel:dev:logs": "docker compose -f compose/dev.yml logs -f cloudflared",
@@ -43,6 +48,7 @@
     "public:safety": "tsx -r tsconfig-paths/register scripts/check-public-safety.ts"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1072.0",
     "@mantine/core": "^9.3.2",
     "@mantine/hooks": "^9.3.2",
     "@mantine/notifications": "^9.3.2",

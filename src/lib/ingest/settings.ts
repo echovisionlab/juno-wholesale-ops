@@ -4,6 +4,7 @@ export {
   getRunnableGmailSources,
   listActiveMailboxSources,
   redactMailboxSource,
+  toAttachmentStorageConfig,
   type MailboxIngestSource,
   type PublicMailboxSource,
   type RunnableGmailMailboxSource,
