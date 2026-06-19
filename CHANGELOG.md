@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.2.0...v0.3.0) (2026-06-19)
+
+
+### Features
+
+* add attachment storage backends ([4b18be3](https://github.com/echovisionlab/juno-wholesale-ops/commit/4b18be38fbba6a6fdc464c20b7a4f731aa4cae93))
+
 ## [0.2.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/juno-wholesale-ops-v0.1.0...juno-wholesale-ops-v0.2.0) (2026-06-19)
 
 
