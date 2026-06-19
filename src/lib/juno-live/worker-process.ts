@@ -61,7 +61,7 @@ export class JunoLiveWorkerProcessManager {
     }
 
     const cwd = this.options.cwd ?? process.cwd();
-    const { command, args } = resolveWorkerProcessCommand(cwd, this.options.env ?? process.env);
+    const { command, args } = resolveWorkerProcessCommand(cwd);
     const spawnFn: SpawnFn =
       this.options.spawnFn ?? ((workerCommand, workerArgs, spawnOptions) => spawn(workerCommand, workerArgs, spawnOptions) as WorkerChildProcess);
     const child = spawnFn(command, args, {
@@ -69,7 +69,6 @@ export class JunoLiveWorkerProcessManager {
       env: {
         ...process.env,
         ...this.options.env,
-        JUNO_LIVE_WORKER_MANAGED: "true",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -144,10 +143,7 @@ export class JunoLiveWorkerProcessManager {
   }
 
   getStatus(): WorkerProcessStatus {
-    const { command, args } = resolveWorkerProcessCommand(
-      this.options.cwd ?? process.cwd(),
-      this.options.env ?? process.env,
-    );
+    const { command, args } = resolveWorkerProcessCommand(this.options.cwd ?? process.cwd());
 
     return {
       state: this.state,
@@ -185,14 +181,7 @@ export class JunoLiveWorkerProcessManager {
   }
 }
 
-export function resolveWorkerProcessCommand(cwd: string, env: WorkerProcessEnv): WorkerProcessCommand {
-  if (env.JUNO_LIVE_WORKER_COMMAND) {
-    return {
-      command: env.JUNO_LIVE_WORKER_COMMAND,
-      args: parseWorkerArgs(env.JUNO_LIVE_WORKER_ARGS),
-    };
-  }
-
+export function resolveWorkerProcessCommand(cwd: string): WorkerProcessCommand {
   const localTsx = path.join(cwd, "node_modules", ".bin", process.platform === "win32" ? "tsx.cmd" : "tsx");
   if (fs.existsSync(localTsx)) {
     return {
@@ -213,20 +202,4 @@ export function getJunoLiveWorkerProcessManager(): JunoLiveWorkerProcessManager 
   };
   globalStore.__junoLiveWorkerProcessManager ??= new JunoLiveWorkerProcessManager();
   return globalStore.__junoLiveWorkerProcessManager;
-}
-
-function parseWorkerArgs(value: string | undefined): string[] {
-  if (!value?.trim()) {
-    return [];
-  }
-
-  if (value.trim().startsWith("[")) {
-    const parsed = JSON.parse(value) as unknown;
-    if (!Array.isArray(parsed) || !parsed.every((item) => typeof item === "string")) {
-      throw new Error("JUNO_LIVE_WORKER_ARGS must be a JSON string array");
-    }
-    return parsed;
-  }
-
-  return value.split(/\s+/).filter(Boolean);
 }

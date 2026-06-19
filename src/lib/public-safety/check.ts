@@ -67,7 +67,7 @@ const requiredReadmeSections = [
   "## Read-only boundary",
   "## Architecture",
   "## Quick start",
-  "## Demo mode",
+  "## Synthetic fixture seed",
   "## Configuration",
   "## Mail ingestion",
   "## Live stock observation",
@@ -114,7 +114,7 @@ const requiredPublicRepositoryChecklistPhrases = [
   "GitHub Actions permissions are minimal",
   "No production secrets in repository",
   "No real wholesale data in repository",
-  "Demo fixtures synthetic-only",
+  "Synthetic fixture workbooks only",
   "Runtime dependency audit passes",
 ] as const;
 

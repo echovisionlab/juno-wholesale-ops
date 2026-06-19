@@ -31,13 +31,12 @@ describe("resolveAppAuthSettings", () => {
   it("resolves DB-managed auth secret, site address, initial admin, and SSO providers", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://env.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
       {
         ...emptyRow(),
+        auth_secret: "a".repeat(32),
         auth_base_url: "https://db.example.com",
         auth_trusted_origins: "https://db.example.com\nhttps://admin.example.com",
       },
@@ -55,7 +54,11 @@ describe("resolveAppAuthSettings", () => {
           name: "Workspace",
           buttonLabel: "Sign in with Workspace",
           logoUrl: "https://login.example.com/logo.png",
+          protocol: "oidc",
           discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
+          authorizationUrl: "",
+          tokenUrl: "",
+          userInfoUrl: "",
           clientId: "client-id",
           clientSecret: "client-secret",
           scopes: ["openid", "email", "profile", "groups"],
@@ -73,8 +76,8 @@ describe("resolveAppAuthSettings", () => {
 
   it("reflects the DB email/password policy", () => {
     const settings = resolveAppAuthSettings(
-      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      { ...emptyRow(), auth_email_password_login_enabled: false },
+      runtimeEnv(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com", auth_email_password_login_enabled: false },
       { ssoProviders: [ssoProvider()] },
     );
 
@@ -85,11 +88,10 @@ describe("resolveAppAuthSettings", () => {
   it("does not use env fallback for SSO providers", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
-      emptyRow(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
     );
 
     expect(settings.externalProviders).toEqual([]);
@@ -97,8 +99,8 @@ describe("resolveAppAuthSettings", () => {
 
   it("normalizes enabled SSO providers with missing optional credentials to blank runtime config values", () => {
     const settings = resolveAppAuthSettings(
-      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      emptyRow(),
+      runtimeEnv(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
       {
         ssoProviders: [
           ssoProvider({
@@ -115,6 +117,9 @@ describe("resolveAppAuthSettings", () => {
     expect(settings.externalProviders[0]).toMatchObject({
       logoUrl: undefined,
       discoveryUrl: "",
+      authorizationUrl: "",
+      tokenUrl: "",
+      userInfoUrl: "",
       clientId: "",
       clientSecret: "",
     });
@@ -127,8 +132,8 @@ describe("resolveAppAuthSettings", () => {
 
   it("maps external provider profiles to admin only through provider-scoped rules", () => {
     const base = resolveAppAuthSettings(
-      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      emptyRow(),
+      runtimeEnv(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
       { ssoProviders: [ssoProvider()] },
     );
 
@@ -165,7 +170,12 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     displayName: "Workspace",
     buttonLabel: "Sign in with Workspace",
     logoUrl: "https://login.example.com/logo.png",
+    protocol: "oidc",
+    preset: "custom_oidc",
     discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
+    authorizationUrl: null,
+    tokenUrl: null,
+    userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "client-secret",
     clientSecretConfigured: true,

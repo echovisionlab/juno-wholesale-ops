@@ -1,5 +1,4 @@
 import { describe, expect, it } from "vitest";
-import { loadRuntimeEnv } from "@/lib/env";
 import {
   resolveJunoLiveSettings,
   shouldAutoEnqueueLiveLookups,
@@ -7,28 +6,14 @@ import {
   type JunoLiveServiceSettingsRow,
 } from "./settings";
 
-function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
-  return loadRuntimeEnv({
-    DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-    ...overrides,
-  });
-}
-
 describe("resolveJunoLiveSettings", () => {
-  it("uses env values when the service settings row is empty", () => {
-    const env = runtimeEnv({
-      JUNO_LOGIN_EMAIL: "catalog@example.com",
-      JUNO_LOGIN_PASSWORD: "secret",
-      JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
-      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
-    });
-
-    const settings = resolveJunoLiveSettings(env, emptyRow());
+  it("uses conservative defaults when the service settings row is empty", () => {
+    const settings = resolveJunoLiveSettings(emptyRow());
 
     expect(settings).toMatchObject({
-      enqueueOnIngest: true,
-      loginEmail: "catalog@example.com",
-      loginPassword: "secret",
+      enqueueOnIngest: false,
+      loginEmail: undefined,
+      loginPassword: undefined,
       browserProfileDir: ".data/juno-browser-profile",
       browserHeadless: true,
       concurrency: 1,
@@ -36,39 +21,30 @@ describe("resolveJunoLiveSettings", () => {
       delayMaxMs: 180000,
       navTimeoutMs: 45000,
       maxAttempts: 2,
-      pollIntervalMs: 300000,
+      pollIntervalMs: null,
       retryDelayMs: 300000,
       autoEnqueueOnInterval: false,
       autoEnqueueLimit: 1000,
     });
-    expect(shouldContinueAutomaticLookup(settings)).toBe(true);
+    expect(shouldContinueAutomaticLookup(settings)).toBe(false);
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
   });
 
-  it("enables interval enqueue only when explicitly configured with credentials", () => {
-    const env = runtimeEnv({
-      JUNO_LOGIN_EMAIL: "catalog@example.com",
-      JUNO_LOGIN_PASSWORD: "secret",
-      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
-      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
+  it("enables interval enqueue only when DB settings include interval and credentials", () => {
+    const settings = resolveJunoLiveSettings({
+      ...emptyRow(),
+      juno_login_email: "catalog@example.com",
+      juno_login_password: "secret",
+      juno_live_poll_interval_ms: 300000,
+      juno_live_auto_enqueue_on_interval: true,
     });
-    const settings = resolveJunoLiveSettings(env, emptyRow());
 
     expect(shouldContinueAutomaticLookup(settings)).toBe(true);
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(true);
   });
 
-  it("lets database settings override env values", () => {
-    const env = runtimeEnv({
-      JUNO_LOGIN_EMAIL: "env@example.com",
-      JUNO_LOGIN_PASSWORD: "env-secret",
-      JUNO_LIVE_CONCURRENCY: "3",
-      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
-      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      JUNO_LIVE_AUTO_ENQUEUE_LIMIT: "1000",
-    });
-
-    const settings = resolveJunoLiveSettings(env, {
+  it("resolves DB settings and clamps concurrency", () => {
+    const settings = resolveJunoLiveSettings({
       ...emptyRow(),
       juno_live_enqueue_on_ingest: true,
       juno_login_email: "db@example.com",
@@ -104,21 +80,12 @@ describe("resolveJunoLiveSettings", () => {
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
   });
 
-  it("disables automatic polling when both database and env omit the interval", () => {
-    const env = runtimeEnv();
-    const settings = resolveJunoLiveSettings(env, null);
-
-    expect(settings.pollIntervalMs).toBeNull();
-    expect(settings.retryDelayMs).toBe(300000);
-    expect(shouldContinueAutomaticLookup(settings)).toBe(false);
-    expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
-  });
-
   it("requires credentials for automatic interval enqueue", () => {
-    const env = runtimeEnv({
-      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
+    const settings = resolveJunoLiveSettings({
+      ...emptyRow(),
+      juno_live_poll_interval_ms: 300000,
+      juno_live_auto_enqueue_on_interval: true,
     });
-    const settings = resolveJunoLiveSettings(env, null);
 
     expect(shouldContinueAutomaticLookup(settings)).toBe(true);
     expect(shouldAutoEnqueueLiveLookups(settings)).toBe(false);
@@ -127,7 +94,6 @@ describe("resolveJunoLiveSettings", () => {
 
 function emptyRow(): JunoLiveServiceSettingsRow {
   return {
-    data_mode: null,
     juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,

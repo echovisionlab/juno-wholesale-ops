@@ -24,7 +24,7 @@ describe("public safety check", () => {
 
   it("catches secret-like strings while allowing env examples", () => {
     const issues = checkSecretLikeStrings([
-      { path: ".env.example", content: "AUTH_SECRET=" },
+      { path: ".env.example", content: "DATABASE_URL=" },
       { path: "README.md", content: `Authorization: Bearer ${"abcdefghijklmnop"}` },
       { path: "docs/key.md", content: `-----BEGIN ${"PRIVATE"} KEY-----` },
       { path: "docs/google.md", content: `{"private_${"key"}":"-----${"BEGIN"} PRIVATE KEY-----"}` },
@@ -108,7 +108,7 @@ describe("public safety check", () => {
       "## Read-only boundary",
       "## Architecture",
       "## Quick start",
-      "## Demo mode",
+      "## Synthetic fixture seed",
       "## Configuration",
       "## Mail ingestion",
       "## Live stock observation",
@@ -164,7 +164,7 @@ describe("public safety check", () => {
             "GitHub Actions permissions are minimal",
             "No production secrets in repository",
             "No real wholesale data in repository",
-            "Demo fixtures synthetic-only",
+            "Synthetic fixture workbooks only",
             "Runtime dependency audit passes",
           ].join("\n"),
         },

@@ -14,6 +14,9 @@ async function main() {
     if (!isLikelyTextPath(file)) {
       continue;
     }
+    if (!fs.existsSync(file)) {
+      continue;
+    }
     textFiles.push({ path: file, content: fs.readFileSync(file, "utf8") });
   }
   const demoFixtures = await loadDemoCatalogFixtures();

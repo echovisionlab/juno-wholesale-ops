@@ -9,7 +9,7 @@ import {
   type SettingDefinition,
   type SettingsWarning,
 } from "./descriptors";
-import { getRuntimeValue, hasSettingValue, type RawRuntimeEnv } from "./masking";
+import { hasSettingValue, type RawRuntimeEnv } from "./masking";
 
 export type SettingsValidationResult =
   | {
@@ -90,8 +90,8 @@ export function collectSettingsWarnings(options: {
   ssoProviders?: SsoProviderRecord[];
 }): SettingsWarning[] {
   const warnings: SettingsWarning[] = [];
-  const authBaseUrl = options.row?.auth_base_url ?? options.env.AUTH_BASE_URL;
-  const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins ?? options.env.AUTH_TRUSTED_ORIGINS);
+  const authBaseUrl = options.row?.auth_base_url ?? null;
+  const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins);
 
   if (!hasSettingValue(authBaseUrl)) {
     warnings.push({
@@ -150,7 +150,7 @@ function flattenSettingsPatch(input: unknown): Record<string, unknown> {
 }
 
 function isKnownGroupKey(key: string): boolean {
-  return key === "auth" || key === "mail" || key === "juno" || key === "notifications" || key === "advanced";
+  return key === "auth" || key === "mail" || key === "juno" || key === "notifications";
 }
 
 function normalizePatchValue(
@@ -166,10 +166,6 @@ function normalizePatchValue(
   if (value === null) {
     return { kind: "value", value: null };
   }
-  if (definition.secret && typeof value === "string" && value.trim() === "") {
-    return { kind: "noop" };
-  }
-
   if (definition.type === "boolean") {
     if (typeof value === "boolean") {
       return { kind: "value", value };
@@ -192,8 +188,11 @@ function normalizePatchValue(
     return { kind: "invalid", issue: "must be a string" };
   }
   const text = value.trim();
+  if (text.length === 0 && definition.requiredWhen !== "always") {
+    return { kind: "value", value: null };
+  }
   if (definition.required && text.length === 0) {
-    return { kind: "invalid", issue: "cannot be empty; use null to clear the saved setting" };
+    return { kind: "invalid", issue: "cannot be empty" };
   }
   if (definition.type === "email" && text.length > 0 && !isEmail(text)) {
     return { kind: "invalid", issue: "must be a valid email address" };
@@ -203,9 +202,6 @@ function normalizePatchValue(
   }
   if (definition.key === "auth_login_logo_url" && text.length > 0 && !isSupportedLoginLogoUrl(text)) {
     return { kind: "invalid", issue: LOGIN_LOGO_URL_REQUIREMENT };
-  }
-  if (definition.key === "data_mode" && text !== "demo" && text !== "real_mailbox") {
-    return { kind: "invalid", issue: "must be demo or real_mailbox" };
   }
   return { kind: "value", value: text };
 }
@@ -235,10 +231,10 @@ function validateResolvedPatch(options: {
 }): string[] {
   const merged = { ...(options.currentRow ?? {}), ...options.patch } as ServiceSettingsRow;
   const issues: string[] = [];
-  const concurrency = effectiveNumber("juno_live_concurrency", merged, options.env);
-  const delayMin = effectiveNumber("juno_live_delay_min_ms", merged, options.env);
-  const delayMax = effectiveNumber("juno_live_delay_max_ms", merged, options.env);
-  const pollInterval = effectiveNullableNumber("juno_live_poll_interval_ms", merged, options.env);
+  const concurrency = effectiveNumber("juno_live_concurrency", merged);
+  const delayMin = effectiveNumber("juno_live_delay_min_ms", merged);
+  const delayMax = effectiveNumber("juno_live_delay_max_ms", merged);
+  const pollInterval = effectiveNullableNumber("juno_live_poll_interval_ms", merged);
 
   if (concurrency !== null && (concurrency < 1 || concurrency > 10)) {
     issues.push("juno_live_concurrency must be between 1 and 10");
@@ -256,7 +252,7 @@ function validateResolvedPatch(options: {
     issues.push("juno_live_poll_interval_ms must be null or a positive integer");
   }
   if (merged.auth_email_password_login_enabled === false) {
-    const baseUrl = merged.auth_base_url ?? options.env.AUTH_BASE_URL ?? null;
+    const baseUrl = merged.auth_base_url ?? null;
     const hasReadySsoProvider = options.ssoProviders.some((provider) =>
       validateSsoProviderReadiness(provider, baseUrl).status === "ready",
     );
@@ -267,15 +263,15 @@ function validateResolvedPatch(options: {
   return issues;
 }
 
-function effectiveNumber(column: ServiceSettingColumn, row: ServiceSettingsRow, env: RuntimeEnv): number | null {
+function effectiveNumber(column: ServiceSettingColumn, row: ServiceSettingsRow): number | null {
   const definition = definitionsByKey.get(column);
-  const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined);
+  const value = row[column] ?? definition?.defaultValue;
   return typeof value === "number" ? value : null;
 }
 
-function effectiveNullableNumber(column: ServiceSettingColumn, row: ServiceSettingsRow, env: RuntimeEnv): number | null {
+function effectiveNullableNumber(column: ServiceSettingColumn, row: ServiceSettingsRow): number | null {
   const definition = definitionsByKey.get(column);
-  const value = row[column] ?? (definition ? getRuntimeValue(definition, env) : undefined) ?? null;
+  const value = row[column] ?? definition?.defaultValue ?? null;
   return typeof value === "number" ? value : null;
 }
 

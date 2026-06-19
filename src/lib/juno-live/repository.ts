@@ -78,7 +78,6 @@ export class JunoLiveRepository {
     const result = await this.pool.query<JunoLiveServiceSettingsRow>(
       `
         SELECT
-          data_mode,
           juno_live_enqueue_on_ingest,
           juno_login_email,
           juno_login_password,

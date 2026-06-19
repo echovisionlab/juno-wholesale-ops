@@ -19,7 +19,6 @@ import { getMovementSignals } from "@/lib/insights/movement-repository";
 import { getCatalogTrends, getInsightDigest } from "@/lib/insights/trend-repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { getJunoLiveWorkerProcessManager } from "@/lib/juno-live/worker-process";
-import { seedDemoData } from "@/lib/demo/repository";
 import { dispatchQueuedNotifications } from "@/lib/notifications/dispatcher";
 import {
   createNotificationChannel,
@@ -57,7 +56,6 @@ import {
 } from "./settings/auth/sso-providers/route";
 import { POST as testGmailSettings } from "./settings/actions/test-gmail/route";
 import { POST as testJunoSessionSettings } from "./settings/actions/test-juno-session/route";
-import { POST as runDemoSeedSettings } from "./settings/actions/run-demo-seed/route";
 import {
   DELETE as deleteNotificationChannels,
   GET as getNotificationChannels,
@@ -145,10 +143,6 @@ vi.mock("@/lib/juno-live/worker-process", () => ({
   getJunoLiveWorkerProcessManager: vi.fn(),
 }));
 
-vi.mock("@/lib/demo/repository", () => ({
-  seedDemoData: vi.fn(),
-}));
-
 vi.mock("@/lib/notifications/dispatcher", () => ({
   dispatchQueuedNotifications: vi.fn(),
 }));
@@ -193,7 +187,6 @@ const deleteWatchRuleMock = vi.mocked(deleteWatchRule);
 const enqueueLiveLookupJobsMock = vi.mocked(enqueueLiveLookupJobs);
 const withJunoLiveRepositoryMock = vi.mocked(withJunoLiveRepository);
 const getJunoLiveWorkerProcessManagerMock = vi.mocked(getJunoLiveWorkerProcessManager);
-const seedDemoDataMock = vi.mocked(seedDemoData);
 const dispatchQueuedNotificationsMock = vi.mocked(dispatchQueuedNotifications);
 const createNotificationChannelMock = vi.mocked(createNotificationChannel);
 const createNotificationRuleMock = vi.mocked(createNotificationRule);
@@ -236,7 +229,6 @@ describe("admin guarded API routes", () => {
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
     countAdminUsersMock.mockResolvedValue(1);
-    seedDemoDataMock.mockResolvedValue({ snapshots: 2 } as never);
     withJunoLiveRepositoryMock.mockImplementation(async (_databaseUrl, callback) =>
       callback(repository as never, {} as never),
     );
@@ -268,7 +260,6 @@ describe("admin guarded API routes", () => {
     await expectStatus(deleteMailSources(jsonRequest({ id: "source-1" })), 403);
     await expectStatus(testGmailSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(testJunoSessionSettings(jsonRequest({ mode: "smoke" })), 403);
-    await expectStatus(runDemoSeedSettings(jsonRequest({})), 403);
     await expectStatus(getLiveLookupStatus(request()), 403);
     await expectStatus(getLiveLookupWorker(request()), 403);
     await expectStatus(postLiveLookupWorker(jsonRequest({ action: "start" })), 403);
@@ -324,7 +315,6 @@ describe("admin guarded API routes", () => {
     expect(createSsoProviderMock).not.toHaveBeenCalled();
     expect(updateSsoProviderMock).not.toHaveBeenCalled();
     expect(deleteSsoProviderMock).not.toHaveBeenCalled();
-    expect(seedDemoDataMock).not.toHaveBeenCalled();
     expect(withJunoLiveRepositoryMock).not.toHaveBeenCalled();
     expect(getJunoLiveWorkerProcessManagerMock).not.toHaveBeenCalled();
     expect(enqueueLiveLookupJobsMock).not.toHaveBeenCalled();
@@ -354,10 +344,9 @@ describe("admin guarded API routes", () => {
       body: expect.any(Object),
     });
 
-    vi.stubEnv("AUTH_BASE_URL", "https://inventory-dev.example.test");
-    vi.stubEnv("JUNO_LOGIN_PASSWORD", "runtime-juno-password");
     ensureServiceSettingsRowMock.mockResolvedValue({
       ...emptySettingsRow(),
+      auth_base_url: "https://inventory-dev.example.test",
       juno_login_email: "buyer@example.test",
       juno_login_password: "db-juno-password",
     });
@@ -398,9 +387,12 @@ describe("admin guarded API routes", () => {
 
     await expect(expectJson(patchSettings(jsonRequest({ juno: { juno_login_password: "" } })))).resolves.toMatchObject({
       status: 200,
-      body: { changed: [] },
+      body: { changed: ["juno_login_password"] },
     });
-    expect(updateServiceSettingsMock).not.toHaveBeenCalled();
+    expect(updateServiceSettingsMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", {
+      juno_login_password: null,
+    });
+    updateServiceSettingsMock.mockClear();
 
     updateServiceSettingsMock.mockResolvedValueOnce({
       ...emptySettingsRow(),
@@ -412,9 +404,9 @@ describe("admin guarded API routes", () => {
     expect(updateServiceSettingsMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", {
       juno_login_password: null,
     });
-    expect(JSON.stringify(clearResponse.body)).toContain("Configured");
+    expect(JSON.stringify(clearResponse.body)).toContain("Not configured");
     expect(JSON.stringify(clearResponse.body)).not.toContain("Runtime fallback configured");
-    expect(JSON.stringify(clearResponse.body)).not.toContain("runtime-juno-password");
+    expect(JSON.stringify(clearResponse.body)).not.toContain("db-juno-password");
 
     await expect(
       expectJson(
@@ -447,16 +439,6 @@ describe("admin guarded API routes", () => {
       body: { ok: true, status: "read_only_preflight_passed", readOnly: true },
     });
 
-    await expect(expectJson(runDemoSeedSettings(jsonRequest({})))).resolves.toEqual({
-      status: 200,
-      body: { ok: true, result: { snapshots: 2 } },
-    });
-
-    vi.stubEnv("NODE_ENV", "production");
-    await expect(expectJson(runDemoSeedSettings(jsonRequest({})))).resolves.toEqual({
-      status: 403,
-      body: { error: "demo_seed_disabled_in_production" },
-    });
   });
 
   it("guards mail source CRUD and never returns credential secrets", async () => {
@@ -1148,7 +1130,6 @@ async function expectJson(responsePromise: Promise<Response>): Promise<{ status:
 
 function emptySettingsRow(): ServiceSettingsRow {
   return {
-    data_mode: null,
     juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,

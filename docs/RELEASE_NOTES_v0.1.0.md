@@ -25,12 +25,12 @@ not evidence of actual sales volume or actual demand.
 - Today Signals, Movement Signals, Catalog Trends, and Operator Digest APIs.
 - Optional read-only live observation worker.
 - Read-only notification queue and dispatch layer.
-- Synthetic demo fixtures and demo seed/reset commands.
+- Synthetic fixture seed/reset commands for local validation.
 - Public safety checks for release readiness.
 
-## Demo Mode
+## Synthetic Fixture Seed
 
-Demo mode uses only synthetic workbooks:
+Local validation uses only synthetic workbooks:
 
 - [../demo/fixtures/catalog/preorders-demo.xlsx](../demo/fixtures/catalog/preorders-demo.xlsx)
 - [../demo/fixtures/catalog/in-stock-demo.xlsx](../demo/fixtures/catalog/in-stock-demo.xlsx)
@@ -45,7 +45,7 @@ pnpm demo:seed
 pnpm dev
 ```
 
-Reset demo rows after review:
+Reset synthetic rows after review:
 
 ```bash
 set -a
@@ -74,13 +74,13 @@ Open `http://localhost:3006`.
 - Gmail ingest requires Google Workspace service account delegation.
 - Live observation requires operator-provided Juno credentials when enabled.
 - Notification webhook sending is dry-run by default and must be explicitly enabled with `--send`.
-- Demo data is synthetic and is not a wholesale price sheet.
+- Synthetic fixture data is not a wholesale price sheet.
 - This repository is a self-hosted application, not an npm package.
 
 ## Security And Privacy Notes
 
 - Do not commit `.env`, `.data`, browser profiles, service account JSON, raw Gmail payloads, raw attachments, credentials, cookies, auth headers, or webhook URLs.
-- Prefer runtime secret mounts or environment variables for production secrets.
+- Prefer private secret storage for production credentials.
 - Keep Postgres and attachment storage in private backup planning.
 - Run `pnpm public:safety` before tagging.
 

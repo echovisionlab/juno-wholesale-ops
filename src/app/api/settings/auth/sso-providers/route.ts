@@ -1,4 +1,3 @@
-import { loadRuntimeEnv } from "@/lib/env";
 import {
   createSsoProvider,
   deleteSsoProvider,
@@ -12,7 +11,6 @@ import {
 import {
   authorizeSettingsRequest,
   databaseUrlResponse,
-  getRequestOrigin,
   loadSettingsResponse,
   parseOptionalJson,
   safeSettingsActionError,
@@ -27,9 +25,8 @@ export async function GET(request: Request) {
     return authorization;
   }
   const database = databaseUrlResponse();
-  const env = loadRuntimeEnv(process.env);
   const row = await ensureServiceSettingsRow(database.databaseUrl);
-  const baseUrl = row.auth_base_url ?? env.AUTH_BASE_URL ?? getRequestOrigin(request);
+  const baseUrl = row.auth_base_url ?? null;
   const providers = await listSsoProviders(database.databaseUrl);
   return Response.json({ providers: providers.map((provider) => redactSsoProvider(provider, baseUrl)) });
 }

@@ -1,12 +1,12 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { redactSsoProvider, type PublicSsoProvider, type SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
-import { settingDefinitions, type SettingsGroup, type SettingsResponse, type DataMode, type IntegrationUnitStatus } from "./descriptors";
+import { settingDefinitions, type SettingsGroup, type SettingsResponse, type IntegrationUnitStatus } from "./descriptors";
 import { resolveSettingDescriptor, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
 import type { ServiceSettingsRow, SettingsGroupId, NextAction } from "./descriptors";
 import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 
-const groupOrder: SettingsGroupId[] = ["system", "auth", "mail", "juno", "notifications", "advanced"];
+const groupOrder: SettingsGroupId[] = ["auth", "mail", "juno", "notifications"];
 
 export function buildSettingsResponse(options: {
   env: RuntimeEnv;
@@ -18,12 +18,10 @@ export function buildSettingsResponse(options: {
   mailSources?: PublicMailboxSource[];
   ssoProviders?: SsoProviderRecord[];
 }): SettingsResponse {
-  const dataMode = resolveDataMode(options.settingsRow, options.env);
   const mailSources = options.mailSources ?? [];
   const ssoProviders = options.ssoProviders ?? [];
-  const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow, options.env);
+  const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow);
   const context: SettingResolutionContext = {
-    dataMode,
     externalProviderEnabled: ssoProviders.some((provider) => provider.enabled),
     junoLookupEnabled,
   };
@@ -43,15 +41,12 @@ export function buildSettingsResponse(options: {
     currentRequestOrigin: options.currentRequestOrigin ?? null,
   });
   const groups: SettingsGroup[] = groupOrder.map((groupId) => {
-    const settings =
-      groupId === "advanced"
-        ? descriptors
-        : descriptors.filter((descriptor) => descriptorGroup(descriptor.key) === groupId);
+    const settings = descriptors.filter((descriptor) => descriptorGroup(descriptor.key) === groupId);
     const warningForGroup = warnings.some((warning) => warning.id.startsWith(groupId));
     return {
       id: groupId,
       label: groupLabel(groupId),
-      state: groupId === "mail" ? mailGroupState(dataMode, mailSources) : groupState(settings, warningForGroup),
+      state: groupId === "mail" ? mailGroupState(mailSources) : groupState(settings, warningForGroup),
       settings,
     };
   });
@@ -59,7 +54,7 @@ export function buildSettingsResponse(options: {
   return {
     environment: {
       nodeEnv: options.nodeEnv,
-      appBaseUrl: resolveAppBaseUrl(options.settingsRow, options.env),
+      appBaseUrl: resolveAppBaseUrl(options.settingsRow),
       currentRequestOrigin: options.currentRequestOrigin ?? null,
       deploymentMode: resolveDeploymentMode(options.nodeEnv),
       lastUpdatedAt: options.settingsRow?.updated_at ? new Date(options.settingsRow.updated_at).toISOString() : null,
@@ -69,17 +64,9 @@ export function buildSettingsResponse(options: {
         noCheckout: true,
       },
     },
-    dataMode: {
-      value: dataMode,
-      source: descriptorByKey(descriptors, "data_mode")?.source ?? "default",
-      status: dataMode,
-      detail: dataMode === "demo"
-        ? "Synthetic demo data mode. Mail sources are optional."
-        : "Real mailbox mode. At least one runnable mail source is required.",
-    },
     units: {
-      authProvider: buildAuthProviderUnit(options.settingsRow, options.env, ssoProviders),
-      mail: buildMailUnit(mailSources, dataMode),
+      authProvider: buildAuthProviderUnit(options.settingsRow, ssoProviders),
+      mail: buildMailUnit(mailSources),
       junoLive: buildJunoUnit(groups, junoLookupEnabled),
       notifications: {
         id: "notifications",
@@ -107,7 +94,7 @@ export function buildSettingsResponse(options: {
 
 function descriptorGroup(key: string): SettingsGroupId {
   const definition = settingDefinitions.find((entry) => entry.key === key);
-  return definition?.group ?? "advanced";
+  return definition?.group ?? "notifications";
 }
 
 function groupLabel(id: SettingsGroupId): string {
@@ -122,9 +109,6 @@ function groupLabel(id: SettingsGroupId): string {
   }
   if (id === "notifications") {
     return "Notifications";
-  }
-  if (id === "advanced") {
-    return "Advanced";
   }
   return "System";
 }
@@ -160,7 +144,7 @@ function buildNextActions(groups: SettingsGroup[], warnings: SettingsResponse["w
     actions.push({
       id: "configure-mail-source",
       label: "Configure a mail source",
-      detail: "Create an active Gmail mailbox source with Google Workspace delegation and a JSON service account credential.",
+      detail: "Create an active mail source with a configured read-only credential.",
       href: "/settings",
       action: "test-gmail",
       severity: "warning",
@@ -205,8 +189,8 @@ function settingsInGroup(groups: SettingsGroup[], id: SettingsGroupId): Settings
   return groups.find((group) => group.id === id)?.settings ?? [];
 }
 
-function resolveAppBaseUrl(row: ServiceSettingsRow | null, env: RuntimeEnv): string | null {
-  return row?.auth_base_url ?? env.AUTH_BASE_URL ?? null;
+function resolveAppBaseUrl(row: ServiceSettingsRow | null): string | null {
+  return row?.auth_base_url ?? null;
 }
 
 function resolveDeploymentMode(nodeEnv: string): SettingsResponse["environment"]["deploymentMode"] {
@@ -219,23 +203,15 @@ function resolveDeploymentMode(nodeEnv: string): SettingsResponse["environment"]
   return "unknown";
 }
 
-function resolveDataMode(row: ServiceSettingsRow | null, env: RuntimeEnv): DataMode {
-  return row?.data_mode ?? env.JUNO_WHOLESALE_OPS_DATA_MODE;
-}
-
-function isJunoLookupEnabled(row: ServiceSettingsRow | null, env: RuntimeEnv): boolean {
-  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? env.JUNO_LIVE_ENQUEUE_ON_INGEST;
-  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL;
-  const pollInterval = row?.juno_live_poll_interval_ms ?? env.JUNO_LIVE_POLL_INTERVAL_MS;
+function isJunoLookupEnabled(row: ServiceSettingsRow | null): boolean {
+  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? false;
+  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? false;
+  const pollInterval = row?.juno_live_poll_interval_ms ?? null;
   return Boolean(enqueueOnIngest || autoEnqueueOnInterval || pollInterval);
 }
 
-function descriptorByKey(settings: SettingsGroup["settings"], key: string) {
-  return settings.find((setting) => setting.key === key);
-}
-
-function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv, providers: SsoProviderRecord[]): SettingsResponse["units"]["authProvider"] {
-  const baseUrl = resolveAppBaseUrl(row, env);
+function buildAuthProviderUnit(row: ServiceSettingsRow | null, providers: SsoProviderRecord[]): SettingsResponse["units"]["authProvider"] {
+  const baseUrl = resolveAppBaseUrl(row);
   const publicProviders = providers.map((provider) => redactSsoProvider(provider, baseUrl)).map(toSsoProviderUnit);
   const enabledProviderCount = publicProviders.filter((provider) => provider.enabled).length;
   const readyProviderCount = publicProviders.filter((provider) => provider.status === "ready").length;
@@ -275,9 +251,14 @@ function toSsoProviderUnit(provider: PublicSsoProvider): SettingsResponse["units
     displayName: provider.displayName,
     buttonLabel: provider.buttonLabel,
     logoUrl: provider.logoUrl,
+    protocol: provider.protocol,
+    preset: provider.preset,
     enabled: provider.enabled,
     status: provider.status,
     discoveryUrl: provider.discoveryUrl,
+    authorizationUrl: provider.authorizationUrl,
+    tokenUrl: provider.tokenUrl,
+    userInfoUrl: provider.userInfoUrl,
     clientId: provider.clientId,
     clientSecretConfigured: provider.clientSecretConfigured,
     scopes: provider.scopes,
@@ -291,31 +272,31 @@ function toSsoProviderUnit(provider: PublicSsoProvider): SettingsResponse["units
   };
 }
 
-function buildMailUnit(sources: PublicMailboxSource[], dataMode: DataMode): SettingsResponse["units"]["mail"] {
+function buildMailUnit(sources: PublicMailboxSource[]): SettingsResponse["units"]["mail"] {
   const runnableSources = sources.filter(isRunnableMailSource);
   const activeSources = sources.filter((source) => source.isActive);
-  const missing = dataMode === "real_mailbox" && runnableSources.length === 0;
+  const missing = runnableSources.length === 0;
   const warning = activeSources.some((source) => source.provider !== "gmail");
   return {
     id: "mail_sources",
     label: "Mail sources",
     status: missing ? "missing" : warning ? "warning" : runnableSources.length > 0 ? "ready" : "disabled",
     detail: missing
-      ? "Real mailbox mode requires at least one active Gmail source with a configured JSON service account credential."
+      ? "At least one active mail source with an implemented read-only adapter is required."
       : warning
         ? "One or more active mail sources use a provider adapter that is not implemented yet."
         : runnableSources.length > 0
-          ? `${runnableSources.length} runnable Gmail source${runnableSources.length === 1 ? "" : "s"} configured.`
-          : "Mail ingest is optional while demo mode is selected.",
+          ? `${runnableSources.length} runnable mail source${runnableSources.length === 1 ? "" : "s"} configured.`
+          : "No runnable mail source configured.",
     configured: runnableSources.length > 0,
     optional: false,
   };
 }
 
-function mailGroupState(dataMode: DataMode, sources: PublicMailboxSource[]): SettingsGroup["state"] {
+function mailGroupState(sources: PublicMailboxSource[]): SettingsGroup["state"] {
   const activeSources = sources.filter((source) => source.isActive);
   const runnableSources = activeSources.filter(isRunnableMailSource);
-  if (dataMode === "real_mailbox" && runnableSources.length === 0) {
+  if (runnableSources.length === 0) {
     return "missing";
   }
   if (activeSources.some((source) => source.provider !== "gmail")) {

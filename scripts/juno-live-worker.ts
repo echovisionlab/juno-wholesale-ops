@@ -29,7 +29,7 @@ async function main() {
     sinks: [new ConsoleJsonLogSink(), new PostgresLogSink(pool)],
   });
   const repository = new JunoLiveRepository(pool);
-  const settings = resolveJunoLiveSettings(env, await repository.getServiceSettingsRow());
+  const settings = resolveJunoLiveSettings(await repository.getServiceSettingsRow());
   const browser = new PlaywrightJunoBrowser({
     profileDir: settings.browserProfileDir,
     headless: settings.browserHeadless,

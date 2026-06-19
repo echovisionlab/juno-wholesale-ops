@@ -17,7 +17,6 @@ describe("buildAppSetupStatus", () => {
     const status = buildAppSetupStatus({
       env: runtimeEnv(),
       settingsRow: null,
-      mailSources: [],
     });
 
     expect(status.ready).toBe(false);
@@ -35,36 +34,17 @@ describe("buildAppSetupStatus", () => {
           }),
         ]),
       }),
-      expect.objectContaining({ id: "data", state: "warning", missing: [] }),
-      expect.objectContaining({ id: "mail", state: "warning", missing: [] }),
+      expect.objectContaining({ id: "mail", state: "missing", missing: ["mail_source"] }),
       expect.objectContaining({ id: "juno", state: "warning", missing: [] }),
       expect.objectContaining({ id: "auth", state: "missing", missing: ["auth_base_url"] }),
     ]);
     expect(JSON.stringify(status)).not.toContain("AUTH_SECRET");
   });
 
-  it("does not require mail sources in demo mode", () => {
-    const status = buildAppSetupStatus({
-      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      settingsRow: emptyRow(),
-      adminUserCount: 1,
-      mailSources: [],
-    });
-
-    expect(status.ready).toBe(true);
-    expect(status.steps.find((step) => step.id === "mail")).toEqual(
-      expect.objectContaining({
-        state: "warning",
-        missing: [],
-        detail: "optional while demo mode is selected",
-      }),
-    );
-  });
-
-  it("requires a runnable mail source in real mailbox mode", () => {
+  it("requires a runnable mail source", () => {
     const missing = buildAppSetupStatus({
-      env: runtimeEnv({ JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox", AUTH_BASE_URL: "https://app.example.com" }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 1,
       mailSources: [],
     });
@@ -74,8 +54,8 @@ describe("buildAppSetupStatus", () => {
     );
 
     const configured = buildAppSetupStatus({
-      env: runtimeEnv({ JUNO_WHOLESALE_OPS_DATA_MODE: "real_mailbox", AUTH_BASE_URL: "https://app.example.com" }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 1,
       mailSources: [mailSource()],
     });
@@ -93,9 +73,10 @@ describe("buildAppSetupStatus", () => {
 
   it("keeps Juno live lookup optional until lookup controls are enabled", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.ready).toBe(true);
@@ -112,9 +93,10 @@ describe("buildAppSetupStatus", () => {
 
   it("blocks Juno live lookup when enabled without credentials", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com", JUNO_LIVE_POLL_INTERVAL_MS: "300000" }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_live_poll_interval_ms: 300000 },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.ready).toBe(false);
@@ -128,13 +110,18 @@ describe("buildAppSetupStatus", () => {
 
   it("blocks setup when the Juno live delay window is unsafe", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LIVE_DELAY_MIN_MS: "2000",
-        JUNO_LIVE_DELAY_MAX_MS: "1000",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: {
+        ...emptyRow(),
+        auth_base_url: "https://app.example.com",
+        juno_login_email: "buyer@example.com",
+        juno_login_password: "secret",
+        juno_live_poll_interval_ms: 300000,
+        juno_live_delay_min_ms: 2000,
+        juno_live_delay_max_ms: 1000,
+      },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.ready).toBe(false);
@@ -155,15 +142,10 @@ describe("buildAppSetupStatus", () => {
 
   it("formats scheduled polling guardrails", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "120000",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_login_email: "buyer@example.com", juno_login_password: "secret", juno_live_poll_interval_ms: 120000, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -179,37 +161,22 @@ describe("buildAppSetupStatus", () => {
 
   it("formats singular and plural hour/minute scheduled polling intervals", () => {
     const oneHour = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "3600000",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_login_email: "buyer@example.com", juno_login_password: "secret", juno_live_poll_interval_ms: 3600000, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
     const twoHours = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "7200000",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_login_email: "buyer@example.com", juno_login_password: "secret", juno_live_poll_interval_ms: 7200000, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
     const oneMinute = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "60000",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_login_email: "buyer@example.com", juno_login_password: "secret", juno_live_poll_interval_ms: 60000, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(oneHour.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -225,13 +192,10 @@ describe("buildAppSetupStatus", () => {
 
   it("marks scheduled polling blocked when automatic enqueue has no credentials", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LIVE_POLL_INTERVAL_MS: "1234",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_live_poll_interval_ms: 1234, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -247,15 +211,10 @@ describe("buildAppSetupStatus", () => {
 
   it("formats millisecond scheduled polling when interval is not minute aligned", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_EMAIL: "buyer@example.com",
-        JUNO_LOGIN_PASSWORD: "secret",
-        JUNO_LIVE_POLL_INTERVAL_MS: "1234",
-        JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "true",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com", juno_login_email: "buyer@example.com", juno_login_password: "secret", juno_live_poll_interval_ms: 1234, juno_live_auto_enqueue_on_interval: true },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.guardrails).toEqual(
@@ -271,9 +230,10 @@ describe("buildAppSetupStatus", () => {
 
   it("blocks auth bootstrap when no admin access path exists", () => {
     const blocked = buildAppSetupStatus({
-      env: runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 0,
+      mailSources: [mailSource()],
     });
     expect(blocked.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
       expect.arrayContaining([
@@ -283,12 +243,12 @@ describe("buildAppSetupStatus", () => {
 
     const withInitialAdmin = buildAppSetupStatus({
       env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
-      settingsRow: emptyRow(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 0,
+      mailSources: [mailSource()],
     });
     expect(withInitialAdmin.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
       expect.arrayContaining([
@@ -297,11 +257,10 @@ describe("buildAppSetupStatus", () => {
     );
 
     const withExternalMapping = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
-      settingsRow: emptyRow(),
+      env: runtimeEnv(),
+      settingsRow: { ...emptyRow(), auth_base_url: "https://app.example.com" },
       adminUserCount: 0,
+      mailSources: [mailSource()],
       ssoProviders: [
         ssoProvider({
           adminRules: [{ id: "rule-1", type: "claim_equals", value: "groups=ops-admin" }],
@@ -319,25 +278,25 @@ describe("buildAppSetupStatus", () => {
     );
   });
 
-  it("surfaces database and runtime setting sources without raw secrets", () => {
+  it("surfaces database setting sources without raw secrets", () => {
     const status = buildAppSetupStatus({
-      env: runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        JUNO_LOGIN_PASSWORD: "runtime-secret",
-      }),
+      env: runtimeEnv(),
       settingsRow: {
         ...emptyRow(),
+        auth_base_url: "https://app.example.com",
         juno_login_email: "buyer@example.com",
+        juno_login_password: "db-secret",
         juno_live_poll_interval_ms: 3600000,
         auth_email_password_login_enabled: false,
       },
       adminUserCount: 1,
+      mailSources: [mailSource()],
     });
 
     expect(status.steps.find((step) => step.id === "juno")?.settings).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({ key: "juno_login_email", source: "database", value: "buyer@example.com" }),
-        expect.objectContaining({ key: "juno_login_password", source: "runtime", value: "configured", secret: true }),
+	        expect.objectContaining({ key: "juno_login_email", source: "database", value: "buyer@example.com" }),
+	        expect.objectContaining({ key: "juno_login_password", source: "database", value: "configured", secret: true }),
       ]),
     );
     expect(status.steps.find((step) => step.id === "auth")?.settings).toEqual(
@@ -345,14 +304,13 @@ describe("buildAppSetupStatus", () => {
         expect.objectContaining({ key: "auth_email_password_login_enabled", source: "database", value: "disabled" }),
       ]),
     );
-    expect(JSON.stringify(status)).not.toContain("runtime-secret");
+	    expect(JSON.stringify(status)).not.toContain("db-secret");
   });
 });
 
 function emptyRow(): JunoLiveServiceSettingsRow {
   return {
-    data_mode: null,
-    juno_live_enqueue_on_ingest: null,
+	    juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,
     juno_browser_profile_dir: null,
@@ -378,9 +336,14 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     id: "provider-id",
     providerId: "workspace",
     displayName: "Workspace",
-    buttonLabel: "Continue with Workspace",
-    logoUrl: null,
-    discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+	    buttonLabel: "Continue with Workspace",
+	    logoUrl: null,
+	    protocol: "oidc",
+	    preset: "custom_oidc",
+	    discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+    authorizationUrl: null,
+    tokenUrl: null,
+    userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "client-secret",
     clientSecretConfigured: true,

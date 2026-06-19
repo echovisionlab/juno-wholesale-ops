@@ -1,6 +1,6 @@
 # Screenshots
 
-Screenshots for public docs must use synthetic demo data only.
+Screenshots for public docs must use synthetic fixture data only.
 
 Before adding screenshots:
 

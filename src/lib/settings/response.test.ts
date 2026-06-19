@@ -14,23 +14,16 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 
 describe("settings response and validation", () => {
   it("resolves saved settings, runtime values, defaults, unset values, and masked secrets", () => {
-    const env = runtimeEnv({
-      DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-      AUTH_SECRET: "x".repeat(32),
-      AUTH_BASE_URL: "https://runtime.example.test",
-      JUNO_LOGIN_PASSWORD: "runtime-password",
-    });
+    const env = runtimeEnv();
     const response = buildSettingsResponse({
       env,
       rawEnv: {
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://runtime.example.test",
-        JUNO_LOGIN_PASSWORD: "runtime-password",
       },
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://database.example.test",
+        juno_login_password: "db-password",
       },
       nodeEnv: "development",
       mailSources: [mailSource()],
@@ -42,7 +35,7 @@ describe("settings response and validation", () => {
       value: "https://database.example.test",
     });
     expect(descriptor(response, "juno_login_password")).toMatchObject({
-      source: "runtime",
+      source: "database",
       displayValue: "Configured",
       value: null,
       secret: true,
@@ -53,24 +46,18 @@ describe("settings response and validation", () => {
     });
     expect(response.units.mail.status).toBe("ready");
     expect(JSON.stringify(response)).not.toContain("raw-service-account-json");
-    expect(JSON.stringify(response)).not.toContain("runtime-password");
+    expect(JSON.stringify(response)).not.toContain("db-password");
     expect(JSON.stringify(response)).not.toContain("AUTH_SECRET");
     expect(JSON.stringify(response)).not.toContain("auth_secret");
     expect(response.nextActions.map((action) => action.id)).toContain("review-read-only-boundary");
   });
 
   it("derives the auth provider callback URL from the configured site address and masks provider secrets", () => {
-    const env = runtimeEnv({
-      DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-      AUTH_SECRET: "x".repeat(32),
-      AUTH_BASE_URL: "https://runtime.example.test",
-    });
+    const env = runtimeEnv();
     const response = buildSettingsResponse({
       env,
       rawEnv: {
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://runtime.example.test",
       },
       settingsRow: {
         ...emptySettingsRow(),
@@ -93,9 +80,46 @@ describe("settings response and validation", () => {
       buttonLabel: "Sign in with Workspace",
       providerId: "workspace",
       clientSecretConfigured: true,
+      discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
       callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
     });
     expect(JSON.stringify(response)).not.toContain("db-client-secret");
+  });
+
+  it("marks OAuth2 providers ready when endpoint URLs are configured without discovery", () => {
+    const response = buildSettingsResponse({
+      env: runtimeEnv(),
+      rawEnv: {},
+      settingsRow: {
+        ...emptySettingsRow(),
+        auth_base_url: "https://inventory-dev.example.test",
+      },
+      nodeEnv: "development",
+      ssoProviders: [
+        ssoProvider({
+          protocol: "oauth2",
+          preset: "custom_oauth2",
+          discoveryUrl: null,
+          authorizationUrl: "https://login.example.test/oauth/authorize",
+          tokenUrl: "https://login.example.test/oauth/token",
+          userInfoUrl: "https://login.example.test/oauth/userinfo",
+        }),
+      ],
+    });
+
+    expect(response.units.authProvider).toMatchObject({
+      status: "ready",
+      readyProviderCount: 1,
+    });
+    expect(response.units.authProvider.providers[0]).toMatchObject({
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
+      missing: [],
+      invalid: [],
+    });
   });
 
   it("marks malformed external provider URLs invalid instead of ready", () => {
@@ -120,33 +144,21 @@ describe("settings response and validation", () => {
     });
   });
 
-  it("treats mail sources as optional in demo mode and required in real mailbox mode", () => {
-    const env = runtimeEnv({
-      DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-    });
+  it("treats mail sources as required for operational ingest", () => {
+    const env = runtimeEnv();
 
-    const demo = buildSettingsResponse({
+    const missing = buildSettingsResponse({
       env,
       rawEnv: {},
       settingsRow: emptySettingsRow(),
       nodeEnv: "development",
     });
-    expect(demo.dataMode.value).toBe("demo");
-    expect(demo.units.mail).toMatchObject({ status: "disabled", configured: false });
-
-    const realMailbox = buildSettingsResponse({
-      env,
-      rawEnv: {},
-      settingsRow: { ...emptySettingsRow(), data_mode: "real_mailbox" },
-      nodeEnv: "development",
-    });
-    expect(realMailbox.dataMode.value).toBe("real_mailbox");
-    expect(realMailbox.units.mail).toMatchObject({ status: "missing", configured: false });
+    expect(missing.units.mail).toMatchObject({ status: "missing", configured: false });
 
     const configured = buildSettingsResponse({
       env,
       rawEnv: {},
-      settingsRow: { ...emptySettingsRow(), data_mode: "real_mailbox" },
+      settingsRow: emptySettingsRow(),
       nodeEnv: "development",
       mailSources: [mailSource()],
     });
@@ -155,10 +167,7 @@ describe("settings response and validation", () => {
 
   it("blocks auth bootstrap when no admin access path exists", () => {
     const blocked = buildSettingsResponse({
-      env: runtimeEnv({
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://app.example.test",
-      }),
+      env: runtimeEnv(),
       rawEnv: {},
       settingsRow: emptySettingsRow(),
       nodeEnv: "production",
@@ -170,10 +179,7 @@ describe("settings response and validation", () => {
     });
 
     const existingAdmin = buildSettingsResponse({
-      env: runtimeEnv({
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://app.example.test",
-      }),
+      env: runtimeEnv(),
       rawEnv: {},
       settingsRow: emptySettingsRow(),
       nodeEnv: "production",
@@ -185,10 +191,7 @@ describe("settings response and validation", () => {
     });
 
     const allowlist = buildSettingsResponse({
-      env: runtimeEnv({
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://app.example.test",
-      }),
+      env: runtimeEnv(),
       rawEnv: {},
       settingsRow: emptySettingsRow(),
       nodeEnv: "production",
@@ -207,13 +210,13 @@ describe("settings response and validation", () => {
 
   it("warns when configured site address or trusted origins do not match the current origin", () => {
     const response = buildSettingsResponse({
-      env: runtimeEnv({
-        AUTH_SECRET: "x".repeat(32),
-        AUTH_BASE_URL: "https://configured.example.test",
-        AUTH_TRUSTED_ORIGINS: "https://configured.example.test",
-      }),
+      env: runtimeEnv(),
       rawEnv: {},
-      settingsRow: emptySettingsRow(),
+      settingsRow: {
+        ...emptySettingsRow(),
+        auth_base_url: "https://configured.example.test",
+        auth_trusted_origins: "https://configured.example.test",
+      },
       nodeEnv: "development",
       currentRequestOrigin: "https://inventory-dev.example.test",
       adminUserCount: 1,
@@ -228,19 +231,16 @@ describe("settings response and validation", () => {
   });
 
   it("validates patch semantics and unsafe settings", () => {
-    const env = runtimeEnv({
-      DATABASE_URL: "postgres://user:pass@localhost:5432/app",
-      AUTH_SECRET: "x".repeat(32),
-    });
+    const env = runtimeEnv();
 
-    const secretNoop = validateSettingsPatch({
+    const blankSecretClears = validateSettingsPatch({
       input: { juno: { juno_login_password: "" } },
       currentRow: { ...emptySettingsRow(), juno_login_password: "db-secret" },
       env,
       rawEnv: {},
       nodeEnv: "development",
     });
-    expect(secretNoop).toMatchObject({ ok: true, changed: [], patch: {} });
+    expect(blankSecretClears).toMatchObject({ ok: true, changed: ["juno_login_password"], patch: { juno_login_password: null } });
 
     const clearSecret = validateSettingsPatch({
       input: { juno: { juno_login_password: null } },
@@ -334,7 +334,7 @@ describe("settings response and validation", () => {
 });
 
 function descriptor(response: ReturnType<typeof buildSettingsResponse>, key: string) {
-  const setting = response.groups.find((group) => group.id === "advanced")?.settings.find((entry) => entry.key === key);
+  const setting = response.groups.flatMap((group) => group.settings).find((entry) => entry.key === key);
   if (!setting) {
     throw new Error(`Missing descriptor ${key}`);
   }
@@ -348,7 +348,12 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     displayName: "Workspace",
     buttonLabel: "Sign in with Workspace",
     logoUrl: null,
+    protocol: "oidc",
+    preset: "custom_oidc",
     discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+    authorizationUrl: null,
+    tokenUrl: null,
+    userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "db-client-secret",
     clientSecretConfigured: true,
@@ -364,7 +369,6 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
 
 function emptySettingsRow(): ServiceSettingsRow {
   return {
-    data_mode: null,
     juno_live_enqueue_on_ingest: null,
     juno_login_email: null,
     juno_login_password: null,

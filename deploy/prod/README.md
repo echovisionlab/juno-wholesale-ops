@@ -35,17 +35,18 @@ Set these secrets in the stack environment, not in git:
 
 ```text
 DATABASE_URL
-AUTH_BASE_URL
-JUNO_LOGIN_EMAIL
-JUNO_LOGIN_PASSWORD
+AUTH_INITIAL_ADMIN_EMAIL
+AUTH_INITIAL_ADMIN_PASSWORD
 ```
 
-`AUTH_SECRET` is normally omitted. If it is absent, startup creates a random
-Better Auth secret in the database. Mailbox sources and Gmail service account
-JSON credentials are configured in the Settings Center, not through deployment
-env. Keep `DATABASE_URL` runtime-only in the Komodo stack environment; GitHub
-Actions must only update the immutable image reference and sync the compose
-file.
+The initial admin values are optional bootstrap inputs. If they are omitted,
+the app uses existing admin rows or a configured external provider admin rule.
+Startup creates the internal Better Auth secret in the database when one is
+missing. Mailbox sources, Gmail service account JSON credentials, Juno login
+details, SSO providers, and webhook settings are configured in the Settings
+Center or private secret storage, not deployment env. Keep `DATABASE_URL`
+runtime-only in the Komodo stack environment; GitHub Actions must only update
+the immutable image reference and sync the compose file.
 
 Use an immutable image tag for `JUNO_WHOLESALE_OPS_WEB_IMAGE`, for example:
 
@@ -105,15 +106,13 @@ the Next.js server through `/api/live-lookups/worker`, which starts or stops the
 polling loop as a child process inside the web container. Its persistent
 Playwright profile is stored in the
 `juno-wholesale-ops-browser-profile` Docker volume so it does not relogin unless
-the Juno session expires. Juno settings are managed through the Settings Center
-and explicit runtime env where supported. Leave both DB and env poll interval
-values empty to disable automatic idle polling.
+the Juno session expires. Juno settings are managed through the Settings Center.
+Leave the saved poll interval empty to disable automatic idle polling.
 
-For automatic live-stock refreshes, set a poll interval such as
-`JUNO_LIVE_POLL_INTERVAL_MS=7200000`. With credentials present and
-`JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL=true`, the child worker enqueues unique Juno
-IDs from the latest catalog snapshot each interval, then processes them with the
-per-product randomized delay window. Mail ingest state is available through
+When credentials and a saved poll interval are present, the child worker
+enqueues unique Juno IDs from the latest catalog snapshot each interval, then
+processes them with the per-product randomized delay window. Mail ingest state
+is available through
 `/api/ingest/status` so operators can confirm the last mailbox query and last
 unique DB catalog date before widening any search window.
 

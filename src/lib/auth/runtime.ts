@@ -16,11 +16,15 @@ export type ResolvedRuntimeAuth = {
   missing: string[];
 };
 
-async function resolveRuntimeAuth(options: { requestOrigin?: string | null } = {}): Promise<ResolvedRuntimeAuth> {
+export type RuntimeAuthOptions = {
+  requestOrigin?: string | null;
+};
+
+async function resolveRuntimeAuth(options: RuntimeAuthOptions = {}): Promise<ResolvedRuntimeAuth> {
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await withJunoLiveRepository(env.DATABASE_URL, async (repository, pool) => {
     const row = await repository.getServiceSettingsRow();
-    if (!row?.auth_secret && !env.AUTH_SECRET) {
+    if (!row?.auth_secret) {
       const authSecret = await ensureDatabaseAuthSecretClient(pool);
       const refreshedRow = row ?? await repository.getServiceSettingsRow();
       if (!refreshedRow) {
@@ -34,7 +38,14 @@ async function resolveRuntimeAuth(options: { requestOrigin?: string | null } = {
     return row;
   });
   const ssoProviders = await listSsoProviders(env.DATABASE_URL);
-  const settings = resolveAppAuthSettings(env, settingsRow, { requestOrigin: options.requestOrigin, ssoProviders });
+  const resolvedSettings = resolveAppAuthSettings(env, settingsRow, { ssoProviders });
+  const requestOrigin = normalizeOrigin(options.requestOrigin);
+  const settings = resolvedSettings.baseUrl || !requestOrigin
+    ? resolvedSettings
+    : {
+        ...resolvedSettings,
+        baseUrl: requestOrigin,
+      };
   const missing = getMissingAppAuthSettings(settings);
 
   return {
@@ -44,7 +55,7 @@ async function resolveRuntimeAuth(options: { requestOrigin?: string | null } = {
   };
 }
 
-export async function getRuntimeBetterAuth(options: { requestOrigin?: string | null } = {}) {
+export async function getRuntimeBetterAuth(options: RuntimeAuthOptions = {}) {
   const runtime = await resolveRuntimeAuth(options);
 
   if (!isAppAuthRunnable(runtime.settings)) {
@@ -59,4 +70,15 @@ export async function getRuntimeBetterAuth(options: { requestOrigin?: string | n
     }),
     unavailable: false,
   };
+}
+
+function normalizeOrigin(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+  try {
+    return new URL(value).origin;
+  } catch {
+    return null;
+  }
 }

@@ -14,7 +14,11 @@ export type ExternalAuthProviderSettings = {
   name: string;
   buttonLabel: string;
   logoUrl: string | undefined;
+  protocol: "oidc" | "oauth2";
   discoveryUrl: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  userInfoUrl: string;
   clientId: string;
   clientSecret: string;
   scopes: string[];
@@ -39,12 +43,12 @@ export type InitialAdminSettings = {
 export function resolveAppAuthSettings(
   env: RuntimeEnv,
   row: AuthServiceSettingsRow | null,
-  options: { requestOrigin?: string | null; ssoProviders?: SsoProviderRecord[] } = {},
+  options: { ssoProviders?: SsoProviderRecord[] } = {},
 ): AppAuthSettings {
   return {
-    secret: row?.auth_secret ?? env.AUTH_SECRET,
-    baseUrl: row?.auth_base_url ?? env.AUTH_BASE_URL ?? options.requestOrigin ?? undefined,
-    trustedOrigins: splitList(row?.auth_trusted_origins ?? env.AUTH_TRUSTED_ORIGINS),
+    secret: row?.auth_secret ?? undefined,
+    baseUrl: row?.auth_base_url ?? undefined,
+    trustedOrigins: splitList(row?.auth_trusted_origins),
     emailPasswordLoginEnabled: row?.auth_email_password_login_enabled ?? true,
     externalProviders: resolveExternalProviders(options.ssoProviders ?? []),
     initialAdmin: resolveInitialAdmin(env),
@@ -101,7 +105,11 @@ function resolveExternalProviders(providers: SsoProviderRecord[]): ExternalAuthP
       name: provider.displayName,
       buttonLabel: provider.buttonLabel,
       logoUrl: provider.logoUrl ?? undefined,
+      protocol: provider.protocol,
       discoveryUrl: provider.discoveryUrl ?? "",
+      authorizationUrl: provider.authorizationUrl ?? "",
+      tokenUrl: provider.tokenUrl ?? "",
+      userInfoUrl: provider.userInfoUrl ?? "",
       clientId: provider.clientId ?? "",
       clientSecret: provider.clientSecret ?? "",
       scopes: provider.scopes,
@@ -117,7 +125,7 @@ function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
   return {
     email: env.AUTH_INITIAL_ADMIN_EMAIL,
     password: env.AUTH_INITIAL_ADMIN_PASSWORD,
-    name: env.AUTH_INITIAL_ADMIN_NAME,
+    name: "Initial Admin",
   };
 }
 

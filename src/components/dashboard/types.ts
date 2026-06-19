@@ -234,7 +234,7 @@ export type NotificationDelivery = {
 
 export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
 
-export type SetupSettingSource = "database" | "runtime" | "unset";
+export type SetupSettingSource = "database" | "default" | "runtime" | "unset";
 
 export type SetupSettingState = "configured" | "missing" | "disabled";
 

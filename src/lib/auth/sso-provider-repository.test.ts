@@ -53,6 +53,11 @@ describe("SSO provider repository", () => {
       displayName: "Workspace",
       clientSecret: "client-secret",
       clientSecretConfigured: true,
+      protocol: "oidc",
+      preset: "custom_oidc",
+      authorizationUrl: null,
+      tokenUrl: null,
+      userInfoUrl: null,
       scopes: ["openid", "email", "profile", "groups"],
       adminRules: expect.arrayContaining([
         expect.objectContaining({ type: "email_allowlist", value: "admin@example.test" }),
@@ -84,7 +89,51 @@ describe("SSO provider repository", () => {
     expect(updated).toMatchObject({
       displayName: "Renamed Workspace",
       clientSecret: "client-secret",
+      protocol: "oidc",
+      preset: "custom_oidc",
       adminRules: [expect.objectContaining({ type: "email_allowlist", value: "admin@example.test" })],
+    });
+
+    await updateSsoProvider(databaseUrl, {
+      id: created.id,
+      protocol: "oauth2",
+    });
+
+    const [oauth2Updated] = await listSsoProviders(databaseUrl);
+    expect(oauth2Updated).toMatchObject({
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+    });
+
+    await updateSsoProvider(databaseUrl, {
+      id: created.id,
+      preset: "custom_oidc",
+    });
+
+    const [oidcUpdated] = await listSsoProviders(databaseUrl);
+    expect(oidcUpdated).toMatchObject({
+      protocol: "oidc",
+      preset: "custom_oidc",
+    });
+
+    await updateSsoProvider(databaseUrl, {
+      id: created.id,
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+      discoveryUrl: "",
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
+    });
+
+    const [oauth2EndpointsUpdated] = await listSsoProviders(databaseUrl);
+    expect(oauth2EndpointsUpdated).toMatchObject({
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+      discoveryUrl: null,
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
     });
 
     await expect(deleteSsoProvider(databaseUrl, created.id)).resolves.toEqual({ deleted: true });
@@ -100,6 +149,12 @@ describe("SSO provider repository", () => {
     expect(validateSsoProviderInput({
       providerId: "workspace",
       displayName: "Workspace",
+      protocol: "oauth2",
+      preset: "custom_oidc",
+    }, { requireSecret: false })).toEqual(["preset must match protocol"]);
+    expect(validateSsoProviderInput({
+      providerId: "workspace",
+      displayName: "Workspace",
       adminClaim: "groups",
       adminClaimValue: "",
     }, { requireSecret: false })).toEqual(["adminClaim and adminClaimValue must be configured together"]);
@@ -108,7 +163,11 @@ describe("SSO provider repository", () => {
       enabled: false,
       providerId: "workspace",
       displayName: "Workspace",
+      protocol: "oidc",
       discoveryUrl: null,
+      authorizationUrl: null,
+      tokenUrl: null,
+      userInfoUrl: null,
       clientId: null,
       clientSecretConfigured: false,
     }, null)).toEqual({ status: "disabled", missing: [], invalid: [] });
@@ -117,13 +176,49 @@ describe("SSO provider repository", () => {
       enabled: true,
       providerId: "workspace",
       displayName: "Workspace",
+      protocol: "oidc",
       discoveryUrl: "not-a-url",
+      authorizationUrl: null,
+      tokenUrl: null,
+      userInfoUrl: null,
       clientId: "client-id",
       clientSecretConfigured: false,
     }, "https://inventory-dev.example.test")).toEqual({
       status: "missing",
       missing: ["client secret"],
       invalid: ["discovery URL"],
+    });
+
+    expect(validateSsoProviderReadiness({
+      enabled: true,
+      providerId: "workspace",
+      displayName: "Workspace",
+      protocol: "oauth2",
+      discoveryUrl: null,
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
+      clientId: "client-id",
+      clientSecretConfigured: true,
+    }, "https://inventory-dev.example.test")).toEqual({ status: "ready", missing: [], invalid: [] });
+  });
+
+  it("infers protocol from preset when creating providers", async () => {
+    const created = await createSsoProvider(databaseUrl, {
+      providerId: "custom-oauth2",
+      displayName: "Custom OAuth2",
+      preset: "custom_oauth2",
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
+      clientId: "client-id",
+      clientSecret: "client-secret",
+    });
+
+    expect(created).toMatchObject({
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+      discoveryUrl: null,
     });
   });
 });

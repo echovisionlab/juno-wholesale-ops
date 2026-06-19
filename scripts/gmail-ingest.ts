@@ -40,8 +40,8 @@ async function main() {
       : null;
   const liveSettings =
     writeMode
-      ? resolveJunoLiveSettings(env, settingsRow)
-      : resolveJunoLiveSettings(env, null);
+      ? resolveJunoLiveSettings(settingsRow)
+      : resolveJunoLiveSettings(null);
 
   const sources = await listActiveMailboxSources(databaseUrl);
   const gmailSources = getRunnableGmailSources(sources);

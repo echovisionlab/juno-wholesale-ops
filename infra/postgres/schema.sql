@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 5411de5d68fbdeb92af6ba638cc33e96b8aeb0e86c3c0edebfc3ca4c3b3ff10c
+-- migration-manifest-sha256: 21fe9f9d8e58825cedb60fd16e8ac2dace6b9f7a57f655b9b0ef915f1bcd3d87
 --
 -- PostgreSQL database dump
 --
@@ -100,7 +100,15 @@ CREATE TABLE public.auth_sso_provider (
     sort_order integer DEFAULT 0 NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
-    CONSTRAINT auth_sso_provider_id_format_check CHECK ((provider_id ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text))
+    protocol text DEFAULT 'oidc'::text NOT NULL,
+    preset text DEFAULT 'custom_oidc'::text NOT NULL,
+    authorization_url text,
+    token_url text,
+    user_info_url text,
+    CONSTRAINT auth_sso_provider_id_format_check CHECK ((provider_id ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text)),
+    CONSTRAINT auth_sso_provider_preset_check CHECK ((preset = ANY (ARRAY['custom_oidc'::text, 'custom_oauth2'::text, 'google_oidc'::text, 'microsoft_entra_oidc'::text, 'auth0_oidc'::text, 'okta_oidc'::text]))),
+    CONSTRAINT auth_sso_provider_preset_protocol_check CHECK ((((protocol = 'oidc'::text) AND (preset = ANY (ARRAY['custom_oidc'::text, 'google_oidc'::text, 'microsoft_entra_oidc'::text, 'auth0_oidc'::text, 'okta_oidc'::text]))) OR ((protocol = 'oauth2'::text) AND (preset = 'custom_oauth2'::text)))),
+    CONSTRAINT auth_sso_provider_protocol_check CHECK ((protocol = ANY (ARRAY['oidc'::text, 'oauth2'::text])))
 );
 
 
@@ -532,13 +540,11 @@ CREATE TABLE public.service_setting (
     juno_live_auto_enqueue_limit integer,
     auth_base_url text,
     auth_trusted_origins text,
-    data_mode text,
     auth_secret text,
     auth_login_logo_url text,
     auth_email_password_login_enabled boolean DEFAULT true NOT NULL,
     CONSTRAINT service_setting_auth_login_logo_url_asset_check CHECK (((auth_login_logo_url IS NULL) OR (auth_login_logo_url ~* '^https?://[^[:space:]]+\.(png|webp|svg)([?#].*)?$'::text))),
     CONSTRAINT service_setting_auth_secret_length_check CHECK (((auth_secret IS NULL) OR (length(auth_secret) >= 32))),
-    CONSTRAINT service_setting_data_mode_check CHECK (((data_mode IS NULL) OR (data_mode = ANY (ARRAY['demo'::text, 'real_mailbox'::text])))),
     CONSTRAINT service_setting_id_check CHECK (id),
     CONSTRAINT service_setting_juno_live_auto_enqueue_limit_check CHECK ((juno_live_auto_enqueue_limit > 0)),
     CONSTRAINT service_setting_juno_live_concurrency_check CHECK (((juno_live_concurrency >= 1) AND (juno_live_concurrency <= 10))),

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   GOOGLE_GMAIL_MODIFY_SCOPE,
   GOOGLE_GMAIL_READONLY_SCOPE,
+  getDatabaseUrl,
   hasGmailModifyScope,
   loadRuntimeEnv,
   parseScopes,
@@ -12,116 +13,57 @@ const configuredEnv = {
 };
 
 describe("loadRuntimeEnv", () => {
-  it("loads required values and applies defaults", () => {
+  it("loads only the required app runtime values", () => {
     const env = loadRuntimeEnv({
-      DATABASE_URL: configuredEnv.DATABASE_URL,
+      ...configuredEnv,
+      AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
+      AUTH_INITIAL_ADMIN_PASSWORD: "password123",
     });
 
-    expect(env).toMatchObject({
+    expect(env).toEqual({
       DATABASE_URL: configuredEnv.DATABASE_URL,
-      JUNO_WHOLESALE_OPS_DATA_MODE: "demo",
-      JUNO_LIVE_ENQUEUE_ON_INGEST: false,
-      AUTH_INITIAL_ADMIN_NAME: "Initial Admin",
-      JUNO_BROWSER_PROFILE_DIR: ".data/juno-browser-profile",
-      JUNO_BROWSER_HEADLESS: true,
-      JUNO_LIVE_CONCURRENCY: 1,
-      JUNO_LIVE_DELAY_MIN_MS: 30000,
-      JUNO_LIVE_DELAY_MAX_MS: 180000,
-      JUNO_LIVE_NAV_TIMEOUT_MS: 45000,
-      JUNO_LIVE_MAX_ATTEMPTS: 2,
-      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: false,
-      JUNO_LIVE_AUTO_ENQUEUE_LIMIT: 1000,
+      AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
+      AUTH_INITIAL_ADMIN_PASSWORD: "password123",
     });
-    expect(env.AUTH_SECRET).toBeUndefined();
-    expect(env.AUTH_BASE_URL).toBeUndefined();
-    expect(env.AUTH_TRUSTED_ORIGINS).toBeUndefined();
-    expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBeUndefined();
-    expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBeUndefined();
-    expect(env.JUNO_LOGIN_EMAIL).toBeUndefined();
-    expect(env.JUNO_LOGIN_PASSWORD).toBeUndefined();
-    expect(env.JUNO_LIVE_POLL_INTERVAL_MS).toBeUndefined();
   });
 
-  it("coerces numeric env values and accepts required database URL", () => {
+  it("ignores removed app env values", () => {
     const env = loadRuntimeEnv({
       ...configuredEnv,
       AUTH_SECRET: "a".repeat(32),
       AUTH_BASE_URL: "https://app.example.com",
-      AUTH_TRUSTED_ORIGINS: "https://app.example.com,https://admin.example.com",
-      AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
-      AUTH_INITIAL_ADMIN_PASSWORD: "password123",
-      AUTH_INITIAL_ADMIN_NAME: "Ops Admin",
-      JUNO_LIVE_ENQUEUE_ON_INGEST: "true",
-      JUNO_LOGIN_EMAIL: "catalog@example.com",
+      AUTH_ENABLED: "false",
+      JUNO_WHOLESALE_OPS_DATA_MODE: "demo",
       JUNO_LOGIN_PASSWORD: "secret",
-      JUNO_BROWSER_HEADLESS: "false",
-      JUNO_LIVE_CONCURRENCY: "4",
-      JUNO_LIVE_POLL_INTERVAL_MS: "300000",
-      JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL: "false",
-      JUNO_LIVE_AUTO_ENQUEUE_LIMIT: "50",
-      JUNO_LIVE_WORKER_COMMAND: "tsx",
-      JUNO_LIVE_WORKER_ARGS: "--loop",
     });
 
-    expect(env.DATABASE_URL).toBe(configuredEnv.DATABASE_URL);
-    expect(env.AUTH_SECRET).toBe("a".repeat(32));
-    expect(env.AUTH_BASE_URL).toBe("https://app.example.com");
-    expect(env.AUTH_TRUSTED_ORIGINS).toBe("https://app.example.com,https://admin.example.com");
-    expect(env.AUTH_INITIAL_ADMIN_EMAIL).toBe("admin@example.com");
-    expect(env.AUTH_INITIAL_ADMIN_PASSWORD).toBe("password123");
-    expect(env.AUTH_INITIAL_ADMIN_NAME).toBe("Ops Admin");
-    expect(env.JUNO_LIVE_ENQUEUE_ON_INGEST).toBe(true);
-    expect(env.JUNO_LOGIN_EMAIL).toBe("catalog@example.com");
-    expect(env.JUNO_LOGIN_PASSWORD).toBe("secret");
-    expect(env.JUNO_BROWSER_HEADLESS).toBe(false);
-    expect(env.JUNO_LIVE_CONCURRENCY).toBe(4);
-    expect(env.JUNO_LIVE_POLL_INTERVAL_MS).toBe(300000);
-    expect(env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL).toBe(false);
-    expect(env.JUNO_LIVE_AUTO_ENQUEUE_LIMIT).toBe(50);
-    expect(env.JUNO_LIVE_WORKER_COMMAND).toBe("tsx");
-    expect(env.JUNO_LIVE_WORKER_ARGS).toBe("--loop");
+    expect(Object.keys(env).sort()).toEqual([
+      "AUTH_INITIAL_ADMIN_EMAIL",
+      "AUTH_INITIAL_ADMIN_PASSWORD",
+      "DATABASE_URL",
+    ]);
+    expect("AUTH_SECRET" in env).toBe(false);
+    expect("AUTH_BASE_URL" in env).toBe(false);
+    expect("AUTH_ENABLED" in env).toBe(false);
+    expect("JUNO_WHOLESALE_OPS_DATA_MODE" in env).toBe(false);
   });
 
-  it("treats blank Juno credentials as unset optional values", () => {
-    const env = loadRuntimeEnv({
-      ...configuredEnv,
-      JUNO_LOGIN_EMAIL: "",
-      JUNO_LOGIN_PASSWORD: "",
-    });
-
-    expect(env.JUNO_LOGIN_EMAIL).toBeUndefined();
-    expect(env.JUNO_LOGIN_PASSWORD).toBeUndefined();
-  });
-
-  it("rejects missing database URLs", () => {
+  it("requires DATABASE_URL", () => {
     expect(() => loadRuntimeEnv({})).toThrow();
   });
 
-  it("accepts non-string boolean values from programmatic overrides", () => {
-    const env = loadRuntimeEnv({
-      ...configuredEnv,
-      JUNO_BROWSER_HEADLESS: true as unknown as string,
-    });
-
-    expect(env.JUNO_BROWSER_HEADLESS).toBe(true);
-  });
-
-  it("rejects invalid boolean strings", () => {
+  it("validates optional initial admin values when present", () => {
     expect(() =>
       loadRuntimeEnv({
         ...configuredEnv,
-        JUNO_BROWSER_HEADLESS: "yes",
+        AUTH_INITIAL_ADMIN_EMAIL: "not-an-email",
+        AUTH_INITIAL_ADMIN_PASSWORD: "short",
       }),
     ).toThrow();
   });
 
-  it("rejects short auth secrets", () => {
-    expect(() =>
-      loadRuntimeEnv({
-        ...configuredEnv,
-        AUTH_SECRET: "too-short",
-      }),
-    ).toThrow();
+  it("returns DATABASE_URL through getDatabaseUrl", () => {
+    expect(getDatabaseUrl(configuredEnv)).toBe(configuredEnv.DATABASE_URL);
   });
 });
 

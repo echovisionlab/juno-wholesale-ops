@@ -70,7 +70,10 @@ export function buildAppAuthOptions(options: {
           providerId: provider.providerId,
           clientId: provider.clientId,
           clientSecret: provider.clientSecret,
-          discoveryUrl: provider.discoveryUrl,
+          discoveryUrl: provider.discoveryUrl || undefined,
+          authorizationUrl: provider.authorizationUrl || undefined,
+          tokenUrl: provider.tokenUrl || undefined,
+          userInfoUrl: provider.userInfoUrl || undefined,
           scopes: provider.scopes,
           mapProfileToUser: (profile): GenericOAuthUserMap => ({
             role: resolveExternalProfileRole(profile, options.settings, provider.providerId),
@@ -107,15 +110,19 @@ export async function getCachedAppAuth(options: {
   settings: AppAuthSettings;
 }) {
   const key = JSON.stringify({
-    databaseUrl: options.databaseUrl,
-    settings: {
-      baseUrl: options.settings.baseUrl,
-      trustedOrigins: options.settings.trustedOrigins,
-      emailPasswordLoginEnabled: options.settings.emailPasswordLoginEnabled,
-      externalProviders: options.settings.externalProviders.map((provider) => ({
-        providerId: provider.providerId,
-        discoveryUrl: provider.discoveryUrl,
-        clientId: provider.clientId,
+      databaseUrl: options.databaseUrl,
+      settings: {
+        secretHash: hashSecret(options.settings.secret ?? ""),
+        baseUrl: options.settings.baseUrl,
+        trustedOrigins: options.settings.trustedOrigins,
+        emailPasswordLoginEnabled: options.settings.emailPasswordLoginEnabled,
+        externalProviders: options.settings.externalProviders.map((provider) => ({
+          providerId: provider.providerId,
+          discoveryUrl: provider.discoveryUrl,
+          authorizationUrl: provider.authorizationUrl,
+          tokenUrl: provider.tokenUrl,
+          userInfoUrl: provider.userInfoUrl,
+          clientId: provider.clientId,
         clientSecretHash: hashSecret(provider.clientSecret),
         scopes: provider.scopes,
         adminRules: provider.adminRules,
@@ -135,9 +142,12 @@ export async function getCachedAppAuth(options: {
 }
 
 function isExternalProviderReady(provider: AppAuthSettings["externalProviders"][number]): boolean {
+  const endpointsReady = provider.protocol === "oauth2"
+    ? isUrl(provider.discoveryUrl) || (isUrl(provider.authorizationUrl) && isUrl(provider.tokenUrl) && isUrl(provider.userInfoUrl))
+    : isUrl(provider.discoveryUrl);
   return Boolean(
     provider?.providerId.trim()
-      && isUrl(provider.discoveryUrl)
+      && endpointsReady
       && provider.clientId.trim()
       && provider.clientSecret.trim(),
   );

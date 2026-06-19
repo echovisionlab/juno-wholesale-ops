@@ -12,31 +12,26 @@ pnpm db:migrate
 pnpm dev
 ```
 
-After migrations, open `/settings`. Runtime configuration is bootstrap for
-infrastructure and explicitly supported operator settings. Saved Postgres
-settings are the primary operator settings surface. Mail ingest uses separate
+After migrations, open `/settings`. Process env is limited to `DATABASE_URL`
+and optional initial admin bootstrap values. Saved Postgres settings are the
+primary operator settings surface. Mail ingest uses separate
 `mail_connection` and `mail_mailbox_source` records, with no env fallback for
 mailbox addresses, Gmail service account JSON, storage directories, or supplier
 codes. The Settings Center shows current editable values directly in inputs,
-masks secrets, and keeps storage/source details in Advanced. Sanitized
-diagnostics JSON is available only under Advanced and can be copied without
-exposing secrets.
+masks secrets, and avoids raw payload dumps.
 
 ## Production Checklist
 
-- Optionally provide a strong `AUTH_SECRET` runtime override. If omitted,
-  startup stores an internal random Better Auth secret in Postgres.
 - Auth is always enabled. Configure an admin bootstrap path through existing
   admin rows, `AUTH_INITIAL_ADMIN_EMAIL`/`AUTH_INITIAL_ADMIN_PASSWORD`, or
   external provider admin mapping.
-- Set the Settings Center `Site address` to the public app URL. `AUTH_BASE_URL`
-  may be used only as a bootstrap value before the database setting exists.
+- Set the Settings Center `Site address` to the public app URL.
 - Register the displayed External SSO callback URL in the provider console when
   enabling Generic OAuth/OIDC.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.
-- Keep Juno credentials in saved secret fields, runtime env, or secret storage.
+- Keep Juno credentials in saved secret fields or private secret storage.
 - Store raw attachments outside the application image.
 - Back up Postgres and attachment storage.
 - Keep browser profile storage private.
