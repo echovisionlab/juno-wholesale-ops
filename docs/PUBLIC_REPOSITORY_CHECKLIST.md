@@ -13,6 +13,7 @@ repository public until the owner explicitly approves that final action.
 - [ ] Secret scanning is enabled.
 - [ ] Dependabot alerts are enabled.
 - [ ] Dependabot open alerts are zero, or remaining alerts have owner-approved accepted risk records with review deadlines.
+- [ ] `RELEASE_PLEASE_TOKEN` is configured, or the owner accepts the `GITHUB_TOKEN` workflow-trigger limitation.
 - [ ] Public issue templates warn against sharing secrets or real wholesale data.
 
 ## Repository Contents
@@ -37,6 +38,6 @@ repository public until the owner explicitly approves that final action.
 - [ ] `pnpm build` passes.
 - [ ] `docker build -t juno-wholesale-ops:local .` passes.
 - [ ] Browser synthetic fixture check completed.
-- [ ] Tag creation approved.
-- [ ] GitHub Release draft prepared.
+- [ ] Release Please PR reviewed and approved.
+- [ ] Release Please-created tag and GitHub Release verified.
 - [ ] Repository visibility change approved after release candidate review.

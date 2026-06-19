@@ -57,8 +57,12 @@ harbor.dsub.io/dsub/juno-wholesale-ops-web:<tag>
 ```
 
 The `Publish Image` GitHub Actions workflow publishes `main` and
-`sha-<commit>` tags on pushes to `main`. Release tags `v*` promote the existing
+`sha-<commit>` tags on pushes to `main`. Release Please owns version bumps,
+release PRs, `v*` tags, and GitHub Releases. Release tags promote the existing
 `sha-<commit>` image for that commit to the release tag instead of rebuilding.
+If Release Please is running with `GITHUB_TOKEN`, the release workflow
+dispatches `publish-image.yml` on the new tag because GitHub suppresses most
+workflow events created by that token.
 Configure these GitHub repository or organization secrets before enabling the
 workflow:
 
@@ -66,6 +70,12 @@ workflow:
 HARBOR_REGISTRY_USERNAME
 HARBOR_REGISTRY_PASSWORD
 ```
+
+Configure `RELEASE_PLEASE_TOKEN` with a maintainer-scoped token if Release
+Please PRs, tags, and GitHub Releases must trigger follow-up GitHub Actions
+workflows through a non-`GITHUB_TOKEN` actor. Without that token, Release Please
+can still run with `GITHUB_TOKEN`, but GitHub may suppress workflows caused by
+release artifacts created by that token.
 
 Release tags also run the Komodo production deploy job after image promotion.
 Configure these GitHub `production` environment secrets if you want tagged
