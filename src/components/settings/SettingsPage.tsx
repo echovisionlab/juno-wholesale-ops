@@ -31,7 +31,6 @@ import {
   Database,
   Globe2,
   MailSearch,
-  RotateCw,
   Save,
   Settings,
   ShieldCheck,
@@ -49,7 +48,7 @@ import type {
 type PatchValue = string | number | boolean | null;
 type DraftValues = Record<string, PatchValue>;
 type ActionResult = Record<string, unknown>;
-type SettingsActionName = "test-gmail" | "test-juno-session" | "refresh-status" | "run-demo-seed";
+type SettingsActionName = "test-gmail" | "test-juno-session" | "run-demo-seed";
 type ActionSummary = {
   title: string;
   detail: string;
@@ -233,7 +232,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         setSettings(payload.settings);
       }
       setDiagnosticsPayload(maskActionResult({ action, httpStatus: response.status, ...payload }));
-      setActionSummary(summarizeAction(action, payload, response.status, payload.settings ?? settings));
+      setActionSummary(summarizeAction(action, payload, response.status));
     } finally {
       setActionPending(null);
     }
@@ -602,9 +601,6 @@ function SettingsActionsPanel({ deploymentMode, pending, summary, onRun }: {
           <Button size="xs" variant="light" loading={pending === "test-juno-session"} onClick={() => onRun("test-juno-session")}>
             Test Juno session
           </Button>
-          <Button size="xs" variant="light" leftSection={<RotateCw size={14} aria-hidden="true" />} loading={pending === "refresh-status"} onClick={() => onRun("refresh-status")}>
-            Refresh status
-          </Button>
           {deploymentMode !== "production" ? (
             <Button size="xs" variant="light" color="gray" loading={pending === "run-demo-seed"} onClick={() => onRun("run-demo-seed")}>
               Run demo seed
@@ -622,7 +618,7 @@ function SettingsActionsPanel({ deploymentMode, pending, summary, onRun }: {
           </>
         ) : (
           <Text size="sm" c="dimmed">
-            Actions refresh status or run read-only smoke checks. Detailed diagnostics are available only under Advanced.
+            Run read-only smoke checks from here. Detailed diagnostics are available only under Advanced.
           </Text>
         )}
       </Stack>
@@ -659,7 +655,7 @@ function AdvancedDiagnosticsPanel({
         </Group>
         {!diagnosticsPayload ? (
           <Alert color="blue" title="No diagnostics captured">
-            Run Refresh status or a read-only smoke check from Overview first.
+            Run a read-only smoke check from Overview first.
           </Alert>
         ) : null}
         {open && diagnosticsPayload ? (
@@ -1482,20 +1478,12 @@ function summarizeAction(
   action: SettingsActionName,
   payload: ActionResult & { settings?: SettingsResponse; error?: string; status?: string; ok?: boolean },
   httpStatus: number,
-  currentSettings: SettingsResponse | null,
 ): ActionSummary {
   if (httpStatus >= 400) {
     return {
-      title: action === "refresh-status" ? "Status refresh failed" : "Action failed",
+      title: "Action failed",
       detail: `API returned ${httpStatus}: ${payload.error ?? "No additional detail returned."}`,
       color: "red",
-    };
-  }
-  if (action === "refresh-status") {
-    return {
-      title: `Status refreshed ${new Date().toLocaleTimeString()}`,
-      detail: currentSettings ? summarizeSettingsHealth(currentSettings) : "Settings cards updated.",
-      color: "green",
     };
   }
   if (action === "run-demo-seed") {
@@ -1517,16 +1505,6 @@ function summarizeAction(
     detail: payload.status ? `Result: ${String(payload.status)}` : "Read-only Juno session preflight completed.",
     color: payload.ok === false ? "yellow" : "green",
   };
-}
-
-function summarizeSettingsHealth(settings: SettingsResponse): string {
-  const sections = buildOverviewUnits(settings);
-  const ready = sections.filter((section) => section.status === "Ready").length;
-  const warnings = sections.filter((section) => section.status === "Needs attention").length
-    + settings.warnings.filter((warning) => warning.severity === "warning").length;
-  const blockers = settings.warnings.filter((warning) => warning.severity === "critical").length
-    + (settings.security.authBootstrap.status === "blocked" ? 1 : 0);
-  return `${ready} sections ready · ${warnings} warning${warnings === 1 ? "" : "s"} · ${blockers} blocker${blockers === 1 ? "" : "s"}`;
 }
 
 function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {

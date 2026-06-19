@@ -57,7 +57,6 @@ import {
 } from "./settings/auth/sso-providers/route";
 import { POST as testGmailSettings } from "./settings/actions/test-gmail/route";
 import { POST as testJunoSessionSettings } from "./settings/actions/test-juno-session/route";
-import { POST as refreshSettingsStatus } from "./settings/actions/refresh-status/route";
 import { POST as runDemoSeedSettings } from "./settings/actions/run-demo-seed/route";
 import {
   DELETE as deleteNotificationChannels,
@@ -269,7 +268,6 @@ describe("admin guarded API routes", () => {
     await expectStatus(deleteMailSources(jsonRequest({ id: "source-1" })), 403);
     await expectStatus(testGmailSettings(jsonRequest({ mode: "smoke" })), 403);
     await expectStatus(testJunoSessionSettings(jsonRequest({ mode: "smoke" })), 403);
-    await expectStatus(refreshSettingsStatus(jsonRequest({})), 403);
     await expectStatus(runDemoSeedSettings(jsonRequest({})), 403);
     await expectStatus(getLiveLookupStatus(request()), 403);
     await expectStatus(getLiveLookupWorker(request()), 403);
@@ -445,11 +443,6 @@ describe("admin guarded API routes", () => {
     await expect(expectJson(testJunoSessionSettings(jsonRequest({ mode: "smoke" })))).resolves.toMatchObject({
       status: 200,
       body: { ok: true, status: "read_only_preflight_passed", readOnly: true },
-    });
-
-    await expect(expectJson(refreshSettingsStatus(jsonRequest({})))).resolves.toMatchObject({
-      status: 200,
-      body: { settings: expect.any(Object), setup: expect.any(Object) },
     });
 
     await expect(expectJson(runDemoSeedSettings(jsonRequest({})))).resolves.toEqual({
