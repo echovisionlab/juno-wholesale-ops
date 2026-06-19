@@ -474,9 +474,13 @@ function describeError(error) {
   return details.join("; ");
 }
 
-function checkSmokeUrl(url, timeoutMs) {
+function checkSmokeUrl(url, timeoutMs, verifyTls) {
   const timeoutSeconds = Math.max(1, Math.ceil(timeoutMs / 1000));
-  const args = ["--fail", "--silent", "--show-error", "--location", "--max-time", String(timeoutSeconds), url];
+  const args = ["--fail", "--silent", "--show-error", "--location", "--max-time", String(timeoutSeconds)];
+  if (!verifyTls) {
+    args.push("--insecure");
+  }
+  args.push(url);
 
   return new Promise((resolve, reject) => {
     const child = spawn("curl", args, { stdio: ["ignore", "ignore", "pipe"] });
@@ -503,6 +507,7 @@ async function checkSmokeUrls(urls, label) {
   const attempts = parsePositiveIntegerEnv("KOMODO_SMOKE_ATTEMPTS", DEFAULT_SMOKE_ATTEMPTS);
   const retryDelayMs = parsePositiveIntegerEnv("KOMODO_SMOKE_RETRY_DELAY_MS", DEFAULT_SMOKE_RETRY_DELAY_MS);
   const timeoutMs = parsePositiveIntegerEnv("KOMODO_SMOKE_TIMEOUT_MS", DEFAULT_SMOKE_TIMEOUT_MS);
+  const verifyTls = parseBoolean(process.env.KOMODO_SMOKE_TLS_VERIFY, true);
 
   for (const url of urls) {
     let lastFailure = "";
@@ -511,7 +516,7 @@ async function checkSmokeUrls(urls, label) {
     for (let attempt = 1; attempt <= attempts; attempt += 1) {
       try {
         console.log(`Smoke ${label} (${attempt}/${attempts}): ${url}`);
-        await checkSmokeUrl(url, timeoutMs);
+        await checkSmokeUrl(url, timeoutMs, verifyTls);
         passed = true;
         break;
       } catch (error) {

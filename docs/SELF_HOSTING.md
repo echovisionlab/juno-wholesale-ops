@@ -103,6 +103,11 @@ must include `DATABASE_URL` before a production deploy can pass. Do not put
 database URLs, supplier credentials, or raw attachment storage paths in GitHub
 Actions secrets.
 
+If the external Caddy layer serves a certificate chain that the GitHub runner
+trust store has not caught up with yet, set the production environment variable
+`KOMODO_SMOKE_TLS_VERIFY=false`. The smoke check still goes through the public
+Caddy route and requires a successful HTTP response.
+
 Production compose should use an immutable image reference such as
 `harbor.dsub.io/dsub/juno-wholesale-ops-web:sha-<commit>` or a reviewed release
 tag.
