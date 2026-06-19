@@ -79,9 +79,9 @@ much domain behavior in one TSX file. The migration target is:
 src/app/settings/page.tsx             # thin route wrapper
 src/features/settings/                # Settings Center workflows
 src/components/core/                  # domain-free primitives
-src/components/settings/SettingsPage  # temporary compatibility export
 ```
 
-The first migration step moved Settings Center into `src/features/settings`.
+The first migration step moved Settings Center into `src/features/settings` and
+removed the old `src/components/settings/SettingsPage` compatibility wrapper.
 Next steps should split mail sources, SSO providers, Juno live, and notification
 settings into focused feature components with Storybook coverage.

@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { SettingsCenter } from "./SettingsCenter";
 import {
+  notificationChannelFixture,
+  notificationRuleFixture,
   settingsFixture,
   settingsInvalidSsoFixture,
   settingsMissingMailSourceFixture,
@@ -29,6 +31,7 @@ export const MissingMailSource: Story = {
   args: {
     initialSettings: settingsMissingMailSourceFixture(),
     initialError: null,
+    initialTab: "mail",
   },
 };
 
@@ -36,6 +39,17 @@ export const SsoProviderNeedsSecret: Story = {
   args: {
     initialSettings: settingsInvalidSsoFixture(),
     initialError: null,
+    initialTab: "auth",
+  },
+};
+
+export const NotificationsConfigured: Story = {
+  args: {
+    initialSettings: settingsFixture(),
+    initialError: null,
+    initialTab: "notifications",
+    initialNotificationChannels: [notificationChannelFixture()],
+    initialNotificationRules: [notificationRuleFixture()],
   },
 };
 

@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from "@storybook/nextjs-vite";
 import { LoginForm } from "./LoginForm";
 
 const meta = {
-  title: "Auth/LoginForm",
+  title: "Feature/Auth/LoginForm",
   component: LoginForm,
   args: {
     redirectTo: "/",

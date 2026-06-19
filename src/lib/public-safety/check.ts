@@ -385,6 +385,7 @@ function isPublicCopyPath(file: string): boolean {
     file.startsWith("docs/") ||
     file.startsWith("src/app/") ||
     file.startsWith("src/components/") ||
+    file.startsWith("src/features/") ||
     file.startsWith(".github/")
   );
 }

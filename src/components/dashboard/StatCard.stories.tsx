@@ -3,7 +3,7 @@ import { MailSearch } from "lucide-react";
 import { StatCard } from "./StatCard";
 
 const meta = {
-  title: "Dashboard/StatCard",
+  title: "Feature/Dashboard/StatCard",
   component: StatCard,
   args: {
     label: "Mailbox",

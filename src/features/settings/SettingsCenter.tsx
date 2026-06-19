@@ -284,9 +284,20 @@ const ssoProviderPresetOptions: Array<{
 type SettingsCenterProps = {
   initialSettings?: SettingsResponse | null;
   initialError?: string | null;
+  initialTab?: SettingsTab;
+  initialNotificationChannels?: NotificationChannel[] | null;
+  initialNotificationRules?: NotificationRule[] | null;
 };
 
-export function SettingsCenter({ initialSettings = null, initialError = null }: SettingsCenterProps) {
+type SettingsTab = "overview" | SettingsGroupId;
+
+export function SettingsCenter({
+  initialSettings = null,
+  initialError = null,
+  initialTab = "overview",
+  initialNotificationChannels = null,
+  initialNotificationRules = null,
+}: SettingsCenterProps) {
   const [settings, setSettings] = useState<SettingsResponse | null>(initialSettings);
   const [draft, setDraft] = useState<DraftValues>({});
   const [error, setError] = useState<string | null>(initialError);
@@ -301,8 +312,8 @@ export function SettingsCenter({ initialSettings = null, initialError = null }: 
   const [editingSsoProviderId, setEditingSsoProviderId] = useState<string | null>(null);
   const [ssoProviderPending, setSsoProviderPending] = useState<string | null>(null);
   const [ssoProviderModalOpen, setSsoProviderModalOpen] = useState(false);
-  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
-  const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(null);
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(initialNotificationChannels);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(initialNotificationRules);
   const [notificationLoading, setNotificationLoading] = useState(false);
   const [notificationPending, setNotificationPending] = useState<string | null>(null);
   const [notificationChannelDraft, setNotificationChannelDraft] = useState<NotificationChannelDraft>(emptyNotificationChannelDraft);
@@ -852,7 +863,7 @@ export function SettingsCenter({ initialSettings = null, initialError = null }: 
             <>
               <SystemStatusStrip settings={settings} />
               <SettingsWarningsPanel warnings={settings.warnings} />
-              <Tabs defaultValue="overview" keepMounted={false}>
+              <Tabs defaultValue={initialTab} keepMounted={false}>
                 <Tabs.List>
                   <Tabs.Tab value="overview">Overview</Tabs.Tab>
                   <Tabs.Tab value="auth">Auth</Tabs.Tab>

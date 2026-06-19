@@ -299,6 +299,7 @@ describe("public safety check", () => {
       { path: "docs/COPY.md", content: "This phrase says order now." },
       { path: "src/components/example.test.tsx", content: "buy" },
       { path: "src/components/example.tsx", content: "Observed signal" },
+      { path: "src/features/settings/example.tsx", content: "sales velocity" },
       { path: "src/lib/public-safety/check.ts", content: "order now" },
     ];
 
@@ -307,6 +308,7 @@ describe("public safety check", () => {
     ]);
     expect(checkProhibitedCopy(textFiles)).toEqual([
       { code: "prohibited-copy", path: "docs/COPY.md", message: "prohibited public copy phrase found" },
+      { code: "prohibited-copy", path: "src/features/settings/example.tsx", message: "prohibited public copy phrase found" },
     ]);
     expect(isLikelyTextPath("README.md")).toBe(true);
     expect(isLikelyTextPath("demo/fixtures/catalog/in-stock-demo.xlsx")).toBe(false);
