@@ -72,6 +72,29 @@ describe("public safety check", () => {
     });
   });
 
+  it("rejects non-string package versions", () => {
+    const issues = runPublicSafetyCheck({
+      trackedFiles: [],
+      textFiles: [
+        {
+          path: "package.json",
+          content: JSON.stringify({
+            version: 1,
+            scripts: { validate: "pnpm public:safety" },
+          }),
+        },
+      ],
+      demoFixtures: [],
+      exists: () => false,
+    });
+
+    expect(issues).toContainEqual({
+      code: "missing-required-section",
+      path: "package.json",
+      message: "package version must be valid semver",
+    });
+  });
+
   it("passes complete release readiness content", () => {
     const requiredFiles = [
       "LICENSE",
@@ -190,7 +213,7 @@ describe("public safety check", () => {
         {
           path: "package.json",
           content: JSON.stringify({
-            version: "0.1.0",
+            version: "0.2.0",
             scripts: { validate: "pnpm lint && pnpm public:safety" },
           }),
         },
@@ -251,7 +274,7 @@ describe("public safety check", () => {
     expect(roadmap).toContain("Auto-ordering");
     expect(roadmap).toContain("Cart automation");
     expect(roadmap).toContain("Checkout automation");
-    expect(packageJson.version).toBe("0.1.0");
+    expect(packageJson.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(packageJson.scripts?.validate).toContain("pnpm public:safety");
     expect(ciWorkflow).toContain("Public safety check");
     expect(ciWorkflow).toContain("pnpm public:safety");
