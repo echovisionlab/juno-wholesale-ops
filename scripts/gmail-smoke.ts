@@ -15,7 +15,7 @@ async function main() {
     throw new Error("No active mail sources are configured.");
   }
   if (gmailSources.length === 0) {
-    throw new Error("No runnable Gmail mailbox sources are configured.");
+    throw new Error("No runnable mail sources are configured for the Gmail Workspace adapter.");
   }
 
   const results = [];

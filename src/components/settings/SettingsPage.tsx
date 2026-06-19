@@ -16,6 +16,7 @@ import {
   NativeSelect,
   NumberInput,
   PasswordInput,
+  Select,
   Stack,
   Switch,
   Table,
@@ -55,6 +56,7 @@ import type {
   MailboxSourcePatch,
   PublicMailboxSource,
 } from "@/lib/ingest/mail-source";
+import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type {
   NotificationChannel,
@@ -91,6 +93,7 @@ type MailSourceDraft = {
   supplierCode: string;
   isActive: boolean;
 };
+type MailSourceTestState = MailSourceConnectionTestResult | null;
 type SsoProviderDraft = {
   id?: string;
   providerId: string;
@@ -158,9 +161,9 @@ const emptyMailSourceDraft: MailSourceDraft = {
 
 const mailProviderOptions: Array<{ value: MailProvider; label: string }> = [
   { value: "gmail", label: "Gmail Workspace" },
-  { value: "imap", label: "IMAP" },
-  { value: "microsoft_graph", label: "Microsoft Graph" },
-  { value: "generic", label: "Generic mailbox" },
+  { value: "imap", label: "IMAP (adapter pending)" },
+  { value: "microsoft_graph", label: "Microsoft Graph (adapter pending)" },
+  { value: "generic", label: "Generic mailbox (adapter pending)" },
 ];
 
 const mailAuthTypeOptions: Array<{ value: MailAuthType; label: string }> = [
@@ -274,6 +277,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
   const [mailSourceDraft, setMailSourceDraft] = useState<MailSourceDraft>(emptyMailSourceDraft);
+  const [mailSourceTest, setMailSourceTest] = useState<MailSourceTestState>(null);
   const [editingMailSourceId, setEditingMailSourceId] = useState<string | null>(null);
   const [mailSourcePending, setMailSourcePending] = useState<string | null>(null);
   const [mailSourceModalOpen, setMailSourceModalOpen] = useState(false);
@@ -393,16 +397,58 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     }
   }
 
+  function updateMailSourceDraft(draft: MailSourceDraft) {
+    setMailSourceDraft(draft);
+    setMailSourceTest(null);
+  }
+
+  async function testMailSourceDraft() {
+    const editing = Boolean(editingMailSourceId);
+    const payload = mailSourcePayload(mailSourceDraft, editing);
+    setMailSourcePending("test");
+    setError(null);
+    setMailSourceTest(null);
+    try {
+      const response = await fetch("/api/mail-sources/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        test?: MailSourceConnectionTestResult;
+        error?: string;
+      };
+      if (!result.test) {
+        const message = result.error ?? `Mail source test returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Connection test failed", message });
+        return;
+      }
+      setMailSourceTest(result.test);
+      notifications.show({
+        color: result.test.ok ? "green" : "yellow",
+        title: result.test.ok ? "Connection ready" : "Connection test failed",
+        message: result.test.error ?? result.test.status,
+      });
+    } finally {
+      setMailSourcePending(null);
+    }
+  }
+
   async function saveMailSource() {
     const editing = Boolean(editingMailSourceId);
     const payload = mailSourcePayload(mailSourceDraft, editing);
+    if (!mailSourceTest?.ok) {
+      notifications.show({ color: "yellow", title: "Test connection first", message: "Save is blocked until the connection test passes." });
+      return;
+    }
     setMailSourcePending(editing ? editingMailSourceId : "new");
     setError(null);
     try {
       const response = await fetch("/api/mail-sources", {
         method: editing ? "PATCH" : "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ ...payload, connectionTestPassed: true }),
       });
       const result = (await response.json().catch(() => ({}))) as {
         error?: string;
@@ -415,6 +461,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       }
       await loadSettings();
       setMailSourceDraft(emptyMailSourceDraft);
+      setMailSourceTest(null);
       setEditingMailSourceId(null);
       setMailSourceModalOpen(false);
       notifications.show({ color: "green", title: editing ? "Mail source updated" : "Mail source created", message: "Saved" });
@@ -839,17 +886,20 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                           <MailSourcesCard
                             settings={settings}
                             draft={mailSourceDraft}
+                            testResult={mailSourceTest}
                             editingId={editingMailSourceId}
                             pending={mailSourcePending}
                             modalOpen={mailSourceModalOpen}
-                            onDraftChange={setMailSourceDraft}
+                            onDraftChange={updateMailSourceDraft}
                             onAdd={() => {
                               setMailSourceDraft(emptyMailSourceDraft);
+                              setMailSourceTest(null);
                               setEditingMailSourceId(null);
                               setMailSourceModalOpen(true);
                             }}
                             onEdit={(source) => {
                               setMailSourceDraft(mailSourceToDraft(source));
+                              setMailSourceTest(null);
                               setEditingMailSourceId(source.id);
                               setMailSourceModalOpen(true);
                             }}
@@ -857,12 +907,15 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                               setMailSourceModalOpen(false);
                               setEditingMailSourceId(null);
                               setMailSourceDraft(emptyMailSourceDraft);
+                              setMailSourceTest(null);
                             }}
+                            onTest={() => void testMailSourceDraft()}
                             onSave={() => void saveMailSource()}
                             onCancel={() => {
                               setMailSourceModalOpen(false);
                               setEditingMailSourceId(null);
                               setMailSourceDraft(emptyMailSourceDraft);
+                              setMailSourceTest(null);
                             }}
                             onToggle={(id, isActive) => void toggleMailSource(id, isActive)}
                           />
@@ -1452,6 +1505,14 @@ function presetLabel(value: string): string {
   return ssoProviderPresetOptions.find((preset) => preset.value === value)?.label ?? value;
 }
 
+function formatMailProvider(provider: MailProvider): string {
+  return mailProviderOptions.find((option) => option.value === provider)?.label.replace(" (adapter pending)", "") ?? provider;
+}
+
+function formatMailAuthType(authType: MailAuthType): string {
+  return mailAuthTypeOptions.find((option) => option.value === authType)?.label ?? authType;
+}
+
 function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
   return {
     id: source.id,
@@ -1544,6 +1605,7 @@ function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSou
 function MailSourcesCard({
   settings,
   draft,
+  testResult,
   editingId,
   pending,
   modalOpen,
@@ -1551,12 +1613,14 @@ function MailSourcesCard({
   onAdd,
   onEdit,
   onModalClose,
+  onTest,
   onSave,
   onCancel,
   onToggle,
 }: {
   settings: SettingsResponse;
   draft: MailSourceDraft;
+  testResult: MailSourceTestState;
   editingId: string | null;
   pending: string | null;
   modalOpen: boolean;
@@ -1564,12 +1628,15 @@ function MailSourcesCard({
   onAdd: () => void;
   onEdit: (source: PublicMailboxSource) => void;
   onModalClose: () => void;
+  onTest: () => void;
   onSave: () => void;
   onCancel: () => void;
   onToggle: (id: string, isActive: boolean) => void;
 }) {
   const sources = settings.mailSources;
   const runnableCount = sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length;
+  const providerImplemented = draft.provider === "gmail";
+  const testReady = Boolean(testResult?.ok);
   return (
     <Card>
       <Stack gap="sm">
@@ -1614,8 +1681,8 @@ function MailSourcesCard({
                       <Text fw={600}>{source.displayName ?? source.mailboxAddress}</Text>
                       <Text size="xs" c="dimmed">{source.mailboxAddress}</Text>
                     </Table.Td>
-                    <Table.Td>{source.provider}</Table.Td>
-                    <Table.Td>{source.authType}</Table.Td>
+                    <Table.Td>{formatMailProvider(source.provider)}</Table.Td>
+                    <Table.Td>{formatMailAuthType(source.authType)}</Table.Td>
                     <Table.Td>
                       <Badge color={source.credentialConfigured ? "green" : "red"} variant="light" size="xs">
                         {source.credentialConfigured ? "configured" : "missing"}
@@ -1654,118 +1721,153 @@ function MailSourcesCard({
 
         <Text size="sm" c="dimmed">{settings.units.mail.detail}</Text>
         <Modal opened={modalOpen} onClose={onModalClose} title={editingId ? "Edit mail source" : "Add mail source"} size="lg" transitionProps={{ duration: 0 }}>
-          <Stack gap="sm">
-            <ResponsiveGrid minWidth={240} gap="sm">
-              <TextInput
-                label="Source name"
-                value={draft.name}
-                onChange={(event) => onDraftChange({ ...draft, name: event.currentTarget.value })}
+          <Stack gap="md">
+            <Stack gap="xs">
+              <Text fw={700}>Provider</Text>
+              <ResponsiveGrid minWidth={240} gap="sm">
+                <Select
+                  label="Provider adapter"
+                  value={draft.provider}
+                  data={mailProviderOptions}
+                  allowDeselect={false}
+                  onChange={(value) => value && onDraftChange(applyMailProviderPreset(draft, value as MailProvider))}
+                />
+                <TextInput
+                  label="Source name"
+                  value={draft.name}
+                  onChange={(event) => onDraftChange({ ...draft, name: event.currentTarget.value })}
+                />
+                <Switch
+                  label="Active"
+                  checked={draft.isActive}
+                  onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
+                />
+              </ResponsiveGrid>
+              {!providerImplemented ? (
+                <Alert color="yellow" title="Adapter pending">
+                  Save requires a connection test; this adapter is not implemented yet.
+                </Alert>
+              ) : null}
+            </Stack>
+
+            <Divider />
+
+            <Stack gap="xs">
+              <Text fw={700}>Connection</Text>
+              <ResponsiveGrid minWidth={240} gap="sm">
+                <TextInput
+                  label="Mailbox address"
+                  value={draft.mailboxAddress}
+                  onChange={(event) => onDraftChange({ ...draft, mailboxAddress: event.currentTarget.value })}
+                />
+                <TextInput
+                  label="Display name"
+                  value={draft.displayName}
+                  onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
+                />
+                <NativeSelect
+                  label="Auth type"
+                  value={draft.authType}
+                  data={mailAuthTypeOptions}
+                  disabled={draft.provider === "gmail"}
+                  onChange={(event) => onDraftChange({ ...draft, authType: event.currentTarget.value as MailAuthType })}
+                />
+                <NativeSelect
+                  label="Credential type"
+                  value={draft.credentialType}
+                  data={mailCredentialTypeOptions}
+                  disabled={draft.provider === "gmail"}
+                  onChange={(event) => onDraftChange({ ...draft, credentialType: event.currentTarget.value as MailCredentialType })}
+                />
+              </ResponsiveGrid>
+              <PasswordInput
+                label={editingId ? "New credential secret" : "Credential secret"}
+                placeholder={editingId ? "Current credential stays configured" : undefined}
+                value={draft.credentialSecret}
+                onChange={(event) => onDraftChange({ ...draft, credentialSecret: event.currentTarget.value })}
               />
-              <NativeSelect
-                label="Provider"
-                value={draft.provider}
-                data={mailProviderOptions}
-                onChange={(event) => onDraftChange(applyMailProviderPreset(draft, event.currentTarget.value as MailProvider))}
-              />
-              <NativeSelect
-                label="Auth type"
-                value={draft.authType}
-                data={mailAuthTypeOptions}
-                onChange={(event) => onDraftChange({ ...draft, authType: event.currentTarget.value as MailAuthType })}
-              />
-              <NativeSelect
-                label="Credential type"
-                value={draft.credentialType}
-                data={mailCredentialTypeOptions}
-                onChange={(event) => onDraftChange({ ...draft, credentialType: event.currentTarget.value as MailCredentialType })}
-              />
-              <TextInput
-                label="Mailbox address"
-                value={draft.mailboxAddress}
-                onChange={(event) => onDraftChange({ ...draft, mailboxAddress: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Display name"
-                value={draft.displayName}
-                onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Provider mailbox ID"
-                value={draft.providerMailboxId}
-                onChange={(event) => onDraftChange({ ...draft, providerMailboxId: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Query"
-                value={draft.query}
-                onChange={(event) => onDraftChange({ ...draft, query: event.currentTarget.value })}
-              />
-              <NumberInput
-                label="Max results"
-                value={draft.maxResults}
-                allowDecimal={false}
-                min={1}
-                max={500}
-                onChange={(value) => onDraftChange({ ...draft, maxResults: typeof value === "number" ? value : 25 })}
-              />
-              <NumberInput
-                label="Lookback ms"
-                value={draft.lookbackMs}
-                allowDecimal={false}
-                min={1}
-                onChange={(value) => onDraftChange({ ...draft, lookbackMs: typeof value === "number" ? value : 604800000 })}
-              />
-              <TextInput
-                label="Processed label"
-                value={draft.processedLabel}
-                onChange={(event) => onDraftChange({ ...draft, processedLabel: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Storage dir"
-                value={draft.storageDir}
-                onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Attachment pattern"
-                value={draft.attachmentPattern}
-                onChange={(event) => onDraftChange({ ...draft, attachmentPattern: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Supplier code"
-                value={draft.supplierCode}
-                onChange={(event) => onDraftChange({ ...draft, supplierCode: event.currentTarget.value })}
-              />
-              <Switch
-                label="Active"
-                checked={draft.isActive}
-                onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
-              />
-            </ResponsiveGrid>
-            <Textarea
-              label={editingId ? "New credential secret" : "Credential secret"}
-              minRows={4}
-              placeholder={editingId ? "Current credential stays configured" : "Paste credential content"}
-              value={draft.credentialSecret}
-              onChange={(event) => onDraftChange({ ...draft, credentialSecret: event.currentTarget.value })}
-            />
-            <ResponsiveGrid minWidth={240} gap="sm">
               <TextInput
                 label="Credential reference"
                 value={draft.credentialReference}
                 onChange={(event) => onDraftChange({ ...draft, credentialReference: event.currentTarget.value })}
               />
-              <TextInput
-                label="Scopes"
-                value={draft.scopes}
-                onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
-              />
-            </ResponsiveGrid>
-            <Group justify="flex-end">
-              <Button variant="light" color="gray" onClick={onCancel}>
-                Cancel
+            </Stack>
+
+            <Divider />
+
+            <Stack gap="xs">
+              <Text fw={700}>Ingest</Text>
+              <ResponsiveGrid minWidth={240} gap="sm">
+                <TextInput
+                  label="Query"
+                  value={draft.query}
+                  onChange={(event) => onDraftChange({ ...draft, query: event.currentTarget.value })}
+                />
+                <TextInput
+                  label="Attachment pattern"
+                  value={draft.attachmentPattern}
+                  onChange={(event) => onDraftChange({ ...draft, attachmentPattern: event.currentTarget.value })}
+                />
+                <NumberInput
+                  label="Max results"
+                  value={draft.maxResults}
+                  allowDecimal={false}
+                  min={1}
+                  max={500}
+                  onChange={(value) => onDraftChange({ ...draft, maxResults: typeof value === "number" ? value : 25 })}
+                />
+                <NumberInput
+                  label="Lookback days"
+                  value={Math.max(1, Math.round(draft.lookbackMs / 86400000))}
+                  allowDecimal={false}
+                  min={1}
+                  onChange={(value) => onDraftChange({ ...draft, lookbackMs: (typeof value === "number" ? value : 7) * 86400000 })}
+                />
+                <TextInput
+                  label="Supplier code"
+                  value={draft.supplierCode}
+                  onChange={(event) => onDraftChange({ ...draft, supplierCode: event.currentTarget.value })}
+                />
+                <TextInput
+                  label="Storage dir"
+                  value={draft.storageDir}
+                  onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
+                />
+              </ResponsiveGrid>
+            </Stack>
+
+            {draft.provider === "gmail" ? (
+              <>
+                <Divider />
+                <Stack gap="xs">
+                  <Text fw={700}>Gmail Workspace</Text>
+                  <TextInput
+                    label="Scopes"
+                    value={draft.scopes}
+                    onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
+                  />
+                </Stack>
+              </>
+            ) : null}
+
+            {testResult ? (
+              <Alert color={testResult.ok ? "green" : "yellow"} title={testResult.ok ? "Connection ready" : "Connection test failed"}>
+                {testResult.ok ? `${testResult.messageCount ?? 0} message${testResult.messageCount === 1 ? "" : "s"} matched.` : testResult.error ?? testResult.status}
+              </Alert>
+            ) : null}
+
+            <Group justify="space-between">
+              <Button variant="light" loading={pending === "test"} onClick={onTest}>
+                Test connection
               </Button>
-              <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingId ?? "new")} onClick={onSave}>
-                {editingId ? "Save source" : "Create source"}
-              </Button>
+              <Group>
+                <Button variant="light" color="gray" onClick={onCancel}>
+                  Cancel
+                </Button>
+                <Button leftSection={<Save size={16} aria-hidden="true" />} disabled={!testReady} loading={pending === (editingId ?? "new")} onClick={onSave}>
+                  {editingId ? "Save source" : "Create source"}
+                </Button>
+              </Group>
             </Group>
           </Stack>
         </Modal>

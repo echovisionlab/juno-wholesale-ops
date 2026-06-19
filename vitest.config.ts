@@ -49,6 +49,7 @@ export default defineConfig({
         "src/lib/ingest/gmail.ts",
         "src/lib/ingest/google-auth.ts",
         "src/lib/ingest/juno-parser.ts",
+        "src/lib/ingest/mail-source-test.ts",
         "src/lib/ingest/settings.ts",
         "src/lib/insights/normalize.ts",
         "src/lib/insights/movement.ts",
