@@ -1,7 +1,7 @@
 import type { RuntimeEnv } from "@/lib/env";
-import { parseScopes } from "@/lib/env";
+import { redactSsoProvider, type PublicSsoProvider, type SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import { settingDefinitions, type SettingsGroup, type SettingsResponse, type DataMode, type IntegrationUnitStatus } from "./descriptors";
-import { resolveSettingDescriptor, hasSettingValue, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
+import { resolveSettingDescriptor, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
 import type { ServiceSettingsRow, SettingsGroupId, NextAction } from "./descriptors";
 import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
@@ -16,14 +16,15 @@ export function buildSettingsResponse(options: {
   currentRequestOrigin?: string | null;
   adminUserCount?: number | null;
   mailSources?: PublicMailboxSource[];
+  ssoProviders?: SsoProviderRecord[];
 }): SettingsResponse {
   const dataMode = resolveDataMode(options.settingsRow, options.env);
   const mailSources = options.mailSources ?? [];
-  const externalProviderEnabled = options.settingsRow?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
+  const ssoProviders = options.ssoProviders ?? [];
   const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow, options.env);
   const context: SettingResolutionContext = {
     dataMode,
-    externalProviderEnabled,
+    externalProviderEnabled: ssoProviders.some((provider) => provider.enabled),
     junoLookupEnabled,
   };
   const descriptors = settingDefinitions.map((definition) =>
@@ -77,7 +78,7 @@ export function buildSettingsResponse(options: {
         : "Real mailbox mode. At least one runnable mail source is required.",
     },
     units: {
-      authProvider: buildAuthProviderUnit(options.settingsRow, options.env),
+      authProvider: buildAuthProviderUnit(options.settingsRow, options.env, ssoProviders),
       mail: buildMailUnit(mailSources, dataMode),
       junoLive: buildJunoUnit(groups, junoLookupEnabled),
       notifications: {
@@ -93,10 +94,8 @@ export function buildSettingsResponse(options: {
       authBootstrap: buildAuthBootstrapStatus({
         initialAdminConfigured: Boolean(options.env.AUTH_INITIAL_ADMIN_EMAIL && options.env.AUTH_INITIAL_ADMIN_PASSWORD),
         adminUserCount: options.adminUserCount ?? null,
-        externalProviderEnabled,
-        adminAllowlistConfigured: hasSettingValue(options.settingsRow?.auth_admin_email_allowlist ?? options.env.AUTH_ADMIN_EMAIL_ALLOWLIST),
-        adminClaimConfigured: hasSettingValue(options.settingsRow?.auth_external_admin_claim ?? options.env.AUTH_EXTERNAL_ADMIN_CLAIM)
-          && hasSettingValue(options.settingsRow?.auth_external_admin_claim_value ?? options.env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
+        externalProviderEnabled: ssoProviders.some((provider) => provider.enabled),
+        providerAdminRuleConfigured: ssoProviders.some((provider) => provider.adminRules.length > 0),
       }),
     },
     mailSources,
@@ -235,69 +234,61 @@ function descriptorByKey(settings: SettingsGroup["settings"], key: string) {
   return settings.find((setting) => setting.key === key);
 }
 
-function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv): SettingsResponse["units"]["authProvider"] {
-  const enabled = row?.auth_external_provider_enabled ?? env.AUTH_EXTERNAL_PROVIDER_ENABLED;
-  const providerId = trimOptional(row?.auth_external_provider_id ?? env.AUTH_EXTERNAL_PROVIDER_ID);
-  const displayName = trimOptional(row?.auth_external_provider_name ?? env.AUTH_EXTERNAL_PROVIDER_NAME) ?? providerId ?? "External provider";
-  const buttonLabel = trimOptional(row?.auth_external_provider_button_label ?? env.AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL) ?? `Continue with ${displayName}`;
+function buildAuthProviderUnit(row: ServiceSettingsRow | null, env: RuntimeEnv, providers: SsoProviderRecord[]): SettingsResponse["units"]["authProvider"] {
   const baseUrl = resolveAppBaseUrl(row, env);
-  const clientId = trimOptional(row?.auth_external_client_id ?? env.AUTH_EXTERNAL_CLIENT_ID);
-  const discoveryUrl = trimOptional(row?.auth_external_discovery_url ?? env.AUTH_EXTERNAL_DISCOVERY_URL);
-  const clientSecretConfigured = hasSettingValue(row?.auth_external_client_secret ?? env.AUTH_EXTERNAL_CLIENT_SECRET);
-  const invalid = [
-    discoveryUrl && !isUrl(discoveryUrl) ? "discovery URL" : null,
-    baseUrl && !isUrl(baseUrl) ? "site address" : null,
-  ].filter(Boolean);
-  const missing = [
-    providerId ? null : "provider id",
-    discoveryUrl ? null : "discovery URL",
-    clientId ? null : "client ID",
-    clientSecretConfigured ? null : "client secret",
-    baseUrl ? null : "site address",
-  ].filter(Boolean);
-  const status: IntegrationUnitStatus = !enabled
+  const publicProviders = providers.map((provider) => redactSsoProvider(provider, baseUrl)).map(toSsoProviderUnit);
+  const enabledProviderCount = publicProviders.filter((provider) => provider.enabled).length;
+  const readyProviderCount = publicProviders.filter((provider) => provider.status === "ready").length;
+  const status: IntegrationUnitStatus = enabledProviderCount === 0
     ? "disabled"
-    : missing.length > 0
-      ? "missing"
-      : invalid.length > 0
+    : readyProviderCount > 0
+      ? "ready"
+      : publicProviders.some((provider) => provider.status === "invalid")
         ? "invalid"
-        : "ready";
+        : "missing";
 
   return {
     id: "auth_provider",
-    label: "Auth Provider",
-    providerType: "generic_oauth_oidc",
-    enabled,
+    label: "Auth SSO Providers",
     status,
-    displayName,
-    buttonLabel,
-    providerId: providerId ?? null,
-    logoUrl: trimOptional(row?.auth_external_provider_logo_url ?? env.AUTH_EXTERNAL_PROVIDER_LOGO_URL) ?? null,
-    discoveryUrl: discoveryUrl ?? null,
-    clientId: clientId ?? null,
-    clientSecretConfigured,
-    scopes: parseScopes(row?.auth_external_provider_scopes ?? env.AUTH_EXTERNAL_PROVIDER_SCOPES),
-    callbackUrl: baseUrl && providerId ? `${baseUrl.replace(/\/+$/, "")}/api/auth/oauth2/callback/${providerId}` : null,
-    adminEmailAllowlistConfigured: hasSettingValue(row?.auth_admin_email_allowlist ?? env.AUTH_ADMIN_EMAIL_ALLOWLIST),
-    adminClaimMappingConfigured: hasSettingValue(row?.auth_external_admin_claim ?? env.AUTH_EXTERNAL_ADMIN_CLAIM)
-      && hasSettingValue(row?.auth_external_admin_claim_value ?? env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
-    detail: enabled
-      ? missing.length > 0
-        ? `Missing ${missing.join(", ")}.`
-        : invalid.length > 0
-          ? `Invalid ${invalid.join(", ")}.`
-        : "Generic OAuth/OIDC sign-in is ready."
-      : "External auth provider is disabled.",
+    providerCount: publicProviders.length,
+    enabledProviderCount,
+    readyProviderCount,
+    providers: publicProviders,
+    detail: readyProviderCount > 0
+      ? `${readyProviderCount} SSO provider${readyProviderCount === 1 ? "" : "s"} ready for the Sign in page.`
+      : enabledProviderCount > 0
+        ? "Enabled SSO providers need valid discovery, client, secret, and Site address settings."
+        : "External SSO providers are optional and currently disabled.",
   };
 }
 
-function isUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
+function toSsoProviderUnit(provider: PublicSsoProvider): SettingsResponse["units"]["authProvider"]["providers"][number] {
+  const emailAllowlist = provider.adminRules
+    .filter((rule) => rule.type === "email_allowlist")
+    .map((rule) => rule.value);
+  const claimRule = provider.adminRules.find((rule) => rule.type === "claim_equals")?.value ?? null;
+  const [adminClaim, ...adminClaimValueParts] = claimRule?.split("=") ?? [];
+  return {
+    id: provider.id,
+    providerId: provider.providerId,
+    displayName: provider.displayName,
+    buttonLabel: provider.buttonLabel,
+    logoUrl: provider.logoUrl,
+    enabled: provider.enabled,
+    status: provider.status,
+    discoveryUrl: provider.discoveryUrl,
+    clientId: provider.clientId,
+    clientSecretConfigured: provider.clientSecretConfigured,
+    scopes: provider.scopes,
+    callbackUrl: provider.callbackUrl,
+    adminEmailAllowlist: emailAllowlist,
+    adminClaim: adminClaim || null,
+    adminClaimValue: adminClaimValueParts.join("=") || null,
+    sortOrder: provider.sortOrder,
+    missing: provider.missing,
+    invalid: provider.invalid,
+  };
 }
 
 function buildMailUnit(sources: PublicMailboxSource[], dataMode: DataMode): SettingsResponse["units"]["mail"] {
@@ -364,11 +355,10 @@ function buildAuthBootstrapStatus(options: {
   initialAdminConfigured: boolean;
   adminUserCount: number | null;
   externalProviderEnabled: boolean;
-  adminAllowlistConfigured: boolean;
-  adminClaimConfigured: boolean;
+  providerAdminRuleConfigured: boolean;
 }): SettingsResponse["security"]["authBootstrap"] {
   const hasExistingAdmin = (options.adminUserCount ?? 0) > 0;
-  const hasExternalAdminMapping = options.externalProviderEnabled && (options.adminAllowlistConfigured || options.adminClaimConfigured);
+  const hasExternalAdminMapping = options.externalProviderEnabled && options.providerAdminRuleConfigured;
 
   if (hasExistingAdmin || options.initialAdminConfigured || hasExternalAdminMapping) {
     return {
@@ -391,9 +381,4 @@ function buildAuthBootstrapStatus(options: {
     hasExternalAdminMapping: false,
     detail: "Auth bootstrap blocked. No admin access path configured.",
   };
-}
-
-function trimOptional(value: string | undefined | null): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
 }

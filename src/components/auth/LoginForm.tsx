@@ -24,12 +24,12 @@ export type LoginExternalProvider = {
 export function LoginForm({
   redirectTo,
   loginLogoUrl = null,
-  externalProvider = null,
+  externalProviders = [],
   navigateTo = (url) => window.location.assign(url),
 }: {
   redirectTo: string;
   loginLogoUrl?: string | null;
-  externalProvider?: LoginExternalProvider | null;
+  externalProviders?: LoginExternalProvider[];
   navigateTo?: (url: string) => void;
 }) {
   const [email, setEmail] = useState("");
@@ -67,10 +67,7 @@ export function LoginForm({
     }
   }
 
-  async function startExternalSignIn() {
-    if (!externalProvider) {
-      return;
-    }
+  async function startExternalSignIn(externalProvider: LoginExternalProvider) {
     setExternalPending(true);
     setError(null);
 
@@ -121,17 +118,20 @@ export function LoginForm({
             </Alert>
           ) : null}
 
-          {externalProvider ? (
+          {externalProviders.length > 0 ? (
             <>
-              <Button
-                type="button"
-                variant="light"
-                loading={externalPending}
-                leftSection={externalProvider.logoUrl ? <Image src={externalProvider.logoUrl} alt="" fit="contain" w={18} h={18} /> : <LogIn size={16} aria-hidden="true" />}
-                onClick={() => void startExternalSignIn()}
-              >
-                {externalProvider.buttonLabel}
-              </Button>
+              {externalProviders.map((externalProvider) => (
+                <Button
+                  key={externalProvider.providerId}
+                  type="button"
+                  variant="light"
+                  loading={externalPending}
+                  leftSection={externalProvider.logoUrl ? <Image src={externalProvider.logoUrl} alt="" fit="contain" w={18} h={18} /> : <LogIn size={16} aria-hidden="true" />}
+                  onClick={() => void startExternalSignIn(externalProvider)}
+                >
+                  {externalProvider.buttonLabel}
+                </Button>
+              ))}
               <Divider label="or" labelPosition="center" />
             </>
           ) : null}

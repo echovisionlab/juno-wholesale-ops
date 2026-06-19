@@ -61,22 +61,21 @@ export function buildAppAuthOptions(options: {
   settings: AppAuthSettings;
 }) {
   const plugins = [];
+  const readyProviders = options.settings.externalProviders.filter(isExternalProviderReady);
 
-  if (options.settings.externalProvider && isExternalProviderReady(options.settings.externalProvider)) {
+  if (readyProviders.length > 0) {
     plugins.push(
       genericOAuth({
-        config: [
-          {
-            providerId: options.settings.externalProvider.providerId,
-            clientId: options.settings.externalProvider.clientId,
-            clientSecret: options.settings.externalProvider.clientSecret,
-            discoveryUrl: options.settings.externalProvider.discoveryUrl,
-            scopes: options.settings.externalProvider.scopes,
-            mapProfileToUser: (profile): GenericOAuthUserMap => ({
-              role: resolveExternalProfileRole(profile, options.settings),
-            }),
-          },
-        ],
+        config: readyProviders.map((provider) => ({
+          providerId: provider.providerId,
+          clientId: provider.clientId,
+          clientSecret: provider.clientSecret,
+          discoveryUrl: provider.discoveryUrl,
+          scopes: provider.scopes,
+          mapProfileToUser: (profile): GenericOAuthUserMap => ({
+            role: resolveExternalProfileRole(profile, options.settings, provider.providerId),
+          }),
+        })),
       }),
     );
   }
@@ -93,7 +92,7 @@ export function buildAppAuthOptions(options: {
       type: "postgres" as const,
     },
     emailAndPassword: {
-      enabled: true,
+      enabled: options.settings.emailPasswordLoginEnabled,
     },
     user: appAuthSchema.user,
     session: appAuthSchema.session,
@@ -112,16 +111,15 @@ export async function getCachedAppAuth(options: {
     settings: {
       baseUrl: options.settings.baseUrl,
       trustedOrigins: options.settings.trustedOrigins,
-      externalProviderEnabled: options.settings.externalProviderEnabled,
-      externalProvider: options.settings.externalProvider
-        ? {
-            providerId: options.settings.externalProvider.providerId,
-            discoveryUrl: options.settings.externalProvider.discoveryUrl,
-            clientId: options.settings.externalProvider.clientId,
-            clientSecretHash: hashSecret(options.settings.externalProvider.clientSecret),
-            scopes: options.settings.externalProvider.scopes,
-          }
-        : null,
+      emailPasswordLoginEnabled: options.settings.emailPasswordLoginEnabled,
+      externalProviders: options.settings.externalProviders.map((provider) => ({
+        providerId: provider.providerId,
+        discoveryUrl: provider.discoveryUrl,
+        clientId: provider.clientId,
+        clientSecretHash: hashSecret(provider.clientSecret),
+        scopes: provider.scopes,
+        adminRules: provider.adminRules,
+      })),
     },
   });
 
@@ -136,7 +134,7 @@ export async function getCachedAppAuth(options: {
   return auth;
 }
 
-function isExternalProviderReady(provider: AppAuthSettings["externalProvider"]): boolean {
+function isExternalProviderReady(provider: AppAuthSettings["externalProviders"][number]): boolean {
   return Boolean(
     provider?.providerId.trim()
       && isUrl(provider.discoveryUrl)

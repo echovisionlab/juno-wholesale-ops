@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadRuntimeEnv } from "@/lib/env";
+import type { SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import { serviceSettingColumns, settingDefinitions, type ServiceSettingsRow } from "./descriptors";
 import { buildSettingsResponse } from "./response";
 import { validateSettingsPatch } from "./validation";
@@ -63,11 +64,6 @@ describe("settings response and validation", () => {
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
       AUTH_BASE_URL: "https://runtime.example.test",
-      AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-      AUTH_EXTERNAL_PROVIDER_ID: "runtime-provider",
-      AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.test/.well-known/openid-configuration",
-      AUTH_EXTERNAL_CLIENT_ID: "runtime-client",
-      AUTH_EXTERNAL_CLIENT_SECRET: "runtime-client-secret",
     });
     const response = buildSettingsResponse({
       env,
@@ -75,39 +71,31 @@ describe("settings response and validation", () => {
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://runtime.example.test",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_CLIENT_SECRET: "runtime-client-secret",
       },
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://inventory-dev.example.test",
-        auth_external_provider_id: "workspace",
-        auth_external_provider_name: "Workspace",
-        auth_external_provider_button_label: "Sign in with Workspace",
-        auth_external_client_id: "client-id",
-        auth_external_client_secret: "db-client-secret",
       },
       nodeEnv: "development",
       currentRequestOrigin: "https://inventory-dev.example.test",
       adminUserCount: 1,
+      ssoProviders: [ssoProvider()],
     });
 
     expect(response.units.authProvider).toMatchObject({
-      enabled: true,
       status: "ready",
+      providerCount: 1,
+      enabledProviderCount: 1,
+      readyProviderCount: 1,
+    });
+    expect(response.units.authProvider.providers[0]).toMatchObject({
       displayName: "Workspace",
       buttonLabel: "Sign in with Workspace",
       providerId: "workspace",
       clientSecretConfigured: true,
       callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
     });
-    expect(descriptor(response, "auth_external_client_secret")).toMatchObject({
-      displayValue: "Saved setting configured",
-      value: null,
-      secret: true,
-    });
     expect(JSON.stringify(response)).not.toContain("db-client-secret");
-    expect(JSON.stringify(response)).not.toContain("runtime-client-secret");
   });
 
   it("marks malformed external provider URLs invalid instead of ready", () => {
@@ -117,19 +105,17 @@ describe("settings response and validation", () => {
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://inventory-dev.example.test",
-        auth_external_provider_enabled: true,
-        auth_external_provider_id: "workspace",
-        auth_external_discovery_url: "not-a-url",
-        auth_external_client_id: "client-id",
-        auth_external_client_secret: "db-client-secret",
       },
       nodeEnv: "development",
+      ssoProviders: [ssoProvider({ discoveryUrl: "not-a-url" })],
     });
 
     expect(response.units.authProvider).toMatchObject({
-      enabled: true,
       status: "invalid",
-      detail: "Invalid discovery URL.",
+    });
+    expect(response.units.authProvider.providers[0]).toMatchObject({
+      status: "invalid",
+      invalid: ["discovery URL"],
       callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
     });
   });
@@ -202,13 +188,16 @@ describe("settings response and validation", () => {
       env: runtimeEnv({
         AUTH_SECRET: "x".repeat(32),
         AUTH_BASE_URL: "https://app.example.test",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.test",
       }),
       rawEnv: {},
       settingsRow: emptySettingsRow(),
       nodeEnv: "production",
       adminUserCount: 0,
+      ssoProviders: [
+        ssoProvider({
+          adminRules: [{ id: "rule-1", type: "email_allowlist", value: "admin@example.test" }],
+        }),
+      ],
     });
     expect(allowlist.security.authBootstrap).toMatchObject({
       status: "ready",
@@ -352,6 +341,27 @@ function descriptor(response: ReturnType<typeof buildSettingsResponse>, key: str
   return setting;
 }
 
+function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRecord {
+  return {
+    id: "provider-id",
+    providerId: "workspace",
+    displayName: "Workspace",
+    buttonLabel: "Sign in with Workspace",
+    logoUrl: null,
+    discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+    clientId: "client-id",
+    clientSecret: "db-client-secret",
+    clientSecretConfigured: true,
+    scopes: ["openid", "email", "profile"],
+    enabled: true,
+    sortOrder: 0,
+    adminRules: [],
+    createdAt: "2026-06-19T00:00:00.000Z",
+    updatedAt: "2026-06-19T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
 function emptySettingsRow(): ServiceSettingsRow {
   return {
     data_mode: null,
@@ -371,19 +381,8 @@ function emptySettingsRow(): ServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_external_provider_enabled: null,
-    auth_external_provider_id: null,
-    auth_external_provider_name: null,
+    auth_email_password_login_enabled: true,
     auth_login_logo_url: null,
-    auth_external_provider_logo_url: null,
-    auth_external_provider_button_label: null,
-    auth_external_discovery_url: null,
-    auth_external_client_id: null,
-    auth_external_client_secret: null,
-    auth_external_provider_scopes: null,
-    auth_admin_email_allowlist: null,
-    auth_external_admin_claim: null,
-    auth_external_admin_claim_value: null,
     updated_at: null,
   };
 }

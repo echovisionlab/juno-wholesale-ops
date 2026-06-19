@@ -163,9 +163,6 @@ function isDefinitionRequired(
   if (definition.requiredWhen === "real_mailbox") {
     return context.dataMode === "real_mailbox";
   }
-  if (definition.requiredWhen === "external_provider_enabled") {
-    return context.externalProviderEnabled;
-  }
   if (definition.requiredWhen === "juno_lookup_enabled") {
     return context.junoLookupEnabled;
   }

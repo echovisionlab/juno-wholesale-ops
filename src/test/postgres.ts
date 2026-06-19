@@ -51,6 +51,8 @@ export async function resetApplicationTables(pool: Pool): Promise<void> {
       mail_mailbox_ingest_state,
       mail_mailbox_source,
       mail_connection,
+      auth_sso_admin_rule,
+      auth_sso_provider,
       supplier,
       processing_run
     RESTART IDENTITY CASCADE

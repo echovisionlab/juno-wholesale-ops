@@ -1,6 +1,7 @@
 import { Box, Center } from "@mantine/core";
 import { LoginForm, type LoginExternalProvider } from "@/components/auth/LoginForm";
 import { normalizeLoginLogoUrl } from "@/lib/auth/login-logo";
+import { listSsoProviders, redactSsoProvider } from "@/lib/auth/sso-provider-repository";
 import { resolveAppAuthSettings } from "@/lib/auth/settings";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { getServiceSettings } from "@/lib/settings/repository";
@@ -22,7 +23,7 @@ export default async function LoginPage({
         <LoginForm
           redirectTo={redirectTo}
           loginLogoUrl={loginSettings.loginLogoUrl}
-          externalProvider={loginSettings.externalProvider}
+          externalProviders={loginSettings.externalProviders}
         />
       </Center>
     </Box>
@@ -44,48 +45,27 @@ function normalizeRedirect(value: string | undefined): string {
 
 async function loadLoginSettings(): Promise<{
   loginLogoUrl: string | null;
-  externalProvider: LoginExternalProvider | null;
+  externalProviders: LoginExternalProvider[];
 }> {
   try {
     const databaseUrl = getDatabaseUrl();
     const env = loadRuntimeEnv(process.env);
     const row = await getServiceSettings(databaseUrl);
-    const settings = resolveAppAuthSettings(env, row);
-    const provider = settings.externalProvider;
+    const providers = await listSsoProviders(databaseUrl);
+    const settings = resolveAppAuthSettings(env, row, { ssoProviders: providers });
+    const baseUrl = settings.baseUrl ?? null;
     return {
       loginLogoUrl: normalizeLoginLogoUrl(row?.auth_login_logo_url),
-      externalProvider: provider && isLoginExternalProviderReady(settings)
-        ? {
-            providerId: provider.providerId,
-            buttonLabel: provider.buttonLabel,
-            logoUrl: provider.logoUrl ?? null,
-          }
-        : null,
+      externalProviders: providers
+        .map((provider) => redactSsoProvider(provider, baseUrl))
+        .filter((provider) => provider.status === "ready")
+        .map((provider) => ({
+          providerId: provider.providerId,
+          buttonLabel: provider.buttonLabel,
+          logoUrl: provider.logoUrl ?? null,
+        })),
     };
   } catch {
-    return { loginLogoUrl: null, externalProvider: null };
-  }
-}
-
-function isLoginExternalProviderReady(settings: ReturnType<typeof resolveAppAuthSettings>): boolean {
-  const provider = settings.externalProvider;
-  return Boolean(
-    settings.externalProviderEnabled &&
-    settings.baseUrl &&
-    isUrl(settings.baseUrl) &&
-    provider?.providerId &&
-    provider.discoveryUrl &&
-    isUrl(provider.discoveryUrl) &&
-    provider.clientId &&
-    provider.clientSecret,
-  );
-}
-
-function isUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
+    return { loginLogoUrl: null, externalProviders: [] };
   }
 }

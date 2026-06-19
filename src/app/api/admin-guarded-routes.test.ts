@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireAdmin } from "@/lib/auth/admin";
+import {
+  createSsoProvider,
+  deleteSsoProvider,
+  listSsoProviders,
+  updateSsoProvider,
+} from "@/lib/auth/sso-provider-repository";
 import { createMailboxSource, deleteMailboxSource, listMailboxSources, updateMailboxSource } from "@/lib/ingest/mail-source";
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
@@ -43,6 +49,12 @@ import { GET as getTrendInsights } from "./insights/trends/route";
 import { GET as getSettingsStatus } from "./settings/status/route";
 import { GET as getSettings, PATCH as patchSettings } from "./settings/route";
 import { GET as getSettingsSecurityBootstrap } from "./settings/security/bootstrap/route";
+import {
+  DELETE as deleteSettingsSsoProviders,
+  GET as getSettingsSsoProviders,
+  PATCH as patchSettingsSsoProviders,
+  POST as postSettingsSsoProviders,
+} from "./settings/auth/sso-providers/route";
 import { POST as testGmailSettings } from "./settings/actions/test-gmail/route";
 import { POST as testJunoSessionSettings } from "./settings/actions/test-juno-session/route";
 import { POST as refreshSettingsStatus } from "./settings/actions/refresh-status/route";
@@ -78,6 +90,15 @@ import {
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: vi.fn(),
+}));
+
+vi.mock("@/lib/auth/sso-provider-repository", () => ({
+  createSsoProvider: vi.fn(),
+  deleteSsoProvider: vi.fn(),
+  listSsoProviders: vi.fn(),
+  redactSsoProvider: vi.fn((provider) => provider),
+  updateSsoProvider: vi.fn(),
+  validateSsoProviderInput: vi.fn(() => []),
 }));
 
 vi.mock("@/lib/ingest/repository", () => ({
@@ -153,6 +174,10 @@ vi.mock("@/lib/settings/repository", () => ({
 }));
 
 const requireAdminMock = vi.mocked(requireAdmin);
+const createSsoProviderMock = vi.mocked(createSsoProvider);
+const deleteSsoProviderMock = vi.mocked(deleteSsoProvider);
+const listSsoProvidersMock = vi.mocked(listSsoProviders);
+const updateSsoProviderMock = vi.mocked(updateSsoProvider);
 const createMailboxSourceMock = vi.mocked(createMailboxSource);
 const deleteMailboxSourceMock = vi.mocked(deleteMailboxSource);
 const listMailboxSourcesMock = vi.mocked(listMailboxSources);
@@ -201,6 +226,10 @@ describe("admin guarded API routes", () => {
     vi.resetAllMocks();
     vi.stubEnv("DATABASE_URL", "postgres://user:pass@localhost:5432/app");
     requireAdminMock.mockResolvedValue({ authorized: true, user: null });
+    listSsoProvidersMock.mockResolvedValue([]);
+    createSsoProviderMock.mockResolvedValue({} as never);
+    updateSsoProviderMock.mockResolvedValue({} as never);
+    deleteSsoProviderMock.mockResolvedValue({ deleted: true });
     listMailboxSourcesMock.mockResolvedValue([]);
     createMailboxSourceMock.mockResolvedValue(mailSource());
     updateMailboxSourceMock.mockResolvedValue(mailSource());
@@ -229,6 +258,10 @@ describe("admin guarded API routes", () => {
     await expectStatus(getSettingsStatus(request()), 403);
     await expectStatus(getSettings(request()), 403);
     await expectStatus(getSettingsSecurityBootstrap(request()), 403);
+    await expectStatus(getSettingsSsoProviders(request()), 403);
+    await expectStatus(postSettingsSsoProviders(jsonRequest({ providerId: "workspace" })), 403);
+    await expectStatus(patchSettingsSsoProviders(jsonRequest({ id: "provider-1", enabled: false })), 403);
+    await expectStatus(deleteSettingsSsoProviders(jsonRequest({ id: "provider-1" })), 403);
     await expectStatus(patchSettings(jsonRequest({ auth: { auth_base_url: "https://app.example.test" } })), 403);
     await expectStatus(getMailSources(request()), 403);
     await expectStatus(postMailSources(jsonRequest({ name: "Mail", provider: "gmail" })), 403);
@@ -289,6 +322,10 @@ describe("admin guarded API routes", () => {
     expect(dispatchQueuedNotificationsMock).not.toHaveBeenCalled();
     expect(ensureServiceSettingsRowMock).not.toHaveBeenCalled();
     expect(updateServiceSettingsMock).not.toHaveBeenCalled();
+    expect(listSsoProvidersMock).not.toHaveBeenCalled();
+    expect(createSsoProviderMock).not.toHaveBeenCalled();
+    expect(updateSsoProviderMock).not.toHaveBeenCalled();
+    expect(deleteSsoProviderMock).not.toHaveBeenCalled();
     expect(seedDemoDataMock).not.toHaveBeenCalled();
     expect(withJunoLiveRepositoryMock).not.toHaveBeenCalled();
     expect(getJunoLiveWorkerProcessManagerMock).not.toHaveBeenCalled();
@@ -325,14 +362,12 @@ describe("admin guarded API routes", () => {
       ...emptySettingsRow(),
       juno_login_email: "buyer@example.test",
       juno_login_password: "db-juno-password",
-      auth_external_client_secret: "db-client-secret",
     });
 
     const settingsResponse = await expectJson(getSettings(request()));
     expect(settingsResponse.status).toBe(200);
     expect(JSON.stringify(settingsResponse.body)).toContain("Saved setting configured");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-juno-password");
-    expect(JSON.stringify(settingsResponse.body)).not.toContain("db-client-secret");
 
     countAdminUsersMock.mockRejectedValueOnce(new Error("count failed"));
     await expect(expectJson(getSettingsStatus(request()))).resolves.toMatchObject({
@@ -1135,19 +1170,8 @@ function emptySettingsRow(): ServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_external_provider_enabled: null,
-    auth_external_provider_id: null,
-    auth_external_provider_name: null,
+    auth_email_password_login_enabled: true,
     auth_login_logo_url: null,
-    auth_external_provider_logo_url: null,
-    auth_external_provider_button_label: null,
-    auth_external_discovery_url: null,
-    auth_external_client_id: null,
-    auth_external_client_secret: null,
-    auth_external_provider_scopes: null,
-    auth_admin_email_allowlist: null,
-    auth_external_admin_claim: null,
-    auth_external_admin_claim_value: null,
     updated_at: null,
   };
 }

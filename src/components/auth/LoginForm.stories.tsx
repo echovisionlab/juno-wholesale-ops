@@ -7,7 +7,7 @@ const meta = {
   args: {
     redirectTo: "/",
     loginLogoUrl: null,
-    externalProvider: null,
+    externalProviders: [],
   },
 } satisfies Meta<typeof LoginForm>;
 
@@ -19,10 +19,12 @@ export const Default: Story = {};
 
 export const WithExternalProvider: Story = {
   args: {
-    externalProvider: {
-      providerId: "workspace",
-      buttonLabel: "Sign in with Workspace",
-      logoUrl: null,
-    },
+    externalProviders: [
+      {
+        providerId: "workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: null,
+      },
+    ],
   },
 };

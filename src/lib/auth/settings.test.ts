@@ -9,7 +9,7 @@ import {
   splitList,
   type AuthServiceSettingsRow,
 } from "./settings";
-
+import type { SsoProviderRecord } from "./sso-provider-repository";
 
 function runtimeEnv(overrides: Record<string, string | boolean | number | undefined> = {}) {
   return loadRuntimeEnv({
@@ -19,59 +19,48 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 }
 
 describe("resolveAppAuthSettings", () => {
-  it("defaults to always-on auth with local email/password without exposing the internal secret as an operator setting", () => {
-    const settings = resolveAppAuthSettings(
-      runtimeEnv({ DATABASE_URL: "postgres://user:pass@localhost:5432/app" }),
-      null,
-    );
+  it("requires site address while keeping email/password enabled by default", () => {
+    const settings = resolveAppAuthSettings(runtimeEnv(), null);
 
-    expect(settings.externalProvider).toBeNull();
+    expect(settings.emailPasswordLoginEnabled).toBe(true);
+    expect(settings.externalProviders).toEqual([]);
     expect(getMissingAppAuthSettings(settings)).toEqual(["auth_base_url"]);
     expect(isAppAuthRunnable(settings)).toBe(false);
   });
 
-  it("resolves complete env-based external provider settings", () => {
+  it("resolves DB-managed auth secret, site address, initial admin, and SSO providers", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
         AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_TRUSTED_ORIGINS: "https://app.example.com\nhttps://admin.example.com",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
-        AUTH_EXTERNAL_PROVIDER_NAME: "Workspace",
-        AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL: "Sign in with Workspace",
-        AUTH_EXTERNAL_PROVIDER_LOGO_URL: "https://login.example.com/logo.png",
-        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
-        AUTH_EXTERNAL_CLIENT_ID: "client-id",
-        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
-        AUTH_EXTERNAL_PROVIDER_SCOPES: "openid email profile groups",
-        AUTH_ADMIN_EMAIL_ALLOWLIST: "admin@example.com",
-        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
-        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops",
+        AUTH_BASE_URL: "https://env.example.com",
         AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
         AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
-      null,
+      {
+        ...emptyRow(),
+        auth_base_url: "https://db.example.com",
+        auth_trusted_origins: "https://db.example.com\nhttps://admin.example.com",
+      },
+      { ssoProviders: [ssoProvider()] },
     );
 
     expect(settings).toMatchObject({
       secret: "a".repeat(32),
-      baseUrl: "https://app.example.com",
-      trustedOrigins: ["https://app.example.com", "https://admin.example.com"],
-      externalProviderEnabled: true,
-      externalProvider: {
-        providerId: "workspace",
-        name: "Workspace",
-        buttonLabel: "Sign in with Workspace",
-        logoUrl: "https://login.example.com/logo.png",
-        discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
-        clientId: "client-id",
-        clientSecret: "client-secret",
-        scopes: ["openid", "email", "profile", "groups"],
-      },
-      adminEmailAllowlist: ["admin@example.com"],
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "ops",
+      baseUrl: "https://db.example.com",
+      trustedOrigins: ["https://db.example.com", "https://admin.example.com"],
+      emailPasswordLoginEnabled: true,
+      externalProviders: [
+        expect.objectContaining({
+          providerId: "workspace",
+          name: "Workspace",
+          buttonLabel: "Sign in with Workspace",
+          logoUrl: "https://login.example.com/logo.png",
+          discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
+          clientId: "client-id",
+          clientSecret: "client-secret",
+          scopes: ["openid", "email", "profile", "groups"],
+        }),
+      ],
       initialAdmin: {
         email: "admin@example.com",
         password: "password123",
@@ -82,117 +71,53 @@ describe("resolveAppAuthSettings", () => {
     expect(isAppAuthRunnable(settings)).toBe(true);
   });
 
-  it("lets database settings override env auth settings", () => {
+  it("reflects the DB email/password policy", () => {
     const settings = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://env.example.com",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "false",
-      }),
-      {
-        ...emptyRow(),
-        auth_base_url: "https://db.example.com",
-        auth_external_provider_enabled: true,
-        auth_external_provider_id: "oidc",
-        auth_external_provider_name: "OIDC",
-        auth_external_discovery_url: "https://oidc.example.com/.well-known/openid-configuration",
-        auth_external_client_id: "db-client",
-        auth_external_client_secret: "db-secret",
-      },
+      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
+      { ...emptyRow(), auth_email_password_login_enabled: false },
+      { ssoProviders: [ssoProvider()] },
     );
 
-    expect(settings.baseUrl).toBe("https://db.example.com");
-    expect(settings.externalProvider).toMatchObject({
-      providerId: "oidc",
-      name: "OIDC",
-      clientId: "db-client",
-    });
+    expect(settings.emailPasswordLoginEnabled).toBe(false);
+    expect(isAppAuthRunnable(settings)).toBe(true);
   });
 
-  it("keeps auth runnable when external provider is enabled but incomplete", () => {
+  it("does not use env fallback for SSO providers", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv({
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
+        AUTH_INITIAL_ADMIN_EMAIL: "admin@example.com",
+        AUTH_INITIAL_ADMIN_PASSWORD: "password123",
       }),
-      null,
+      emptyRow(),
     );
 
-    expect(settings.externalProviderEnabled).toBe(true);
-    expect(settings.externalProvider).toMatchObject({
-      providerId: "",
+    expect(settings.externalProviders).toEqual([]);
+  });
+
+  it("normalizes enabled SSO providers with missing optional credentials to blank runtime config values", () => {
+    const settings = resolveAppAuthSettings(
+      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
+      emptyRow(),
+      {
+        ssoProviders: [
+          ssoProvider({
+            logoUrl: null,
+            discoveryUrl: null,
+            clientId: null,
+            clientSecret: null,
+            clientSecretConfigured: false,
+          }),
+        ],
+      },
+    );
+
+    expect(settings.externalProviders[0]).toMatchObject({
+      logoUrl: undefined,
       discoveryUrl: "",
       clientId: "",
       clientSecret: "",
     });
-    expect(getMissingAppAuthSettings(settings)).toEqual([]);
-    expect(isAppAuthRunnable(settings)).toBe(true);
-  });
-
-  it("keeps email/password auth runnable when an enabled external provider is incomplete", () => {
-    const settings = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
-      {
-        ...emptyRow(),
-        auth_external_provider_enabled: true,
-        auth_external_provider_id: "workspace",
-        auth_external_discovery_url: "not-a-url",
-        auth_external_client_id: "client-id",
-      },
-    );
-
-    expect(settings.externalProviderEnabled).toBe(true);
-    expect(settings.externalProvider).toMatchObject({
-      providerId: "workspace",
-      discoveryUrl: "not-a-url",
-      clientId: "client-id",
-      clientSecret: "",
-    });
-    expect(getMissingAppAuthSettings(settings)).toEqual([]);
-    expect(isAppAuthRunnable(settings)).toBe(true);
-  });
-
-  it("keeps auth runnable when enabled external provider discovery URL is malformed", () => {
-    const settings = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
-      {
-        ...emptyRow(),
-        auth_external_provider_enabled: true,
-        auth_external_provider_id: "workspace",
-        auth_external_discovery_url: "not-a-url",
-        auth_external_client_id: "client-id",
-        auth_external_client_secret: "client-secret",
-      },
-    );
-
-    expect(getMissingAppAuthSettings(settings)).toEqual([]);
-    expect(isAppAuthRunnable(settings)).toBe(true);
-  });
-
-  it("defaults external provider scopes to an empty list", () => {
-    const settings = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_SECRET: "a".repeat(32),
-        AUTH_BASE_URL: "https://app.example.com",
-      }),
-      {
-        ...emptyRow(),
-        auth_external_provider_enabled: true,
-        auth_external_provider_id: "workspace",
-        auth_external_discovery_url: "https://login.example.com/.well-known/openid-configuration",
-        auth_external_client_id: "client-id",
-        auth_external_client_secret: "client-secret",
-        auth_external_provider_scopes: "",
-      },
-    );
-
-    expect(settings.externalProvider?.scopes).toEqual([]);
   });
 
   it("splits blank external provider scopes as an empty list", () => {
@@ -200,50 +125,20 @@ describe("resolveAppAuthSettings", () => {
     expect(splitScopeList("")).toEqual([]);
   });
 
-  it("maps external provider profiles to admin only through configured allowlist or claim mapping", () => {
+  it("maps external provider profiles to admin only through provider-scoped rules", () => {
     const base = resolveAppAuthSettings(
-      runtimeEnv({
-        AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_PROVIDER_ID: "workspace",
-        AUTH_EXTERNAL_DISCOVERY_URL: "https://login.example.com/.well-known/openid-configuration",
-        AUTH_EXTERNAL_CLIENT_ID: "client-id",
-        AUTH_EXTERNAL_CLIENT_SECRET: "client-secret",
-      }),
-      null,
+      runtimeEnv({ AUTH_BASE_URL: "https://app.example.com" }),
+      emptyRow(),
+      { ssoProviders: [ssoProvider()] },
     );
 
-    expect(resolveExternalProfileRole({ email: "admin@example.com", groups: ["ops"] }, base)).toBe("user");
-    expect(resolveExternalProfileRole({ email: "admin@example.com" }, {
-      ...base,
-      adminEmailAllowlist: ["admin@example.com"],
-    })).toBe("admin");
-    expect(resolveExternalProfileRole({ email: "user@example.com", groups: ["ops"] }, {
-      ...base,
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "ops",
-    })).toBe("admin");
-    expect(resolveExternalProfileRole({ email: "user@example.com", groups: "ops,staff" }, {
-      ...base,
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "staff",
-    })).toBe("admin");
-    expect(resolveExternalProfileRole(null, {
-      ...base,
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "ops",
-    })).toBe("user");
-    expect(resolveExternalProfileRole(["ops"], {
-      ...base,
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "ops",
-    })).toBe("user");
-    expect(resolveExternalProfileRole({ email: true, groups: 42 }, {
-      ...base,
-      adminEmailAllowlist: ["admin@example.com"],
-      externalAdminClaim: "groups",
-      externalAdminClaimValue: "ops",
-    })).toBe("user");
+    expect(resolveExternalProfileRole({ email: "other@example.com", groups: ["ops"] }, base, "workspace")).toBe("admin");
+    expect(resolveExternalProfileRole({ email: "other@example.com", groups: "staff, ops" }, base, "workspace")).toBe("admin");
+    expect(resolveExternalProfileRole({ email: "admin@example.com" }, base, "workspace")).toBe("admin");
+    expect(resolveExternalProfileRole({ email: "admin@example.com" }, base, "other")).toBe("user");
+    expect(resolveExternalProfileRole(null, base, "workspace")).toBe("user");
+    expect(resolveExternalProfileRole(["ops"], base, "workspace")).toBe("user");
+    expect(resolveExternalProfileRole({ email: true, groups: 42 }, base, "workspace")).toBe("user");
   });
 });
 
@@ -259,17 +154,30 @@ function emptyRow(): AuthServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_external_provider_enabled: null,
-    auth_external_provider_id: null,
-    auth_external_provider_name: null,
-    auth_external_provider_logo_url: null,
-    auth_external_provider_button_label: null,
-    auth_external_discovery_url: null,
-    auth_external_client_id: null,
-    auth_external_client_secret: null,
-    auth_external_provider_scopes: null,
-    auth_admin_email_allowlist: null,
-    auth_external_admin_claim: null,
-    auth_external_admin_claim_value: null,
+    auth_email_password_login_enabled: true,
+  };
+}
+
+function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRecord {
+  return {
+    id: "provider-id",
+    providerId: "workspace",
+    displayName: "Workspace",
+    buttonLabel: "Sign in with Workspace",
+    logoUrl: "https://login.example.com/logo.png",
+    discoveryUrl: "https://login.example.com/.well-known/openid-configuration",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    clientSecretConfigured: true,
+    scopes: ["openid", "email", "profile", "groups"],
+    enabled: true,
+    sortOrder: 0,
+    adminRules: [
+      { id: "rule-1", type: "email_allowlist", value: "admin@example.com" },
+      { id: "rule-2", type: "claim_equals", value: "groups=ops" },
+    ],
+    createdAt: "2026-06-19T00:00:00.000Z",
+    updatedAt: "2026-06-19T00:00:00.000Z",
+    ...overrides,
   };
 }

@@ -1,4 +1,5 @@
 import { loadRuntimeEnv } from "@/lib/env";
+import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import { buildAppSetupStatus } from "@/lib/setup/status";
@@ -21,6 +22,7 @@ export async function POST(request: Request) {
   const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
   const adminUserCount = await countAdminUsers(database.databaseUrl).catch(() => null);
+  const ssoProviders = await listSsoProviders(database.databaseUrl);
 
   return Response.json({
     settings: buildSettingsResponse({
@@ -30,7 +32,8 @@ export async function POST(request: Request) {
       nodeEnv: process.env.NODE_ENV ?? "development",
       currentRequestOrigin: getRequestOrigin(request),
       adminUserCount,
+      ssoProviders,
     }),
-    setup: buildAppSetupStatus({ env, settingsRow, adminUserCount }),
+    setup: buildAppSetupStatus({ env, settingsRow, adminUserCount, ssoProviders }),
   });
 }

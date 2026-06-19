@@ -57,11 +57,13 @@ describe("LoginForm", () => {
     vi.stubGlobal("fetch", fetchMock);
     const navigateTo = vi.fn();
 
-    await renderLoginForm(null, {
-      providerId: "workspace",
-      buttonLabel: "Sign in with Workspace",
-      logoUrl: "https://assets.example.test/workspace.svg",
-    }, navigateTo);
+    await renderLoginForm(null, [
+      {
+        providerId: "workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: "https://assets.example.test/workspace.svg",
+      },
+    ], navigateTo);
 
     expect(pageText()).toContain("Sign in with Workspace");
     await clickButton("Sign in with Workspace");
@@ -77,13 +79,13 @@ describe("LoginForm", () => {
 
 async function renderLoginForm(
   loginLogoUrl: string | null = null,
-  externalProvider: ComponentProps<typeof LoginForm>["externalProvider"] = null,
+  externalProviders: ComponentProps<typeof LoginForm>["externalProviders"] = [],
   navigateTo?: ComponentProps<typeof LoginForm>["navigateTo"],
 ): Promise<void> {
   await act(async () => {
     root.render(
       <MantineProvider defaultColorScheme="light" theme={theme}>
-        <LoginForm redirectTo="/" loginLogoUrl={loginLogoUrl} externalProvider={externalProvider} navigateTo={navigateTo} />
+        <LoginForm redirectTo="/" loginLogoUrl={loginLogoUrl} externalProviders={externalProviders} navigateTo={navigateTo} />
       </MantineProvider>,
     );
   });

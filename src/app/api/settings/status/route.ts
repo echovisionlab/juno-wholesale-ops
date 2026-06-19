@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/auth/admin";
 import { loadRuntimeEnv } from "@/lib/env";
+import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { listMailboxSources, redactMailboxSource } from "@/lib/ingest/mail-source";
 import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { countAdminUsers } from "@/lib/settings/repository";
@@ -17,6 +18,7 @@ export async function GET(request: Request) {
   const settingsRow = await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow());
   const adminUserCount = await countAdminUsers(env.DATABASE_URL).catch(() => null);
   const mailSources = (await listMailboxSources(env.DATABASE_URL)).map(redactMailboxSource);
+  const ssoProviders = await listSsoProviders(env.DATABASE_URL);
 
   return Response.json({
     setup: buildAppSetupStatus({
@@ -24,6 +26,7 @@ export async function GET(request: Request) {
       settingsRow,
       adminUserCount,
       mailSources,
+      ssoProviders,
     }),
   });
 }
