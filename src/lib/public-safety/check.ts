@@ -292,8 +292,13 @@ function checkRequiredDocumentSections(textFiles: PublicSafetyTextFile[]): Publi
     ...missingPhrases("docs/ROADMAP.md", byPath.get("docs/ROADMAP.md") ?? "", requiredRoadmapPhrases),
   );
   const packageJson = byPath.get("package.json") ?? "";
-  if (!/"version"\s*:\s*"0\.1\.0"/.test(packageJson)) {
-    issues.push({ code: "missing-required-section", path: "package.json", message: "package version must remain 0.1.0" });
+  const packageVersion = readPackageVersion(packageJson);
+  if (!packageVersion || !isValidSemver(packageVersion)) {
+    issues.push({
+      code: "missing-required-section",
+      path: "package.json",
+      message: "package version must be valid semver",
+    });
   }
   if (!/"validate"\s*:\s*"[^"]*pnpm public:safety/.test(packageJson)) {
     issues.push({ code: "missing-required-section", path: "package.json", message: "validate script must include pnpm public:safety" });
@@ -338,6 +343,19 @@ function missingPhrases(
       path,
       message: `missing required release phrase: ${phrase}`,
     }));
+}
+
+function readPackageVersion(packageJson: string): string | null {
+  try {
+    const parsed = JSON.parse(packageJson) as { version?: unknown };
+    return typeof parsed.version === "string" ? parsed.version : null;
+  } catch {
+    return null;
+  }
+}
+
+function isValidSemver(version: string): boolean {
+  return /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/.test(version);
 }
 
 export function checkProhibitedCopy(textFiles: PublicSafetyTextFile[]): PublicSafetyIssue[] {
