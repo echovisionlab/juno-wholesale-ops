@@ -35,6 +35,8 @@ import {
   Save,
   Settings,
   ShieldCheck,
+  Plus,
+  Trash2,
 } from "lucide-react";
 import type {
   SettingsGroup,
@@ -53,6 +55,38 @@ type ActionSummary = {
   detail: string;
   color: "green" | "yellow" | "red" | "blue";
 };
+type SsoProviderDraft = {
+  id?: string;
+  providerId: string;
+  displayName: string;
+  buttonLabel: string;
+  logoUrl: string;
+  discoveryUrl: string;
+  clientId: string;
+  clientSecret: string;
+  scopes: string;
+  enabled: boolean;
+  sortOrder: number;
+  adminEmailAllowlist: string;
+  adminClaim: string;
+  adminClaimValue: string;
+};
+
+const emptySsoProviderDraft: SsoProviderDraft = {
+  providerId: "",
+  displayName: "",
+  buttonLabel: "",
+  logoUrl: "",
+  discoveryUrl: "",
+  clientId: "",
+  clientSecret: "",
+  scopes: "openid email profile",
+  enabled: false,
+  sortOrder: 0,
+  adminEmailAllowlist: "",
+  adminClaim: "",
+  adminClaimValue: "",
+};
 
 type SettingsPageProps = {
   initialSettings?: SettingsResponse | null;
@@ -69,6 +103,9 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [diagnosticsPayload, setDiagnosticsPayload] = useState<ActionResult | null>(null);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<string | null>(null);
+  const [ssoProviderDraft, setSsoProviderDraft] = useState<SsoProviderDraft>(emptySsoProviderDraft);
+  const [editingSsoProviderId, setEditingSsoProviderId] = useState<string | null>(null);
+  const [ssoProviderPending, setSsoProviderPending] = useState<string | null>(null);
   const shouldLoadOnClient = !initialSettings && !initialError;
 
   const loadSettings = useCallback(async () => {
@@ -202,6 +239,70 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     }
   }
 
+  async function saveSsoProvider() {
+    const editing = Boolean(editingSsoProviderId);
+    const payload = {
+      ...ssoProviderDraft,
+      id: editingSsoProviderId ?? undefined,
+      adminEmailAllowlist: ssoProviderDraft.adminEmailAllowlist,
+      adminClaim: ssoProviderDraft.adminClaim,
+      adminClaimValue: ssoProviderDraft.adminClaimValue,
+    };
+    if (editing && payload.clientSecret.trim() === "") {
+      delete (payload as Partial<SsoProviderDraft>).clientSecret;
+    }
+    setSsoProviderPending(editing ? editingSsoProviderId : "new");
+    setError(null);
+    try {
+      const response = await fetch("/api/settings/auth/sso-providers", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        settings?: SettingsResponse;
+        error?: string;
+        issues?: string[];
+      };
+      if (!response.ok || !result.settings) {
+        setError(result.issues?.join(" ") ?? result.error ?? `SSO provider save returned ${response.status}`);
+        return;
+      }
+      setSettings(result.settings);
+      setSsoProviderDraft(emptySsoProviderDraft);
+      setEditingSsoProviderId(null);
+    } finally {
+      setSsoProviderPending(null);
+    }
+  }
+
+  async function deleteSsoProvider(id: string) {
+    setSsoProviderPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/settings/auth/sso-providers", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        settings?: SettingsResponse;
+        error?: string;
+      };
+      if (!response.ok || !result.settings) {
+        setError(result.error ?? `SSO provider delete returned ${response.status}`);
+        return;
+      }
+      setSettings(result.settings);
+      if (editingSsoProviderId === id) {
+        setSsoProviderDraft(emptySsoProviderDraft);
+        setEditingSsoProviderId(null);
+      }
+    } finally {
+      setSsoProviderPending(null);
+    }
+  }
+
   async function copyDiagnostics() {
     if (!diagnosticsPayload) {
       return;
@@ -293,7 +394,23 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                         {groupId === "auth" ? (
                           <>
                             <AuthAccessCards settings={settings} />
-                            <AuthProviderCard settings={settings} />
+                            <AuthProviderCard
+                              settings={settings}
+                              draft={ssoProviderDraft}
+                              editingId={editingSsoProviderId}
+                              pending={ssoProviderPending}
+                              onDraftChange={setSsoProviderDraft}
+                              onEdit={(draft) => {
+                                setSsoProviderDraft(draft);
+                                setEditingSsoProviderId(draft.id ?? null);
+                              }}
+                              onCancel={() => {
+                                setSsoProviderDraft(emptySsoProviderDraft);
+                                setEditingSsoProviderId(null);
+                              }}
+                              onSave={() => void saveSsoProvider()}
+                              onDelete={(id) => void deleteSsoProvider(id)}
+                            />
                           </>
                         ) : null}
                         {groupId === "mail" ? <MailSourcesCard settings={settings} /> : null}
@@ -567,7 +684,8 @@ function AdvancedDiagnosticsPanel({
 function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
   const trustedOrigins = findSetting(settings, "auth_trusted_origins");
-  const externalProvider = settings.units.authProvider;
+  const localLogin = findSetting(settings, "auth_email_password_login_enabled");
+  const authProvider = settings.units.authProvider;
   const currentOriginMatches = settings.environment.appBaseUrl && settings.environment.currentRequestOrigin
     ? normalizeOrigin(settings.environment.appBaseUrl) === normalizeOrigin(settings.environment.currentRequestOrigin)
     : false;
@@ -607,25 +725,45 @@ function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
       <Card>
         <Stack gap="xs">
           <Text fw={700}>Sign-in Methods</Text>
-          <SignalFact label="Email/password login" value="Always enabled" />
-          <SignalFact label="External SSO provider" value={externalProvider.enabled ? externalProvider.status : "disabled"} />
-          <SignalFact label="SSO login button" value={externalProvider.status === "ready" ? externalProvider.buttonLabel : "shown when provider is ready"} />
+          <SignalFact label="Email/password login" value={localLogin?.displayValue ?? "enabled"} />
+          <SignalFact label="External SSO providers" value={`${authProvider.readyProviderCount} ready / ${authProvider.enabledProviderCount} enabled / ${authProvider.providerCount} total`} />
+          <SignalFact label="SSO login buttons" value={authProvider.readyProviderCount > 0 ? "shown for ready providers" : "hidden until a provider is ready"} />
         </Stack>
       </Card>
     </ResponsiveGrid>
   );
 }
 
-function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
-  const provider = settings.units.authProvider;
+function AuthProviderCard({
+  settings,
+  draft,
+  editingId,
+  pending,
+  onDraftChange,
+  onEdit,
+  onCancel,
+  onSave,
+  onDelete,
+}: {
+  settings: SettingsResponse;
+  draft: SsoProviderDraft;
+  editingId: string | null;
+  pending: string | null;
+  onDraftChange: (draft: SsoProviderDraft) => void;
+  onEdit: (draft: SsoProviderDraft) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onDelete: (id: string) => void;
+}) {
+  const providerUnit = settings.units.authProvider;
   const [callbackCopyStatus, setCallbackCopyStatus] = useState<string | null>(null);
 
-  async function copyCallbackUrl() {
-    if (!provider.callbackUrl) {
+  async function copyCallbackUrl(callbackUrl: string | null) {
+    if (!callbackUrl) {
       return;
     }
     try {
-      await navigator.clipboard?.writeText(provider.callbackUrl);
+      await navigator.clipboard?.writeText(callbackUrl);
       setCallbackCopyStatus("Callback URL copied.");
     } catch {
       setCallbackCopyStatus("Browser denied clipboard access. Callback URL remains visible for manual copy.");
@@ -637,55 +775,217 @@ function AuthProviderCard({ settings }: { settings: SettingsResponse }) {
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
           <Stack gap={4}>
-            <Text fw={700}>Auth Provider</Text>
+            <Text fw={700}>External SSO Providers</Text>
             <Text size="sm" c="dimmed">
-              Generic OAuth/OIDC provider unit. The Site address setting owns the callback URL; runtime configuration is only a bootstrap fallback.
+              Manage Generic OAuth/OIDC providers. The Site address setting owns provider-scoped callback URLs.
             </Text>
           </Stack>
-          <Badge color={unitStatusColor(provider.status)} variant="light">
-            {provider.status}
+          <Badge color={unitStatusColor(providerUnit.status)} variant="light">
+            {providerUnit.status}
           </Badge>
         </Group>
 
-        <ResponsiveGrid minWidth={240} gap="xs">
-          <SignalFact label="Provider type" value="Generic OAuth/OIDC" />
-          <SignalFact label="Provider preset" value={inferProviderPreset(provider)} />
-          <SignalFact label="Enabled" value={provider.enabled ? "enabled" : "disabled"} />
-          <SignalFact label="Display name" value={provider.displayName} />
-          <SignalFact label="Button label" value={provider.buttonLabel} />
-          <SignalFact label="Provider ID" value={provider.providerId ?? "not configured"} />
-          <SignalFact label="Logo URL" value={provider.logoUrl ?? "not configured"} />
-          <SignalFact label="Discovery / issuer URL" value={provider.discoveryUrl ?? "not configured"} />
-          <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
-          <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
-          <SignalFact label="Scopes" value={provider.scopes.length > 0 ? provider.scopes.join(" ") : "not configured"} />
-          <SignalFact label="Require issuer validation" value="Use provider discovery document" />
-          <SignalFact label="Admin mapping" value={provider.adminEmailAllowlistConfigured || provider.adminClaimMappingConfigured ? "configured" : "not configured"} />
+        <ResponsiveGrid minWidth={180} gap="xs">
+          <SignalFact label="Total providers" value={String(providerUnit.providerCount)} />
+          <SignalFact label="Enabled providers" value={String(providerUnit.enabledProviderCount)} />
+          <SignalFact label="Ready providers" value={String(providerUnit.readyProviderCount)} />
         </ResponsiveGrid>
 
-        <Box>
-          <Text size="sm" fw={700}>Callback URL</Text>
-          <Group gap="xs" mt={4} align="center">
-            <Code>{provider.callbackUrl ?? "Set Site address and Provider ID"}</Code>
-            <Button
-              size="xs"
-              variant="light"
-              leftSection={<Copy size={14} aria-hidden="true" />}
-              disabled={!provider.callbackUrl}
-              onClick={() => void copyCallbackUrl()}
-            >
-              Copy callback URL
+        <Text size="sm" c="dimmed">{providerUnit.detail}</Text>
+
+        {providerUnit.providers.length === 0 ? (
+          <Alert color="blue" title="No SSO providers configured">
+            Add a provider below. Email/password sign-in remains available unless you disable it after at least one provider is ready.
+          </Alert>
+        ) : (
+          <Stack gap="sm">
+            {providerUnit.providers.map((provider) => (
+              <Card key={provider.id} withBorder>
+                <Stack gap="xs">
+                  <Group justify="space-between" align="flex-start">
+                    <Stack gap={2}>
+                      <Group gap="xs">
+                        <Text fw={700}>{provider.displayName}</Text>
+                        <Badge color={unitStatusColor(provider.status)} variant="light">{provider.status}</Badge>
+                        <Badge color={provider.enabled ? "green" : "gray"} variant="light">{provider.enabled ? "enabled" : "disabled"}</Badge>
+                      </Group>
+                      <Text size="sm" c="dimmed">{provider.providerId}</Text>
+                    </Stack>
+                    <Group gap="xs">
+                      <Button
+                        size="xs"
+                        variant="light"
+                        onClick={() => onEdit(providerToDraft(provider))}
+                      >
+                        Edit
+                      </Button>
+                      <Button
+                        size="xs"
+                        color="red"
+                        variant="light"
+                        loading={pending === provider.id}
+                        leftSection={<Trash2 size={14} aria-hidden="true" />}
+                        onClick={() => onDelete(provider.id)}
+                      >
+                        Delete
+                      </Button>
+                    </Group>
+                  </Group>
+
+                  <ResponsiveGrid minWidth={220} gap="xs">
+                    <SignalFact label="Button label" value={provider.buttonLabel} />
+                    <SignalFact label="Discovery URL" value={provider.discoveryUrl ?? "not configured"} />
+                    <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
+                    <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
+                    <SignalFact label="Scopes" value={provider.scopes.join(" ")} />
+                    <SignalFact label="Admin rules" value={`${provider.adminEmailAllowlist.length + (provider.adminClaim ? 1 : 0)} configured`} />
+                  </ResponsiveGrid>
+
+                  <Box>
+                    <Text size="sm" fw={700}>Callback URL</Text>
+                    <Group gap="xs" mt={4} align="center">
+                      <Code>{provider.callbackUrl ?? "Set Site address and Provider ID"}</Code>
+                      <Button
+                        size="xs"
+                        variant="light"
+                        leftSection={<Copy size={14} aria-hidden="true" />}
+                        disabled={!provider.callbackUrl}
+                        onClick={() => void copyCallbackUrl(provider.callbackUrl)}
+                      >
+                        Copy callback URL
+                      </Button>
+                    </Group>
+                  </Box>
+                  {provider.missing.length > 0 || provider.invalid.length > 0 ? (
+                    <Text size="sm" c="red.7">
+                      Needs {[...provider.missing, ...provider.invalid].join(", ")}.
+                    </Text>
+                  ) : null}
+                </Stack>
+              </Card>
+            ))}
+          </Stack>
+        )}
+
+        {callbackCopyStatus ? <Text size="xs" c="dimmed">{callbackCopyStatus}</Text> : null}
+
+        <Divider />
+
+        <Stack gap="sm">
+          <Group gap="xs">
+            <Plus size={16} aria-hidden="true" />
+            <Text fw={700}>{editingId ? "Edit SSO provider" : "Add SSO provider"}</Text>
+          </Group>
+          <ResponsiveGrid minWidth={260} gap="sm">
+            <Switch
+              label="Provider enabled"
+              checked={draft.enabled}
+              onChange={(event) => onDraftChange({ ...draft, enabled: event.currentTarget.checked })}
+            />
+            <NumberInput
+              label="Sort order"
+              value={draft.sortOrder}
+              allowDecimal={false}
+              onChange={(value) => onDraftChange({ ...draft, sortOrder: typeof value === "number" ? value : 0 })}
+            />
+            <TextInput
+              label="Provider ID"
+              value={draft.providerId}
+              placeholder="google-workspace"
+              onChange={(event) => onDraftChange({ ...draft, providerId: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Display name"
+              value={draft.displayName}
+              placeholder="Google Workspace"
+              onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Button label"
+              value={draft.buttonLabel}
+              placeholder="Continue with Google Workspace"
+              onChange={(event) => onDraftChange({ ...draft, buttonLabel: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Logo URL"
+              value={draft.logoUrl}
+              onChange={(event) => onDraftChange({ ...draft, logoUrl: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Discovery URL"
+              value={draft.discoveryUrl}
+              onChange={(event) => onDraftChange({ ...draft, discoveryUrl: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Client ID"
+              value={draft.clientId}
+              onChange={(event) => onDraftChange({ ...draft, clientId: event.currentTarget.value })}
+            />
+            <PasswordInput
+              label={editingId ? "New client secret" : "Client secret"}
+              placeholder={editingId ? "Leave blank for no change" : undefined}
+              value={draft.clientSecret}
+              onChange={(event) => onDraftChange({ ...draft, clientSecret: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Scopes"
+              value={draft.scopes}
+              onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
+            />
+          </ResponsiveGrid>
+          <Textarea
+            label="Admin email allowlist"
+            minRows={2}
+            value={draft.adminEmailAllowlist}
+            onChange={(event) => onDraftChange({ ...draft, adminEmailAllowlist: event.currentTarget.value })}
+          />
+          <ResponsiveGrid minWidth={260} gap="sm">
+            <TextInput
+              label="Admin claim"
+              value={draft.adminClaim}
+              placeholder="groups"
+              onChange={(event) => onDraftChange({ ...draft, adminClaim: event.currentTarget.value })}
+            />
+            <TextInput
+              label="Admin claim value"
+              value={draft.adminClaimValue}
+              placeholder="ops-admins"
+              onChange={(event) => onDraftChange({ ...draft, adminClaimValue: event.currentTarget.value })}
+            />
+          </ResponsiveGrid>
+          <Group justify="flex-end">
+            {editingId ? (
+              <Button variant="light" color="gray" onClick={onCancel}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingId ?? "new")} onClick={onSave}>
+              {editingId ? "Save provider" : "Add provider"}
             </Button>
           </Group>
-          {callbackCopyStatus ? <Text size="xs" c="dimmed" mt={4}>{callbackCopyStatus}</Text> : null}
-        </Box>
-
-        <Text size="sm" c="dimmed">
-          {provider.detail} Register the callback URL in the provider console, then use the Sign in page to test the SSO button.
-        </Text>
+        </Stack>
       </Stack>
     </Card>
   );
+}
+
+function providerToDraft(provider: SettingsResponse["units"]["authProvider"]["providers"][number]): SsoProviderDraft {
+  return {
+    id: provider.id,
+    providerId: provider.providerId,
+    displayName: provider.displayName,
+    buttonLabel: provider.buttonLabel,
+    logoUrl: provider.logoUrl ?? "",
+    discoveryUrl: provider.discoveryUrl ?? "",
+    clientId: provider.clientId ?? "",
+    clientSecret: "",
+    scopes: provider.scopes.join(" "),
+    enabled: provider.enabled,
+    sortOrder: provider.sortOrder,
+    adminEmailAllowlist: provider.adminEmailAllowlist.join("\n"),
+    adminClaim: provider.adminClaim ?? "",
+    adminClaimValue: provider.adminClaimValue ?? "",
+  };
 }
 
 function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
@@ -1253,25 +1553,6 @@ function normalizeOrigin(value: string): string {
   }
 }
 
-function inferProviderPreset(provider: SettingsResponse["units"]["authProvider"]): string {
-  const haystack = `${provider.displayName} ${provider.discoveryUrl ?? ""}`.toLowerCase();
-  if (haystack.includes("google")) {
-    return "Google";
-  }
-  if (haystack.includes("microsoft") || haystack.includes("entra")) {
-    return "Microsoft Entra ID";
-  }
-  if (haystack.includes("okta")) {
-    return "Okta";
-  }
-  if (haystack.includes("auth0")) {
-    return "Auth0";
-  }
-  if (haystack.includes("keycloak")) {
-    return "Keycloak";
-  }
-  return "Generic OIDC";
-}
 
 function maskActionResult(payload: ActionResult): ActionResult {
   return JSON.parse(

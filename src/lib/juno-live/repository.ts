@@ -95,19 +95,9 @@ export class JunoLiveRepository {
           auth_secret,
           auth_base_url,
           auth_trusted_origins,
-          auth_external_provider_enabled,
-          auth_external_provider_id,
-          auth_external_provider_name,
+          auth_email_password_login_enabled,
           auth_login_logo_url,
-          auth_external_provider_logo_url,
-          auth_external_provider_button_label,
-          auth_external_discovery_url,
-          auth_external_client_id,
-          auth_external_client_secret,
-          auth_external_provider_scopes,
-          auth_admin_email_allowlist,
-          auth_external_admin_claim,
-          auth_external_admin_claim_value
+          updated_at
         FROM service_setting
         WHERE id = true
         LIMIT 1

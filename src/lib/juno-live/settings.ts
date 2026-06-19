@@ -21,19 +21,8 @@ export type JunoLiveServiceSettingsRow = {
   auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
-  auth_external_provider_enabled: boolean | null;
-  auth_external_provider_id: string | null;
-  auth_external_provider_name: string | null;
+  auth_email_password_login_enabled: boolean;
   auth_login_logo_url: string | null;
-  auth_external_provider_logo_url: string | null;
-  auth_external_provider_button_label: string | null;
-  auth_external_discovery_url: string | null;
-  auth_external_client_id: string | null;
-  auth_external_client_secret: string | null;
-  auth_external_provider_scopes: string | null;
-  auth_admin_email_allowlist: string | null;
-  auth_external_admin_claim: string | null;
-  auth_external_admin_claim_value: string | null;
 };
 
 export type JunoLiveSettings = {

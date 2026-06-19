@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { loadRuntimeEnv } from "@/lib/env";
+import type { SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { JunoLiveServiceSettingsRow } from "@/lib/juno-live/settings";
 import { buildAppSetupStatus } from "./status";
@@ -298,12 +299,14 @@ describe("buildAppSetupStatus", () => {
     const withExternalMapping = buildAppSetupStatus({
       env: runtimeEnv({
         AUTH_BASE_URL: "https://app.example.com",
-        AUTH_EXTERNAL_PROVIDER_ENABLED: "true",
-        AUTH_EXTERNAL_ADMIN_CLAIM: "groups",
-        AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: "ops-admin",
       }),
       settingsRow: emptyRow(),
       adminUserCount: 0,
+      ssoProviders: [
+        ssoProvider({
+          adminRules: [{ id: "rule-1", type: "claim_equals", value: "groups=ops-admin" }],
+        }),
+      ],
     });
     expect(withExternalMapping.steps.find((step) => step.id === "auth")?.guardrails).toEqual(
       expect.arrayContaining([
@@ -326,6 +329,7 @@ describe("buildAppSetupStatus", () => {
         ...emptyRow(),
         juno_login_email: "buyer@example.com",
         juno_live_poll_interval_ms: 3600000,
+        auth_email_password_login_enabled: false,
       },
       adminUserCount: 1,
     });
@@ -334,6 +338,11 @@ describe("buildAppSetupStatus", () => {
       expect.arrayContaining([
         expect.objectContaining({ key: "juno_login_email", source: "database", value: "buyer@example.com" }),
         expect.objectContaining({ key: "juno_login_password", source: "runtime", value: "configured", secret: true }),
+      ]),
+    );
+    expect(status.steps.find((step) => step.id === "auth")?.settings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ key: "auth_email_password_login_enabled", source: "database", value: "disabled" }),
       ]),
     );
     expect(JSON.stringify(status)).not.toContain("runtime-secret");
@@ -359,19 +368,29 @@ function emptyRow(): JunoLiveServiceSettingsRow {
     auth_secret: null,
     auth_base_url: null,
     auth_trusted_origins: null,
-    auth_external_provider_enabled: null,
-    auth_external_provider_id: null,
-    auth_external_provider_name: null,
+    auth_email_password_login_enabled: true,
     auth_login_logo_url: null,
-    auth_external_provider_logo_url: null,
-    auth_external_provider_button_label: null,
-    auth_external_discovery_url: null,
-    auth_external_client_id: null,
-    auth_external_client_secret: null,
-    auth_external_provider_scopes: null,
-    auth_admin_email_allowlist: null,
-    auth_external_admin_claim: null,
-    auth_external_admin_claim_value: null,
+  };
+}
+
+function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRecord {
+  return {
+    id: "provider-id",
+    providerId: "workspace",
+    displayName: "Workspace",
+    buttonLabel: "Continue with Workspace",
+    logoUrl: null,
+    discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+    clientId: "client-id",
+    clientSecret: "client-secret",
+    clientSecretConfigured: true,
+    scopes: ["openid", "email", "profile"],
+    enabled: true,
+    sortOrder: 0,
+    adminRules: [],
+    createdAt: "2026-06-19T00:00:00.000Z",
+    updatedAt: "2026-06-19T00:00:00.000Z",
+    ...overrides,
   };
 }
 

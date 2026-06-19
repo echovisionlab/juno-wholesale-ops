@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 4e139733ede78db4a12a43ce60192f5e9567e322e8b6dd10ed547091ca29620e
+-- migration-manifest-sha256: 5411de5d68fbdeb92af6ba638cc33e96b8aeb0e86c3c0edebfc3ca4c3b3ff10c
 --
 -- PostgreSQL database dump
 --
@@ -64,6 +64,43 @@ CREATE TABLE public.auth_session (
     ip_address text,
     user_agent text,
     user_id text NOT NULL
+);
+
+
+--
+-- Name: auth_sso_admin_rule; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_sso_admin_rule (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    provider_id uuid NOT NULL,
+    rule_type text NOT NULL,
+    rule_value text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT auth_sso_admin_rule_type_check CHECK ((rule_type = ANY (ARRAY['email_allowlist'::text, 'claim_equals'::text])))
+);
+
+
+--
+-- Name: auth_sso_provider; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_sso_provider (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    provider_id text NOT NULL,
+    display_name text NOT NULL,
+    button_label text,
+    logo_url text,
+    discovery_url text,
+    client_id text,
+    client_secret text,
+    scopes text DEFAULT 'openid email profile'::text NOT NULL,
+    enabled boolean DEFAULT false NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT auth_sso_provider_id_format_check CHECK ((provider_id ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text))
 );
 
 
@@ -495,21 +532,10 @@ CREATE TABLE public.service_setting (
     juno_live_auto_enqueue_limit integer,
     auth_base_url text,
     auth_trusted_origins text,
-    auth_external_provider_enabled boolean,
-    auth_external_provider_id text,
-    auth_external_provider_name text,
-    auth_external_discovery_url text,
-    auth_external_client_id text,
-    auth_external_client_secret text,
     data_mode text,
-    auth_external_provider_logo_url text,
-    auth_external_provider_button_label text,
-    auth_external_provider_scopes text,
-    auth_admin_email_allowlist text,
-    auth_external_admin_claim text,
-    auth_external_admin_claim_value text,
     auth_secret text,
     auth_login_logo_url text,
+    auth_email_password_login_enabled boolean DEFAULT true NOT NULL,
     CONSTRAINT service_setting_auth_login_logo_url_asset_check CHECK (((auth_login_logo_url IS NULL) OR (auth_login_logo_url ~* '^https?://[^[:space:]]+\.(png|webp|svg)([?#].*)?$'::text))),
     CONSTRAINT service_setting_auth_secret_length_check CHECK (((auth_secret IS NULL) OR (length(auth_secret) >= 32))),
     CONSTRAINT service_setting_data_mode_check CHECK (((data_mode IS NULL) OR (data_mode = ANY (ARRAY['demo'::text, 'real_mailbox'::text])))),
@@ -623,6 +649,38 @@ ALTER TABLE ONLY public.auth_session
 
 ALTER TABLE ONLY public.auth_session
     ADD CONSTRAINT auth_session_token_key UNIQUE (token);
+
+
+--
+-- Name: auth_sso_admin_rule auth_sso_admin_rule_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_sso_admin_rule
+    ADD CONSTRAINT auth_sso_admin_rule_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_sso_admin_rule auth_sso_admin_rule_unique; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_sso_admin_rule
+    ADD CONSTRAINT auth_sso_admin_rule_unique UNIQUE (provider_id, rule_type, rule_value);
+
+
+--
+-- Name: auth_sso_provider auth_sso_provider_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_sso_provider
+    ADD CONSTRAINT auth_sso_provider_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: auth_sso_provider auth_sso_provider_provider_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_sso_provider
+    ADD CONSTRAINT auth_sso_provider_provider_id_key UNIQUE (provider_id);
 
 
 --
@@ -1237,6 +1295,14 @@ ALTER TABLE ONLY public.auth_account
 
 ALTER TABLE ONLY public.auth_session
     ADD CONSTRAINT auth_session_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.auth_user(id) ON DELETE CASCADE;
+
+
+--
+-- Name: auth_sso_admin_rule auth_sso_admin_rule_provider_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_sso_admin_rule
+    ADD CONSTRAINT auth_sso_admin_rule_provider_id_fkey FOREIGN KEY (provider_id) REFERENCES public.auth_sso_provider(id) ON DELETE CASCADE;
 
 
 --

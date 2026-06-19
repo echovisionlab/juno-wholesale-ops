@@ -1,6 +1,7 @@
 import { loadRuntimeEnv } from "@/lib/env";
 import { withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { ensureDatabaseAuthSecretClient } from "@/lib/settings/repository";
+import { listSsoProviders } from "./sso-provider-repository";
 import { getCachedAppAuth } from "./app-auth";
 import {
   getMissingAppAuthSettings,
@@ -32,7 +33,8 @@ async function resolveRuntimeAuth(options: { requestOrigin?: string | null } = {
     }
     return row;
   });
-  const settings = resolveAppAuthSettings(env, settingsRow, { requestOrigin: options.requestOrigin });
+  const ssoProviders = await listSsoProviders(env.DATABASE_URL);
+  const settings = resolveAppAuthSettings(env, settingsRow, { requestOrigin: options.requestOrigin, ssoProviders });
   const missing = getMissingAppAuthSettings(settings);
 
   return {

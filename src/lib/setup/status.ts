@@ -1,5 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { getMissingAppAuthSettings, resolveAppAuthSettings } from "@/lib/auth/settings";
+import type { SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 import {
   resolveJunoLiveSettings,
@@ -53,6 +54,7 @@ export function buildAppSetupStatus(options: {
   settingsRow: JunoLiveServiceSettingsRow | null;
   adminUserCount?: number | null;
   mailSources?: PublicMailboxSource[];
+  ssoProviders?: SsoProviderRecord[];
 }): AppSetupStatus {
   const dataMode = resolveDataMode(options.env, options.settingsRow);
   const mailSources = options.mailSources ?? [];
@@ -67,7 +69,9 @@ export function buildAppSetupStatus(options: {
       ? null
       : "juno_live_delay_min_ms must be <= juno_live_delay_max_ms",
   ].filter((value): value is string => Boolean(value));
-  const authSettings = resolveAppAuthSettings(options.env, options.settingsRow);
+  const authSettings = resolveAppAuthSettings(options.env, options.settingsRow, {
+    ssoProviders: options.ssoProviders ?? [],
+  });
   const authMissing = getMissingAppAuthSettings(authSettings);
   const pollingGuardrail = scheduledPollingGuardrail(liveSettings);
 
@@ -246,25 +250,10 @@ export function buildAppSetupStatus(options: {
           required: true,
         }),
         rowBackedSetting({
-          key: "auth_external_provider_enabled",
-          label: "External provider",
-          rowValue: options.settingsRow?.auth_external_provider_enabled,
-          runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ENABLED,
-        }),
-        rowBackedSetting({
-          key: "auth_external_provider_id",
-          label: "External provider id",
-          rowValue: options.settingsRow?.auth_external_provider_id,
-          runtimeValue: options.env.AUTH_EXTERNAL_PROVIDER_ID,
-          required: authSettings.externalProviderEnabled,
-        }),
-        rowBackedSetting({
-          key: "auth_external_client_secret",
-          label: "External client secret",
-          rowValue: options.settingsRow?.auth_external_client_secret,
-          runtimeValue: options.env.AUTH_EXTERNAL_CLIENT_SECRET,
-          required: authSettings.externalProviderEnabled,
-          secret: true,
+          key: "auth_email_password_login_enabled",
+          label: "Email/password login",
+          rowValue: options.settingsRow?.auth_email_password_login_enabled,
+          runtimeValue: true,
         }),
       ],
       guardrails: [
@@ -273,14 +262,12 @@ export function buildAppSetupStatus(options: {
           state: adminBootstrapGuardrailState({
             adminUserCount: options.adminUserCount ?? null,
             hasInitialAdmin: Boolean(authSettings.initialAdmin),
-            hasExternalAdminMapping: authSettings.externalProviderEnabled
-              && (authSettings.adminEmailAllowlist.length > 0 || Boolean(authSettings.externalAdminClaim && authSettings.externalAdminClaimValue)),
+            hasExternalAdminMapping: authSettings.externalProviders.some((provider) => provider.adminRules.length > 0),
           }),
           detail: adminBootstrapGuardrailDetail({
             adminUserCount: options.adminUserCount ?? null,
             hasInitialAdmin: Boolean(authSettings.initialAdmin),
-            hasExternalAdminMapping: authSettings.externalProviderEnabled
-              && (authSettings.adminEmailAllowlist.length > 0 || Boolean(authSettings.externalAdminClaim && authSettings.externalAdminClaimValue)),
+            hasExternalAdminMapping: authSettings.externalProviders.some((provider) => provider.adminRules.length > 0),
           }),
         },
       ],

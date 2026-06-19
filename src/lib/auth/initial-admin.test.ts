@@ -163,11 +163,8 @@ function authSettings(overrides: Partial<AppAuthSettings>): AppAuthSettings {
     secret: undefined,
     baseUrl: undefined,
     trustedOrigins: [],
-    externalProviderEnabled: false,
-    externalProvider: null,
-    adminEmailAllowlist: [],
-    externalAdminClaim: undefined,
-    externalAdminClaimValue: undefined,
+    emailPasswordLoginEnabled: true,
+    externalProviders: [],
     initialAdmin: null,
     ...overrides,
   };

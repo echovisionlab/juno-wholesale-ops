@@ -1,5 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { isSupportedLoginLogoUrl, LOGIN_LOGO_URL_REQUIREMENT } from "@/lib/auth/login-logo";
+import { validateSsoProviderReadiness, type SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import {
   definitionsByKey,
   type ServiceSettingsPatch,
@@ -29,6 +30,7 @@ export function validateSettingsPatch(options: {
   env: RuntimeEnv;
   rawEnv: RawRuntimeEnv;
   nodeEnv: string;
+  ssoProviders?: SsoProviderRecord[];
 }): SettingsValidationResult {
   const flattened = flattenSettingsPatch(options.input);
   const patch: ServiceSettingsPatch = {};
@@ -55,11 +57,17 @@ export function validateSettingsPatch(options: {
     changed.push(definition.rowColumn);
   }
 
-  issues.push(...validateResolvedPatch({ patch, currentRow: options.currentRow, env: options.env }));
+  issues.push(...validateResolvedPatch({
+    patch,
+    currentRow: options.currentRow,
+    env: options.env,
+    ssoProviders: options.ssoProviders ?? [],
+  }));
   const warnings = collectSettingsWarnings({
     row: { ...(options.currentRow ?? {}), ...patch } as ServiceSettingsRow,
     env: options.env,
     nodeEnv: options.nodeEnv,
+    ssoProviders: options.ssoProviders,
   });
 
   if (issues.length > 0) {
@@ -79,11 +87,10 @@ export function collectSettingsWarnings(options: {
   env: RuntimeEnv;
   nodeEnv: string;
   currentRequestOrigin?: string | null;
+  ssoProviders?: SsoProviderRecord[];
 }): SettingsWarning[] {
   const warnings: SettingsWarning[] = [];
   const authBaseUrl = options.row?.auth_base_url ?? options.env.AUTH_BASE_URL;
-  const externalProviderEnabled =
-    options.row?.auth_external_provider_enabled ?? options.env.AUTH_EXTERNAL_PROVIDER_ENABLED;
   const trustedOrigins = splitOriginList(options.row?.auth_trusted_origins ?? options.env.AUTH_TRUSTED_ORIGINS);
 
   if (!hasSettingValue(authBaseUrl)) {
@@ -110,11 +117,15 @@ export function collectSettingsWarnings(options: {
     });
   }
 
-  if (externalProviderEnabled && !hasSettingValue(options.row?.auth_external_client_secret ?? options.env.AUTH_EXTERNAL_CLIENT_SECRET)) {
+  const incompleteProviders = (options.ssoProviders ?? [])
+    .filter((provider) => provider.enabled)
+    .map((provider) => validateSsoProviderReadiness(provider, authBaseUrl ?? null))
+    .filter((status) => status.status !== "ready");
+  if (incompleteProviders.length > 0) {
     warnings.push({
-      id: "auth_external_provider_client_secret_missing",
+      id: "auth_sso_provider_not_ready",
       severity: "critical",
-      message: "External provider is enabled, but the client secret is not configured.",
+      message: `${incompleteProviders.length} enabled SSO provider${incompleteProviders.length === 1 ? "" : "s"} need valid discovery, client, secret, and Site address settings.`,
     });
   }
 
@@ -220,6 +231,7 @@ function validateResolvedPatch(options: {
   patch: ServiceSettingsPatch;
   currentRow: ServiceSettingsRow | null;
   env: RuntimeEnv;
+  ssoProviders: SsoProviderRecord[];
 }): string[] {
   const merged = { ...(options.currentRow ?? {}), ...options.patch } as ServiceSettingsRow;
   const issues: string[] = [];
@@ -242,6 +254,15 @@ function validateResolvedPatch(options: {
   }
   if (pollInterval !== null && pollInterval <= 0) {
     issues.push("juno_live_poll_interval_ms must be null or a positive integer");
+  }
+  if (merged.auth_email_password_login_enabled === false) {
+    const baseUrl = merged.auth_base_url ?? options.env.AUTH_BASE_URL ?? null;
+    const hasReadySsoProvider = options.ssoProviders.some((provider) =>
+      validateSsoProviderReadiness(provider, baseUrl).status === "ready",
+    );
+    if (!hasReadySsoProvider) {
+      issues.push("auth_email_password_login_enabled cannot be disabled until at least one SSO provider is ready");
+    }
   }
   return issues;
 }

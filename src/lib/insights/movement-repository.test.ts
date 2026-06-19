@@ -54,7 +54,7 @@ describe("movement insights repository", () => {
       status: "out_of_stock",
       stockQuantity: null,
       price: null,
-      observedAt: "2026-06-17T00:00:00.000Z",
+      observedAt: recentObservationIso(40),
     });
     await insertObservation({
       identityId: raw.rows[0].identity_id,
@@ -62,7 +62,7 @@ describe("movement insights repository", () => {
       status: "in_stock",
       stockQuantity: 8,
       price: 10,
-      observedAt: "2026-06-17T04:00:00.000Z",
+      observedAt: recentObservationIso(32),
     });
     await insertObservation({
       identityId: raw.rows[0].identity_id,
@@ -70,7 +70,7 @@ describe("movement insights repository", () => {
       status: "in_stock",
       stockQuantity: 2,
       price: 11,
-      observedAt: "2026-06-17T18:00:00.000Z",
+      observedAt: recentObservationIso(20),
     });
 
     const first = await processMovementSignalsForRecentObservations({
@@ -180,6 +180,10 @@ describe("movement insights repository", () => {
     );
   }
 });
+
+function recentObservationIso(hoursAgo: number): string {
+  return new Date(Date.now() - hoursAgo * 60 * 60 * 1000).toISOString();
+}
 
 function message(gmailMessageId: string): MessageRecord {
   return {

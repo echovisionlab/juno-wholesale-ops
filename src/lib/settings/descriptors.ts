@@ -11,7 +11,6 @@ export type DataMode = "demo" | "real_mailbox";
 export type SettingRequiredWhen =
   | "always"
   | "real_mailbox"
-  | "external_provider_enabled"
   | "juno_lookup_enabled";
 export type SettingUnit =
   | "system_runtime"
@@ -109,21 +108,33 @@ export type IntegrationUnit = {
 export type AuthProviderUnit = {
   id: "auth_provider";
   label: string;
-  providerType: "generic_oauth_oidc";
-  enabled: boolean;
   status: IntegrationUnitStatus;
+  providerCount: number;
+  enabledProviderCount: number;
+  readyProviderCount: number;
+  providers: SsoProviderUnit[];
+  detail: string;
+};
+
+export type SsoProviderUnit = {
+  id: string;
+  providerId: string;
   displayName: string;
   buttonLabel: string;
-  providerId: string | null;
   logoUrl: string | null;
+  enabled: boolean;
+  status: IntegrationUnitStatus;
   discoveryUrl: string | null;
   clientId: string | null;
   clientSecretConfigured: boolean;
   scopes: string[];
   callbackUrl: string | null;
-  adminEmailAllowlistConfigured: boolean;
-  adminClaimMappingConfigured: boolean;
-  detail: string;
+  adminEmailAllowlist: string[];
+  adminClaim: string | null;
+  adminClaimValue: string | null;
+  sortOrder: number;
+  missing: string[];
+  invalid: string[];
 };
 
 export type AuthBootstrapStatus = {
@@ -188,19 +199,8 @@ export const serviceSettingColumns = [
   "auth_secret",
   "auth_base_url",
   "auth_trusted_origins",
-  "auth_external_provider_enabled",
-  "auth_external_provider_id",
-  "auth_external_provider_name",
+  "auth_email_password_login_enabled",
   "auth_login_logo_url",
-  "auth_external_provider_logo_url",
-  "auth_external_provider_button_label",
-  "auth_external_discovery_url",
-  "auth_external_client_id",
-  "auth_external_client_secret",
-  "auth_external_provider_scopes",
-  "auth_admin_email_allowlist",
-  "auth_external_admin_claim",
-  "auth_external_admin_claim_value",
 ] as const satisfies readonly ServiceSettingColumn[];
 
 const runtimeEnvKeyLookup = {
@@ -209,18 +209,6 @@ const runtimeEnvKeyLookup = {
   AUTH_SECRET: true,
   AUTH_BASE_URL: true,
   AUTH_TRUSTED_ORIGINS: true,
-  AUTH_EXTERNAL_PROVIDER_ENABLED: true,
-  AUTH_EXTERNAL_PROVIDER_ID: true,
-  AUTH_EXTERNAL_PROVIDER_NAME: true,
-  AUTH_EXTERNAL_PROVIDER_LOGO_URL: true,
-  AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL: true,
-  AUTH_EXTERNAL_DISCOVERY_URL: true,
-  AUTH_EXTERNAL_CLIENT_ID: true,
-  AUTH_EXTERNAL_CLIENT_SECRET: true,
-  AUTH_EXTERNAL_PROVIDER_SCOPES: true,
-  AUTH_ADMIN_EMAIL_ALLOWLIST: true,
-  AUTH_EXTERNAL_ADMIN_CLAIM: true,
-  AUTH_EXTERNAL_ADMIN_CLAIM_VALUE: true,
   AUTH_INITIAL_ADMIN_EMAIL: true,
   AUTH_INITIAL_ADMIN_PASSWORD: true,
   AUTH_INITIAL_ADMIN_NAME: true,
@@ -296,19 +284,8 @@ export const settingDefinitions = [
   }),
   dbSetting("auth", "auth_base_url", "AUTH_BASE_URL", "Site address", "url", true, false, "Current public site URL. Better Auth callbacks are derived from this saved setting; runtime/current origin is only a bootstrap fallback.", undefined, { requiredWhen: "always" }),
   dbSetting("auth", "auth_trusted_origins", "AUTH_TRUSTED_ORIGINS", "Trusted origins", "csv", false, false, "Comma or newline separated origins that may use auth flows."),
-  dbSetting("auth", "auth_external_provider_enabled", "AUTH_EXTERNAL_PROVIDER_ENABLED", "External provider enabled", "boolean", false, false, "Allows a configured Generic OAuth/OIDC provider."),
-  dbSetting("auth", "auth_external_provider_id", "AUTH_EXTERNAL_PROVIDER_ID", "Provider ID", "string", false, false, "Stable provider identifier used in /api/auth/oauth2/callback/<provider-id>.", undefined, { requiredWhen: "external_provider_enabled", unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_provider_name", "AUTH_EXTERNAL_PROVIDER_NAME", "Provider display name", "string", false, false, "Operator-visible provider name.", undefined, { unit: "auth_provider" }),
+  dbOnlySetting("auth", "auth_email_password_login_enabled", "Email/password login", "boolean", false, false, "Allows local email/password sign-in. Disable only after at least one SSO provider is ready.", true),
   dbOnlySetting("auth", "auth_login_logo_url", "Login logo URL", "url", false, false, "Optional png, webp, or svg logo shown above the sign-in form."),
-  dbSetting("auth", "auth_external_provider_button_label", "AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL", "Provider button label", "string", false, false, "Optional sign-in button label shown to operators.", undefined, { unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_provider_logo_url", "AUTH_EXTERNAL_PROVIDER_LOGO_URL", "Provider logo URL", "url", false, false, "Optional logo URL for the auth provider.", undefined, { unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_discovery_url", "AUTH_EXTERNAL_DISCOVERY_URL", "Discovery URL", "url", false, false, "OIDC discovery URL.", undefined, { requiredWhen: "external_provider_enabled", unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_client_id", "AUTH_EXTERNAL_CLIENT_ID", "External client ID", "string", false, false, "OIDC client ID.", undefined, { requiredWhen: "external_provider_enabled", unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_client_secret", "AUTH_EXTERNAL_CLIENT_SECRET", "External client secret", "secret", false, true, "OIDC client secret. Write-only.", undefined, { requiredWhen: "external_provider_enabled", unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_provider_scopes", "AUTH_EXTERNAL_PROVIDER_SCOPES", "Provider scopes", "csv", false, false, "OAuth/OIDC scopes requested from the provider.", "openid email profile", { unit: "auth_provider" }),
-  dbSetting("auth", "auth_admin_email_allowlist", "AUTH_ADMIN_EMAIL_ALLOWLIST", "Admin email allowlist", "csv", false, false, "Optional admin bootstrap allowlist for external provider accounts. Values are masked in security status as configured/not configured.", undefined, { unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_admin_claim", "AUTH_EXTERNAL_ADMIN_CLAIM", "Admin claim", "string", false, false, "Optional external provider claim name used for admin bootstrap policy.", undefined, { unit: "auth_provider" }),
-  dbSetting("auth", "auth_external_admin_claim_value", "AUTH_EXTERNAL_ADMIN_CLAIM_VALUE", "Admin claim value", "string", false, false, "Optional external provider claim value used for admin bootstrap policy.", undefined, { unit: "auth_provider" }),
   dbSetting("juno", "juno_live_enqueue_on_ingest", "JUNO_LIVE_ENQUEUE_ON_INGEST", "Enqueue on ingest", "boolean", false, false, "Queues read-only live lookup jobs after new snapshots.", false, { unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_email", "JUNO_LOGIN_EMAIL", "Juno login email", "email", true, false, "Login email used only for read-only product page observation. Required only when live lookup is enabled.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),
   dbSetting("juno", "juno_login_password", "JUNO_LOGIN_PASSWORD", "Juno login password", "secret", true, true, "Login password. Write-only and required only when live lookup is enabled.", undefined, { requiredWhen: "juno_lookup_enabled", unit: "juno_live_lookup" }),

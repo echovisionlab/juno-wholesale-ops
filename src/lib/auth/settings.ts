@@ -1,24 +1,15 @@
 import type { RuntimeEnv } from "@/lib/env";
+import type { SsoProviderRecord, SsoAdminRule } from "./sso-provider-repository";
 
 export type AuthServiceSettingsRow = {
   auth_secret: string | null;
   auth_base_url: string | null;
   auth_trusted_origins: string | null;
-  auth_external_provider_enabled: boolean | null;
-  auth_external_provider_id: string | null;
-  auth_external_provider_name: string | null;
-  auth_external_provider_logo_url: string | null;
-  auth_external_provider_button_label: string | null;
-  auth_external_discovery_url: string | null;
-  auth_external_client_id: string | null;
-  auth_external_client_secret: string | null;
-  auth_external_provider_scopes: string | null;
-  auth_admin_email_allowlist: string | null;
-  auth_external_admin_claim: string | null;
-  auth_external_admin_claim_value: string | null;
+  auth_email_password_login_enabled: boolean;
 };
 
 export type ExternalAuthProviderSettings = {
+  id: string;
   providerId: string;
   name: string;
   buttonLabel: string;
@@ -27,17 +18,15 @@ export type ExternalAuthProviderSettings = {
   clientId: string;
   clientSecret: string;
   scopes: string[];
+  adminRules: SsoAdminRule[];
 };
 
 export type AppAuthSettings = {
   secret: string | undefined;
   baseUrl: string | undefined;
   trustedOrigins: string[];
-  externalProviderEnabled: boolean;
-  externalProvider: ExternalAuthProviderSettings | null;
-  adminEmailAllowlist: string[];
-  externalAdminClaim: string | undefined;
-  externalAdminClaimValue: string | undefined;
+  emailPasswordLoginEnabled: boolean;
+  externalProviders: ExternalAuthProviderSettings[];
   initialAdmin: InitialAdminSettings | null;
 };
 
@@ -50,21 +39,14 @@ export type InitialAdminSettings = {
 export function resolveAppAuthSettings(
   env: RuntimeEnv,
   row: AuthServiceSettingsRow | null,
-  options: { requestOrigin?: string | null } = {},
+  options: { requestOrigin?: string | null; ssoProviders?: SsoProviderRecord[] } = {},
 ): AppAuthSettings {
-  const externalProviderEnabled =
-    row?.auth_external_provider_enabled ?? env.AUTH_EXTERNAL_PROVIDER_ENABLED;
-  const externalProvider = resolveExternalProvider(env, row, externalProviderEnabled);
-
   return {
     secret: row?.auth_secret ?? env.AUTH_SECRET,
     baseUrl: row?.auth_base_url ?? env.AUTH_BASE_URL ?? options.requestOrigin ?? undefined,
     trustedOrigins: splitList(row?.auth_trusted_origins ?? env.AUTH_TRUSTED_ORIGINS),
-    externalProviderEnabled,
-    externalProvider,
-    adminEmailAllowlist: splitList(row?.auth_admin_email_allowlist ?? env.AUTH_ADMIN_EMAIL_ALLOWLIST),
-    externalAdminClaim: trimOptional(row?.auth_external_admin_claim ?? env.AUTH_EXTERNAL_ADMIN_CLAIM),
-    externalAdminClaimValue: trimOptional(row?.auth_external_admin_claim_value ?? env.AUTH_EXTERNAL_ADMIN_CLAIM_VALUE),
+    emailPasswordLoginEnabled: row?.auth_email_password_login_enabled ?? true,
+    externalProviders: resolveExternalProviders(options.ssoProviders ?? []),
     initialAdmin: resolveInitialAdmin(env),
   };
 }
@@ -88,15 +70,21 @@ export function splitList(value: string | undefined | null): string[] {
   );
 }
 
-export function resolveExternalProfileRole(profile: unknown, settings: AppAuthSettings): "admin" | "user" {
+export function resolveExternalProfileRole(profile: unknown, settings: AppAuthSettings, providerId: string): "admin" | "user" {
+  const provider = settings.externalProviders.find((entry) => entry.providerId === providerId);
+  const rules = provider?.adminRules ?? [];
   const email = readStringClaim(profile, "email")?.toLowerCase();
-  if (email && settings.adminEmailAllowlist.map((entry) => entry.toLowerCase()).includes(email)) {
+  const emailAllowlist = rules
+    .filter((rule) => rule.type === "email_allowlist")
+    .map((rule) => rule.value.toLowerCase());
+  if (email && emailAllowlist.includes(email)) {
     return "admin";
   }
 
-  if (settings.externalAdminClaim && settings.externalAdminClaimValue) {
-    const claim = readClaim(profile, settings.externalAdminClaim);
-    if (claimMatchesValue(claim, settings.externalAdminClaimValue)) {
+  for (const rule of rules.filter((entry) => entry.type === "claim_equals")) {
+    const [claimName, ...expectedParts] = rule.value.split("=");
+    const expectedValue = expectedParts.join("=");
+    if (claimName && expectedValue && claimMatchesValue(readClaim(profile, claimName), expectedValue)) {
       return "admin";
     }
   }
@@ -104,31 +92,21 @@ export function resolveExternalProfileRole(profile: unknown, settings: AppAuthSe
   return "user";
 }
 
-function resolveExternalProvider(
-  env: RuntimeEnv,
-  row: AuthServiceSettingsRow | null,
-  enabled: boolean,
-): ExternalAuthProviderSettings | null {
-  if (!enabled) {
-    return null;
-  }
-
-  const providerId = row?.auth_external_provider_id ?? env.AUTH_EXTERNAL_PROVIDER_ID;
-  const discoveryUrl = row?.auth_external_discovery_url ?? env.AUTH_EXTERNAL_DISCOVERY_URL;
-  const clientId = row?.auth_external_client_id ?? env.AUTH_EXTERNAL_CLIENT_ID;
-  const clientSecret = row?.auth_external_client_secret ?? env.AUTH_EXTERNAL_CLIENT_SECRET;
-  const name = row?.auth_external_provider_name ?? env.AUTH_EXTERNAL_PROVIDER_NAME ?? providerId ?? "External";
-
-  return {
-    providerId: providerId ?? "",
-    name,
-    buttonLabel: row?.auth_external_provider_button_label ?? env.AUTH_EXTERNAL_PROVIDER_BUTTON_LABEL ?? `Continue with ${name}`,
-    logoUrl: trimOptional(row?.auth_external_provider_logo_url ?? env.AUTH_EXTERNAL_PROVIDER_LOGO_URL),
-    discoveryUrl: discoveryUrl ?? "",
-    clientId: clientId ?? "",
-    clientSecret: clientSecret ?? "",
-    scopes: splitScopeList(row?.auth_external_provider_scopes ?? env.AUTH_EXTERNAL_PROVIDER_SCOPES),
-  };
+function resolveExternalProviders(providers: SsoProviderRecord[]): ExternalAuthProviderSettings[] {
+  return providers
+    .filter((provider) => provider.enabled)
+    .map((provider) => ({
+      id: provider.id,
+      providerId: provider.providerId,
+      name: provider.displayName,
+      buttonLabel: provider.buttonLabel,
+      logoUrl: provider.logoUrl ?? undefined,
+      discoveryUrl: provider.discoveryUrl ?? "",
+      clientId: provider.clientId ?? "",
+      clientSecret: provider.clientSecret ?? "",
+      scopes: provider.scopes,
+      adminRules: provider.adminRules,
+    }));
 }
 
 function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
@@ -145,11 +123,6 @@ function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
 
 function requiredSetting(name: string, value: string | undefined): string | null {
   return value?.trim() ? null : name;
-}
-
-function trimOptional(value: string | undefined | null): string | undefined {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed : undefined;
 }
 
 export function splitScopeList(value: string | undefined | null): string[] {
