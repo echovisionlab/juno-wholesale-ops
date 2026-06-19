@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.3](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.2...v0.3.3) (2026-06-19)
+
+
+### Bug Fixes
+
+* harden settings feature boundaries ([95856e5](https://github.com/echovisionlab/juno-wholesale-ops/commit/95856e5bbf628c980369708b813cb1444b4947f8))
+* harden settings feature boundaries ([26c474e](https://github.com/echovisionlab/juno-wholesale-ops/commit/26c474ea63ad90341e91dbf35e5f5d145b12f9ba))
+
 ## [0.3.2](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.1...v0.3.2) (2026-06-19)
 
 
