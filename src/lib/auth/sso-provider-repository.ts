@@ -1,6 +1,14 @@
 import { Pool, type PoolClient } from "pg";
 
 export type SsoAdminRuleType = "email_allowlist" | "claim_equals";
+export type SsoProviderProtocol = "oidc" | "oauth2";
+export type SsoProviderPreset =
+  | "custom_oidc"
+  | "custom_oauth2"
+  | "google_oidc"
+  | "microsoft_entra_oidc"
+  | "auth0_oidc"
+  | "okta_oidc";
 
 export type SsoAdminRule = {
   id: string;
@@ -14,7 +22,12 @@ export type SsoProviderRecord = {
   displayName: string;
   buttonLabel: string;
   logoUrl: string | null;
+  protocol: SsoProviderProtocol;
+  preset: SsoProviderPreset;
   discoveryUrl: string | null;
+  authorizationUrl: string | null;
+  tokenUrl: string | null;
+  userInfoUrl: string | null;
   clientId: string | null;
   clientSecret: string | null;
   clientSecretConfigured: boolean;
@@ -37,9 +50,14 @@ export type PublicSsoProvider = Omit<SsoProviderRecord, "clientSecret"> & {
 export type SsoProviderInput = {
   providerId: string;
   displayName: string;
+  protocol?: SsoProviderProtocol | string | null;
+  preset?: SsoProviderPreset | string | null;
   buttonLabel?: string | null;
   logoUrl?: string | null;
   discoveryUrl?: string | null;
+  authorizationUrl?: string | null;
+  tokenUrl?: string | null;
+  userInfoUrl?: string | null;
   clientId?: string | null;
   clientSecret?: string | null;
   scopes?: string[] | string | null;
@@ -129,6 +147,21 @@ export function validateSsoProviderInput(input: SsoProviderInput | SsoProviderPa
   if ("providerId" in input && input.providerId !== undefined && !isProviderId(input.providerId)) {
     issues.push("providerId must start with a lowercase letter or digit and contain only lowercase letters, digits, underscores, or dashes");
   }
+  if ("protocol" in input && input.protocol !== undefined && !isProviderProtocol(input.protocol)) {
+    issues.push("protocol must be oidc or oauth2");
+  }
+  if ("preset" in input && input.preset !== undefined && !isProviderPreset(input.preset)) {
+    issues.push("preset is not supported");
+  }
+  if (
+    "protocol" in input &&
+    "preset" in input &&
+    isProviderProtocol(input.protocol) &&
+    isProviderPreset(input.preset) &&
+    presetProtocol(input.preset) !== input.protocol
+  ) {
+    issues.push("preset must match protocol");
+  }
   if (options.requireSecret && !("displayName" in input && input.displayName?.trim())) {
     issues.push("displayName is required");
   } else if ("displayName" in input && input.displayName !== undefined && !input.displayName.trim()) {
@@ -139,6 +172,15 @@ export function validateSsoProviderInput(input: SsoProviderInput | SsoProviderPa
   }
   if ("discoveryUrl" in input && input.discoveryUrl && !isUrl(input.discoveryUrl)) {
     issues.push("discoveryUrl must be a valid URL");
+  }
+  if ("authorizationUrl" in input && input.authorizationUrl && !isUrl(input.authorizationUrl)) {
+    issues.push("authorizationUrl must be a valid URL");
+  }
+  if ("tokenUrl" in input && input.tokenUrl && !isUrl(input.tokenUrl)) {
+    issues.push("tokenUrl must be a valid URL");
+  }
+  if ("userInfoUrl" in input && input.userInfoUrl && !isUrl(input.userInfoUrl)) {
+    issues.push("userInfoUrl must be a valid URL");
   }
   if (options.requireSecret && !("clientSecret" in input && input.clientSecret?.trim())) {
     issues.push("clientSecret is required when creating a provider");
@@ -154,16 +196,23 @@ export function validateSsoProviderInput(input: SsoProviderInput | SsoProviderPa
 }
 
 export function validateSsoProviderReadiness(
-  provider: Pick<SsoProviderRecord, "enabled" | "providerId" | "displayName" | "discoveryUrl" | "clientId" | "clientSecretConfigured">,
+  provider: Pick<SsoProviderRecord, "enabled" | "providerId" | "displayName" | "protocol" | "discoveryUrl" | "authorizationUrl" | "tokenUrl" | "userInfoUrl" | "clientId" | "clientSecretConfigured">,
   baseUrl: string | null,
 ): { status: PublicSsoProvider["status"]; missing: string[]; invalid: string[] } {
   if (!provider.enabled) {
     return { status: "disabled", missing: [], invalid: [] };
   }
+  const endpointMissing = provider.protocol === "oauth2" && !provider.discoveryUrl
+    ? [
+        provider.authorizationUrl ? null : "authorization URL",
+        provider.tokenUrl ? null : "token URL",
+        provider.userInfoUrl ? null : "user info URL",
+      ]
+    : [provider.discoveryUrl ? null : "discovery URL"];
   const missing = [
     provider.providerId ? null : "provider id",
     provider.displayName ? null : "display name",
-    provider.discoveryUrl ? null : "discovery URL",
+    ...endpointMissing,
     provider.clientId ? null : "client ID",
     provider.clientSecretConfigured ? null : "client secret",
     baseUrl ? null : "site address",
@@ -171,6 +220,9 @@ export function validateSsoProviderReadiness(
   const invalid = [
     provider.providerId && !isProviderId(provider.providerId) ? "provider id" : null,
     provider.discoveryUrl && !isUrl(provider.discoveryUrl) ? "discovery URL" : null,
+    provider.authorizationUrl && !isUrl(provider.authorizationUrl) ? "authorization URL" : null,
+    provider.tokenUrl && !isUrl(provider.tokenUrl) ? "token URL" : null,
+    provider.userInfoUrl && !isUrl(provider.userInfoUrl) ? "user info URL" : null,
     baseUrl && !isUrl(baseUrl) ? "site address" : null,
   ].filter((value): value is string => Boolean(value));
   return {
@@ -189,7 +241,12 @@ async function listSsoProvidersClient(queryable: Pool | PoolClient): Promise<Sso
         auth_sso_provider.display_name,
         auth_sso_provider.button_label,
         auth_sso_provider.logo_url,
+        auth_sso_provider.protocol,
+        auth_sso_provider.preset,
         auth_sso_provider.discovery_url,
+        auth_sso_provider.authorization_url,
+        auth_sso_provider.token_url,
+        auth_sso_provider.user_info_url,
         auth_sso_provider.client_id,
         auth_sso_provider.client_secret,
         auth_sso_provider.scopes,
@@ -223,6 +280,10 @@ async function createSsoProviderClient(client: PoolClient, input: SsoProviderInp
   if (issues.length > 0) {
     throw new Error(issues.join("; "));
   }
+  const normalizedProtocol = input.protocol === undefined && isProviderPreset(input.preset)
+    ? presetProtocol(input.preset)
+    : normalizeProviderProtocol(input.protocol);
+  const normalizedPreset = normalizeProviderPreset(input.preset, normalizedProtocol);
   const result = await client.query<{ id: string }>(
     `
       INSERT INTO auth_sso_provider (
@@ -230,14 +291,19 @@ async function createSsoProviderClient(client: PoolClient, input: SsoProviderInp
         display_name,
         button_label,
         logo_url,
+        protocol,
+        preset,
         discovery_url,
+        authorization_url,
+        token_url,
+        user_info_url,
         client_id,
         client_secret,
         scopes,
         enabled,
         sort_order
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id
     `,
     [
@@ -245,7 +311,12 @@ async function createSsoProviderClient(client: PoolClient, input: SsoProviderInp
       input.displayName.trim(),
       normalizeOptionalString(input.buttonLabel),
       normalizeOptionalString(input.logoUrl),
+      normalizedProtocol,
+      normalizedPreset,
       normalizeOptionalString(input.discoveryUrl),
+      normalizeOptionalString(input.authorizationUrl),
+      normalizeOptionalString(input.tokenUrl),
+      normalizeOptionalString(input.userInfoUrl),
       normalizeOptionalString(input.clientId),
       normalizeOptionalString(input.clientSecret),
       normalizeScopes(input.scopes),
@@ -268,7 +339,17 @@ async function updateSsoProviderClient(client: PoolClient, patch: SsoProviderPat
   addField(fields, "display_name", patch.displayName?.trim());
   addField(fields, "button_label", normalizeOptionalString(patch.buttonLabel));
   addField(fields, "logo_url", normalizeOptionalString(patch.logoUrl));
+  const normalizedProtocol = patch.protocol === undefined ? undefined : normalizeProviderProtocol(patch.protocol);
+  const normalizedPreset =
+    patch.preset === undefined && normalizedProtocol === undefined
+      ? undefined
+      : normalizeProviderPreset(patch.preset, normalizedProtocol);
+  addField(fields, "protocol", normalizedProtocol ?? (normalizedPreset ? presetProtocol(normalizedPreset) : undefined));
+  addField(fields, "preset", normalizedPreset);
   addField(fields, "discovery_url", normalizeOptionalString(patch.discoveryUrl));
+  addField(fields, "authorization_url", normalizeOptionalString(patch.authorizationUrl));
+  addField(fields, "token_url", normalizeOptionalString(patch.tokenUrl));
+  addField(fields, "user_info_url", normalizeOptionalString(patch.userInfoUrl));
   addField(fields, "client_id", normalizeOptionalString(patch.clientId));
   if (patch.clientSecret !== undefined && patch.clientSecret !== "") {
     addField(fields, "client_secret", normalizeOptionalString(patch.clientSecret));
@@ -350,7 +431,12 @@ type ProviderRow = {
   display_name: string;
   button_label: string | null;
   logo_url: string | null;
+  protocol: SsoProviderProtocol;
+  preset: SsoProviderPreset;
   discovery_url: string | null;
+  authorization_url: string | null;
+  token_url: string | null;
+  user_info_url: string | null;
   client_id: string | null;
   client_secret: string | null;
   scopes: string;
@@ -373,7 +459,12 @@ function mapProviderRow(row: ProviderRow & { rules: RuleRow[] | null }): SsoProv
     displayName: row.display_name,
     buttonLabel: row.button_label ?? `Continue with ${row.display_name}`,
     logoUrl: row.logo_url,
+    protocol: row.protocol,
+    preset: row.preset,
     discoveryUrl: row.discovery_url,
+    authorizationUrl: row.authorization_url,
+    tokenUrl: row.token_url,
+    userInfoUrl: row.user_info_url,
     clientId: row.client_id,
     clientSecret: row.client_secret,
     clientSecretConfigured: Boolean(row.client_secret),
@@ -402,12 +493,42 @@ function normalizeOptionalString(value: string | null | undefined): string | nul
   return trimmed ? trimmed : null;
 }
 
+function normalizeProviderProtocol(value: string | null | undefined): SsoProviderProtocol {
+  return isProviderProtocol(value) ? value : "oidc";
+}
+
+function normalizeProviderPreset(value: string | null | undefined, protocol: SsoProviderProtocol = "oidc"): SsoProviderPreset {
+  if (isProviderPreset(value)) {
+    return value;
+  }
+  return protocol === "oauth2" ? "custom_oauth2" : "custom_oidc";
+}
+
+function presetProtocol(value: SsoProviderPreset): SsoProviderProtocol {
+  return value.endsWith("_oauth2") ? "oauth2" : "oidc";
+}
+
 function normalizeInteger(value: number | undefined, fallback: number): number {
   return typeof value === "number" && Number.isInteger(value) ? value : fallback;
 }
 
 function isProviderId(value: string): boolean {
   return /^[a-z0-9][a-z0-9_-]{1,62}$/.test(value);
+}
+
+function isProviderProtocol(value: unknown): value is SsoProviderProtocol {
+  return value === "oidc" || value === "oauth2";
+}
+
+function isProviderPreset(value: unknown): value is SsoProviderPreset {
+  return (
+    value === "custom_oidc" ||
+    value === "custom_oauth2" ||
+    value === "google_oidc" ||
+    value === "microsoft_entra_oidc" ||
+    value === "auth0_oidc" ||
+    value === "okta_oidc"
+  );
 }
 
 function isUrl(value: string): boolean {

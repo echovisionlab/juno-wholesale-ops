@@ -11,10 +11,10 @@ import {
   Container,
   Divider,
   Group,
+  Modal,
   NativeSelect,
   NumberInput,
   PasswordInput,
-  ScrollArea,
   Stack,
   Switch,
   Table,
@@ -23,7 +23,9 @@ import {
   TextInput,
   Textarea,
   Title,
+  Tooltip,
 } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -48,19 +50,21 @@ import type {
 type PatchValue = string | number | boolean | null;
 type DraftValues = Record<string, PatchValue>;
 type ActionResult = Record<string, unknown>;
-type SettingsActionName = "test-gmail" | "test-juno-session" | "run-demo-seed";
-type ActionSummary = {
-  title: string;
-  detail: string;
-  color: "green" | "yellow" | "red" | "blue";
-};
+type SettingsActionName = "test-gmail" | "test-juno-session";
+type SsoProviderProtocol = "oidc" | "oauth2";
+type SsoProviderPreset = "custom_oidc" | "custom_oauth2" | "google_oidc" | "microsoft_entra_oidc" | "auth0_oidc" | "okta_oidc";
 type SsoProviderDraft = {
   id?: string;
   providerId: string;
   displayName: string;
+  protocol: SsoProviderProtocol;
+  preset: SsoProviderPreset;
   buttonLabel: string;
   logoUrl: string;
   discoveryUrl: string;
+  authorizationUrl: string;
+  tokenUrl: string;
+  userInfoUrl: string;
   clientId: string;
   clientSecret: string;
   scopes: string;
@@ -74,9 +78,14 @@ type SsoProviderDraft = {
 const emptySsoProviderDraft: SsoProviderDraft = {
   providerId: "",
   displayName: "",
+  protocol: "oidc",
+  preset: "custom_oidc",
   buttonLabel: "",
   logoUrl: "",
   discoveryUrl: "",
+  authorizationUrl: "",
+  tokenUrl: "",
+  userInfoUrl: "",
   clientId: "",
   clientSecret: "",
   scopes: "openid email profile",
@@ -86,6 +95,21 @@ const emptySsoProviderDraft: SsoProviderDraft = {
   adminClaim: "",
   adminClaimValue: "",
 };
+
+const ssoProviderPresetOptions: Array<{
+  value: SsoProviderPreset;
+  label: string;
+  protocol: SsoProviderProtocol;
+  discoveryUrl?: string;
+  scopes: string;
+}> = [
+  { value: "custom_oidc", label: "OpenID Connect", protocol: "oidc", scopes: "openid email profile" },
+  { value: "custom_oauth2", label: "OAuth 2.0", protocol: "oauth2", scopes: "openid email profile" },
+  { value: "google_oidc", label: "Google Workspace", protocol: "oidc", discoveryUrl: "https://accounts.google.com/.well-known/openid-configuration", scopes: "openid email profile" },
+  { value: "microsoft_entra_oidc", label: "Microsoft Entra ID", protocol: "oidc", scopes: "openid email profile" },
+  { value: "auth0_oidc", label: "Auth0", protocol: "oidc", scopes: "openid email profile" },
+  { value: "okta_oidc", label: "Okta", protocol: "oidc", scopes: "openid email profile" },
+];
 
 type SettingsPageProps = {
   initialSettings?: SettingsResponse | null;
@@ -98,13 +122,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [error, setError] = useState<string | null>(initialError);
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
-  const [actionSummary, setActionSummary] = useState<ActionSummary | null>(null);
-  const [diagnosticsPayload, setDiagnosticsPayload] = useState<ActionResult | null>(null);
-  const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<string | null>(null);
   const [ssoProviderDraft, setSsoProviderDraft] = useState<SsoProviderDraft>(emptySsoProviderDraft);
   const [editingSsoProviderId, setEditingSsoProviderId] = useState<string | null>(null);
   const [ssoProviderPending, setSsoProviderPending] = useState<string | null>(null);
+  const [ssoProviderModalOpen, setSsoProviderModalOpen] = useState(false);
   const shouldLoadOnClient = !initialSettings && !initialError;
 
   const loadSettings = useCallback(async () => {
@@ -159,7 +180,9 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         issues?: string[];
       };
       if (!response.ok || !payload.settings) {
-        setError(payload.issues?.join(" ") ?? payload.error ?? `Settings save returned ${response.status}`);
+        const message = payload.issues?.join(" ") ?? payload.error ?? `Settings save returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Save failed", message });
         return;
       }
       setSettings(payload.settings);
@@ -170,42 +193,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         }
         return next;
       });
-    } finally {
-      setSavingGroup(null);
-    }
-  }
-
-  async function clearSetting(group: SettingsGroup, setting: SettingDescriptor) {
-    setDraft((current) => ({ ...current, [setting.key]: null }));
-    await savePatch(group.id, { [setting.key]: null });
-  }
-
-  async function savePatch(groupId: SettingsGroupId, patch: Record<string, PatchValue>) {
-    setSavingGroup(groupId);
-    setError(null);
-    try {
-      const response = await fetch("/api/settings", {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ [groupId]: patch }),
-      });
-      const payload = (await response.json().catch(() => ({}))) as {
-        settings?: SettingsResponse;
-        error?: string;
-        issues?: string[];
-      };
-      if (!response.ok || !payload.settings) {
-        setError(payload.issues?.join(" ") ?? payload.error ?? `Settings save returned ${response.status}`);
-        return;
-      }
-      setSettings(payload.settings);
-      setDraft((current) => {
-        const next = { ...current };
-        for (const key of Object.keys(patch)) {
-          delete next[key];
-        }
-        return next;
-      });
+      notifications.show({ color: "green", title: "Settings saved", message: group.label });
     } finally {
       setSavingGroup(null);
     }
@@ -214,7 +202,6 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   async function runAction(action: SettingsActionName) {
     setActionPending(action);
     setError(null);
-    setActionSummary(null);
     try {
       const response = await fetch(`/api/settings/actions/${action}`, {
         method: "POST",
@@ -226,13 +213,16 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok) {
-        setError(payload.error ?? `${action} returned ${response.status}`);
+        const message = payload.error ?? `${action} returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Check failed", message });
       }
       if (payload.settings) {
         setSettings(payload.settings);
       }
-      setDiagnosticsPayload(maskActionResult({ action, httpStatus: response.status, ...payload }));
-      setActionSummary(summarizeAction(action, payload, response.status));
+      if (response.ok) {
+        notifications.show({ color: payload.ok === false ? "yellow" : "green", title: summarizeActionTitle(action), message: payload.status ? String(payload.status) : undefined });
+      }
     } finally {
       setActionPending(null);
     }
@@ -264,12 +254,43 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         issues?: string[];
       };
       if (!response.ok || !result.settings) {
-        setError(result.issues?.join(" ") ?? result.error ?? `SSO provider save returned ${response.status}`);
+        const message = result.issues?.join(" ") ?? result.error ?? `SSO provider save returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: editing ? "Provider update failed" : "Provider create failed", message });
         return;
       }
       setSettings(result.settings);
       setSsoProviderDraft(emptySsoProviderDraft);
       setEditingSsoProviderId(null);
+      setSsoProviderModalOpen(false);
+      notifications.show({ color: "green", title: editing ? "Provider updated" : "Provider created", message: "Saved" });
+    } finally {
+      setSsoProviderPending(null);
+    }
+  }
+
+  async function toggleSsoProvider(id: string, enabled: boolean) {
+    setSsoProviderPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/settings/auth/sso-providers", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        settings?: SettingsResponse;
+        error?: string;
+        issues?: string[];
+      };
+      if (!response.ok || !result.settings) {
+        const message = result.issues?.join(" ") ?? result.error ?? `SSO provider update returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Provider update failed", message });
+        return;
+      }
+      setSettings(result.settings);
+      notifications.show({ color: "green", title: enabled ? "Provider enabled" : "Provider disabled", message: "Saved" });
     } finally {
       setSsoProviderPending(null);
     }
@@ -289,7 +310,9 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok || !result.settings) {
-        setError(result.error ?? `SSO provider delete returned ${response.status}`);
+        const message = result.error ?? `SSO provider delete returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Provider delete failed", message });
         return;
       }
       setSettings(result.settings);
@@ -297,20 +320,9 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         setSsoProviderDraft(emptySsoProviderDraft);
         setEditingSsoProviderId(null);
       }
+      notifications.show({ color: "green", title: "Provider deleted", message: "Saved" });
     } finally {
       setSsoProviderPending(null);
-    }
-  }
-
-  async function copyDiagnostics() {
-    if (!diagnosticsPayload) {
-      return;
-    }
-    try {
-      await navigator.clipboard?.writeText(JSON.stringify(diagnosticsPayload, null, 2));
-      setCopyStatus("Sanitized diagnostics copied.");
-    } catch {
-      setCopyStatus("Browser denied clipboard access. Diagnostics remain visible for manual copy.");
     }
   }
 
@@ -328,9 +340,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                 Operator setup
               </Text>
               <Title order={1}>Settings Center</Title>
-              <Text c="dimmed">
-                Read-only observation only. Runtime configuration bootstraps infrastructure; saved operator settings and mail sources live in Postgres.
-              </Text>
+              <Text c="dimmed">Read-only operator settings.</Text>
             </Stack>
             <Button component="a" href="/" variant="light">
               Dashboard
@@ -348,7 +358,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
               <Text fw={700}>{error ? "Settings unavailable" : "Loading settings..."}</Text>
               <Text size="sm" c="dimmed" mt={4}>
                 {error
-                  ? "The server could not provide masked operator configuration. Runtime bootstrap still provides DATABASE_URL."
+                  ? "The server could not load masked operator configuration. Check DATABASE_URL and Postgres."
                   : "The Settings Center is asking the server for masked operator configuration."}
               </Text>
               {error ? (
@@ -368,25 +378,22 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                   <Tabs.Tab value="mail">Mail Sources</Tabs.Tab>
                   <Tabs.Tab value="juno">Juno Live</Tabs.Tab>
                   <Tabs.Tab value="notifications">Notifications</Tabs.Tab>
-                  <Tabs.Tab value="advanced">Advanced</Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="overview" pt="md">
                   <Stack gap="md">
                     <OverviewUnitsGrid settings={settings} />
-                    <ResponsiveGrid minWidth={360} gap="md">
-                      <NextActionsPanel settings={settings} />
-                      <SettingsActionsPanel
-                        deploymentMode={settings.environment.deploymentMode}
-                        pending={actionPending}
-                        summary={actionSummary}
-                        onRun={runAction}
-                      />
-                    </ResponsiveGrid>
+	                    <ResponsiveGrid minWidth={360} gap="md">
+	                      <NextActionsPanel settings={settings} />
+	                      <SettingsActionsPanel
+	                        pending={actionPending}
+	                        onRun={runAction}
+	                      />
+	                    </ResponsiveGrid>
                   </Stack>
                 </Tabs.Panel>
 
-                {(["auth", "mail", "juno", "notifications", "advanced"] as const).map((groupId) => (
+                {(["auth", "mail", "juno", "notifications"] as const).map((groupId) => (
                   <Tabs.Panel key={groupId} value={groupId} pt="md">
                     {groupsById[groupId] ? (
                       <Stack gap="md">
@@ -402,38 +409,39 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                               onEdit={(draft) => {
                                 setSsoProviderDraft(draft);
                                 setEditingSsoProviderId(draft.id ?? null);
+                                setSsoProviderModalOpen(true);
                               }}
                               onCancel={() => {
                                 setSsoProviderDraft(emptySsoProviderDraft);
                                 setEditingSsoProviderId(null);
+                                setSsoProviderModalOpen(false);
                               }}
                               onSave={() => void saveSsoProvider()}
                               onDelete={(id) => void deleteSsoProvider(id)}
+                              onToggle={(id, enabled) => void toggleSsoProvider(id, enabled)}
+                              modalOpen={ssoProviderModalOpen}
+                              onAdd={() => {
+                                setSsoProviderDraft(emptySsoProviderDraft);
+                                setEditingSsoProviderId(null);
+                                setSsoProviderModalOpen(true);
+                              }}
+                              onModalClose={() => {
+                                setSsoProviderModalOpen(false);
+                                setEditingSsoProviderId(null);
+                                setSsoProviderDraft(emptySsoProviderDraft);
+                              }}
                             />
                           </>
                         ) : null}
                         {groupId === "mail" ? <MailSourcesCard settings={settings} /> : null}
                         {groupId === "juno" ? <JunoLiveSessionCard settings={settings} group={groupsById[groupId]} /> : null}
                         {groupId === "notifications" ? <NotificationsUnitCard settings={settings} /> : null}
-                        {groupId === "advanced" ? (
-                          <AdvancedDiagnosticsPanel
-                            diagnosticsPayload={diagnosticsPayload}
-                            open={diagnosticsOpen}
-                            copyStatus={copyStatus}
-                            onToggle={() => {
-                              setDiagnosticsOpen((current) => !current);
-                              setCopyStatus(null);
-                            }}
-                            onCopy={() => void copyDiagnostics()}
-                          />
-                        ) : null}
                         <SettingsGroupCard
                           group={groupsById[groupId]}
                           draft={draft}
                           saving={savingGroup === groupId}
                           onDraftChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
                           onSave={() => groupsById[groupId] && void saveGroup(groupsById[groupId])}
-                          onClear={(setting) => groupsById[groupId] && void clearSetting(groupsById[groupId], setting)}
                         />
                       </Stack>
                     ) : null}
@@ -466,11 +474,11 @@ function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
 function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
   const editableSettings = settings.groups.flatMap((group) => group.settings).filter((setting) => setting.editable);
   const missingSettings = editableSettings.filter((setting) => setting.state === "missing" || setting.state === "invalid");
-  return (
-    <ResponsiveGrid minWidth={180} gap="sm">
-      <StatusCard icon={Database} label="Data mode" value={settings.dataMode.value === "demo" ? "Demo" : "Real mailbox"} detail={settings.dataMode.detail} />
-      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
-      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} detail={missingSettings.length === 0 ? "Editable values are ready." : `${missingSettings.length} editable value${missingSettings.length === 1 ? "" : "s"} need attention.`} />
+	  return (
+	    <ResponsiveGrid minWidth={180} gap="sm">
+	      <StatusCard icon={Database} label="Database" value="Required" detail={settings.environment.lastUpdatedAt ? "Settings row available." : "Waiting for saved settings."} />
+	      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} detail={settings.security.authBootstrap.detail} />
+	      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} detail={missingSettings.length === 0 ? "Editable values are ready." : `${missingSettings.length} editable value${missingSettings.length === 1 ? "" : "s"} need attention.`} />
       <StatusCard icon={Globe2} label="Site address" value={settings.environment.appBaseUrl ? "Configured" : "Not set"} detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"} />
     </ResponsiveGrid>
   );
@@ -582,10 +590,8 @@ function UnitOverviewCard({
   );
 }
 
-function SettingsActionsPanel({ deploymentMode, pending, summary, onRun }: {
-  deploymentMode: SettingsResponse["environment"]["deploymentMode"];
+function SettingsActionsPanel({ pending, onRun }: {
   pending: string | null;
-  summary: ActionSummary | null;
   onRun: (action: SettingsActionName) => void;
 }) {
   return (
@@ -599,84 +605,14 @@ function SettingsActionsPanel({ deploymentMode, pending, summary, onRun }: {
           <Button size="xs" loading={pending === "test-gmail"} onClick={() => onRun("test-gmail")}>
             Test Mail Source
           </Button>
-          <Button size="xs" variant="light" loading={pending === "test-juno-session"} onClick={() => onRun("test-juno-session")}>
-            Test Juno session
-          </Button>
-          {deploymentMode !== "production" ? (
-            <Button size="xs" variant="light" color="gray" loading={pending === "run-demo-seed"} onClick={() => onRun("run-demo-seed")}>
-              Run demo seed
-            </Button>
-          ) : null}
-        </Group>
-        {summary ? (
-          <>
-            <Alert color={summary.color} variant="light" title={summary.title}>
-              {summary.detail}
-            </Alert>
-            <Text size="sm" c="dimmed">
-              Detailed diagnostics are available only under Advanced.
-            </Text>
-          </>
-        ) : (
-          <Text size="sm" c="dimmed">
-            Run read-only smoke checks from here. Detailed diagnostics are available only under Advanced.
-          </Text>
-        )}
-      </Stack>
-    </Card>
-  );
-}
-
-function AdvancedDiagnosticsPanel({
-  diagnosticsPayload,
-  open,
-  copyStatus,
-  onToggle,
-  onCopy,
-}: {
-  diagnosticsPayload: ActionResult | null;
-  open: boolean;
-  copyStatus: string | null;
-  onToggle: () => void;
-  onCopy: () => void;
-}) {
-  return (
-    <Card>
-      <Stack gap="sm">
-        <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
-            <Text fw={700}>Diagnostics</Text>
-            <Text size="sm" c="dimmed">
-              View and copy sanitized diagnostics. Secrets, tokens, cookies, passwords, and service account contents are redacted.
-            </Text>
-          </Stack>
-          <Button size="xs" variant="light" onClick={onToggle}>
-            {open ? "Hide sanitized JSON" : "View sanitized JSON"}
-          </Button>
-        </Group>
-        {!diagnosticsPayload ? (
-          <Alert color="blue" title="No diagnostics captured">
-            Run a read-only smoke check from Overview first.
-          </Alert>
-        ) : null}
-        {open && diagnosticsPayload ? (
-          <>
-            <Group justify="space-between" align="center">
-              <Text size="sm" fw={700}>Sanitized JSON</Text>
-              <Button size="xs" variant="light" leftSection={<Copy size={14} aria-hidden="true" />} onClick={onCopy}>
-                Copy diagnostics
-              </Button>
-            </Group>
-            {copyStatus ? <Text size="sm" c="green.7">{copyStatus}</Text> : null}
-            <ScrollArea h={320} type="auto">
-              <Code block>{JSON.stringify(diagnosticsPayload, null, 2)}</Code>
-            </ScrollArea>
-          </>
-        ) : null}
-      </Stack>
-    </Card>
-  );
-}
+	          <Button size="xs" variant="light" loading={pending === "test-juno-session"} onClick={() => onRun("test-juno-session")}>
+	            Test Juno session
+	          </Button>
+	        </Group>
+	      </Stack>
+	    </Card>
+	  );
+	}
 
 function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
@@ -741,6 +677,10 @@ function AuthProviderCard({
   onCancel,
   onSave,
   onDelete,
+  onToggle,
+  modalOpen,
+  onAdd,
+  onModalClose,
 }: {
   settings: SettingsResponse;
   draft: SsoProviderDraft;
@@ -751,6 +691,10 @@ function AuthProviderCard({
   onCancel: () => void;
   onSave: () => void;
   onDelete: (id: string) => void;
+  onToggle: (id: string, enabled: boolean) => void;
+  modalOpen: boolean;
+  onAdd: () => void;
+  onModalClose: () => void;
 }) {
   const providerUnit = settings.units.authProvider;
   const [callbackCopyStatus, setCallbackCopyStatus] = useState<string | null>(null);
@@ -771,29 +715,19 @@ function AuthProviderCard({
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
+          <Group gap="xs">
             <Text fw={700}>External SSO Providers</Text>
-            <Text size="sm" c="dimmed">
-              Manage Generic OAuth/OIDC providers. The Site address setting owns provider-scoped callback URLs.
-            </Text>
-          </Stack>
-          <Badge color={unitStatusColor(providerUnit.status)} variant="light">
-            {providerUnit.status}
-          </Badge>
+            <Badge color={unitStatusColor(providerUnit.status)} variant="light">
+              {providerUnit.status}
+            </Badge>
+          </Group>
+          <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAdd}>
+            Add provider
+          </Button>
         </Group>
 
-        <ResponsiveGrid minWidth={180} gap="xs">
-          <SignalFact label="Total providers" value={String(providerUnit.providerCount)} />
-          <SignalFact label="Enabled providers" value={String(providerUnit.enabledProviderCount)} />
-          <SignalFact label="Ready providers" value={String(providerUnit.readyProviderCount)} />
-        </ResponsiveGrid>
-
-        <Text size="sm" c="dimmed">{providerUnit.detail}</Text>
-
         {providerUnit.providers.length === 0 ? (
-          <Alert color="blue" title="No SSO providers configured">
-            Add a provider below. Email/password sign-in remains available unless you disable it after at least one provider is ready.
-          </Alert>
+          <Text size="sm" c="dimmed">No external SSO providers configured.</Text>
         ) : (
           <Stack gap="sm">
             {providerUnit.providers.map((provider) => (
@@ -803,12 +737,20 @@ function AuthProviderCard({
                     <Stack gap={2}>
                       <Group gap="xs">
                         <Text fw={700}>{provider.displayName}</Text>
+                        <Badge color="blue" variant="light">{presetLabel(provider.preset)}</Badge>
                         <Badge color={unitStatusColor(provider.status)} variant="light">{provider.status}</Badge>
-                        <Badge color={provider.enabled ? "green" : "gray"} variant="light">{provider.enabled ? "enabled" : "disabled"}</Badge>
                       </Group>
                       <Text size="sm" c="dimmed">{provider.providerId}</Text>
                     </Stack>
                     <Group gap="xs">
+                      <Tooltip label={provider.enabled ? "Disable provider" : "Enable provider"}>
+                        <Switch
+                          aria-label={`${provider.displayName} enabled`}
+                          checked={provider.enabled}
+                          disabled={pending === provider.id}
+                          onChange={(event) => onToggle(provider.id, event.currentTarget.checked)}
+                        />
+                      </Tooltip>
                       <Button
                         size="xs"
                         variant="light"
@@ -830,11 +772,9 @@ function AuthProviderCard({
                   </Group>
 
                   <ResponsiveGrid minWidth={220} gap="xs">
-                    <SignalFact label="Button label" value={provider.buttonLabel} />
-                    <SignalFact label="Discovery URL" value={provider.discoveryUrl ?? "not configured"} />
+                    <SignalFact label="Protocol" value={provider.protocol === "oidc" ? "OpenID Connect" : "OAuth 2.0"} />
                     <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
                     <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
-                    <SignalFact label="Scopes" value={provider.scopes.join(" ")} />
                     <SignalFact label="Admin rules" value={`${provider.adminEmailAllowlist.length + (provider.adminClaim ? 1 : 0)} configured`} />
                   </ResponsiveGrid>
 
@@ -866,101 +806,115 @@ function AuthProviderCard({
 
         {callbackCopyStatus ? <Text size="xs" c="dimmed">{callbackCopyStatus}</Text> : null}
 
-        <Divider />
-
-        <Stack gap="sm">
-          <Group gap="xs">
-            <Plus size={16} aria-hidden="true" />
-            <Text fw={700}>{editingId ? "Edit SSO provider" : "Add SSO provider"}</Text>
-          </Group>
-          <ResponsiveGrid minWidth={260} gap="sm">
-            <Switch
-              label="Provider enabled"
-              checked={draft.enabled}
-              onChange={(event) => onDraftChange({ ...draft, enabled: event.currentTarget.checked })}
+        <Modal opened={modalOpen} onClose={onModalClose} title={editingId ? "Edit SSO provider" : "Add SSO provider"} size="lg">
+          <Stack gap="sm">
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <NativeSelect
+                label="Provider preset"
+                value={draft.preset}
+                data={ssoProviderPresetOptions.map((preset) => ({ value: preset.value, label: preset.label }))}
+                onChange={(event) => onDraftChange(applyProviderPreset(draft, event.currentTarget.value as SsoProviderPreset))}
+              />
+              <TextInput
+                label="Provider ID"
+                value={draft.providerId}
+                placeholder="google-workspace"
+                onChange={(event) => onDraftChange({ ...draft, providerId: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Display name"
+                value={draft.displayName}
+                placeholder="Google Workspace"
+                onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Button label"
+                value={draft.buttonLabel}
+                placeholder="Continue with Google Workspace"
+                onChange={(event) => onDraftChange({ ...draft, buttonLabel: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Discovery URL or Issuer URL"
+                value={draft.discoveryUrl}
+                onChange={(event) => onDraftChange({ ...draft, discoveryUrl: event.currentTarget.value })}
+              />
+              {draft.protocol === "oauth2" ? (
+                <>
+                  <TextInput
+                    label="Authorization URL"
+                    value={draft.authorizationUrl}
+                    onChange={(event) => onDraftChange({ ...draft, authorizationUrl: event.currentTarget.value })}
+                  />
+                  <TextInput
+                    label="Token URL"
+                    value={draft.tokenUrl}
+                    onChange={(event) => onDraftChange({ ...draft, tokenUrl: event.currentTarget.value })}
+                  />
+                  <TextInput
+                    label="User info URL"
+                    value={draft.userInfoUrl}
+                    onChange={(event) => onDraftChange({ ...draft, userInfoUrl: event.currentTarget.value })}
+                  />
+                </>
+              ) : null}
+              <TextInput
+                label="Client ID"
+                value={draft.clientId}
+                onChange={(event) => onDraftChange({ ...draft, clientId: event.currentTarget.value })}
+              />
+              <PasswordInput
+                label={editingId ? "New client secret" : "Client secret"}
+                placeholder={editingId ? "Current secret stays configured" : undefined}
+                value={draft.clientSecret}
+                onChange={(event) => onDraftChange({ ...draft, clientSecret: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Scopes"
+                value={draft.scopes}
+                onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
+              />
+              <NumberInput
+                label="Sort order"
+                value={draft.sortOrder}
+                allowDecimal={false}
+                onChange={(value) => onDraftChange({ ...draft, sortOrder: typeof value === "number" ? value : 0 })}
+              />
+              <Switch
+                label="Enabled"
+                checked={draft.enabled}
+                onChange={(event) => onDraftChange({ ...draft, enabled: event.currentTarget.checked })}
+              />
+            </ResponsiveGrid>
+            <Textarea
+              label="Admin email allowlist"
+              minRows={2}
+              value={draft.adminEmailAllowlist}
+              onChange={(event) => onDraftChange({ ...draft, adminEmailAllowlist: event.currentTarget.value })}
             />
-            <NumberInput
-              label="Sort order"
-              value={draft.sortOrder}
-              allowDecimal={false}
-              onChange={(value) => onDraftChange({ ...draft, sortOrder: typeof value === "number" ? value : 0 })}
-            />
-            <TextInput
-              label="Provider ID"
-              value={draft.providerId}
-              placeholder="google-workspace"
-              onChange={(event) => onDraftChange({ ...draft, providerId: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Display name"
-              value={draft.displayName}
-              placeholder="Google Workspace"
-              onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Button label"
-              value={draft.buttonLabel}
-              placeholder="Continue with Google Workspace"
-              onChange={(event) => onDraftChange({ ...draft, buttonLabel: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Logo URL"
-              value={draft.logoUrl}
-              onChange={(event) => onDraftChange({ ...draft, logoUrl: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Discovery URL"
-              value={draft.discoveryUrl}
-              onChange={(event) => onDraftChange({ ...draft, discoveryUrl: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Client ID"
-              value={draft.clientId}
-              onChange={(event) => onDraftChange({ ...draft, clientId: event.currentTarget.value })}
-            />
-            <PasswordInput
-              label={editingId ? "New client secret" : "Client secret"}
-              placeholder={editingId ? "Leave blank for no change" : undefined}
-              value={draft.clientSecret}
-              onChange={(event) => onDraftChange({ ...draft, clientSecret: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Scopes"
-              value={draft.scopes}
-              onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
-            />
-          </ResponsiveGrid>
-          <Textarea
-            label="Admin email allowlist"
-            minRows={2}
-            value={draft.adminEmailAllowlist}
-            onChange={(event) => onDraftChange({ ...draft, adminEmailAllowlist: event.currentTarget.value })}
-          />
-          <ResponsiveGrid minWidth={260} gap="sm">
-            <TextInput
-              label="Admin claim"
-              value={draft.adminClaim}
-              placeholder="groups"
-              onChange={(event) => onDraftChange({ ...draft, adminClaim: event.currentTarget.value })}
-            />
-            <TextInput
-              label="Admin claim value"
-              value={draft.adminClaimValue}
-              placeholder="ops-admins"
-              onChange={(event) => onDraftChange({ ...draft, adminClaimValue: event.currentTarget.value })}
-            />
-          </ResponsiveGrid>
-          <Group justify="flex-end">
-            {editingId ? (
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <TextInput
+                label="Admin claim"
+                value={draft.adminClaim}
+                placeholder="groups"
+                onChange={(event) => onDraftChange({ ...draft, adminClaim: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Admin claim value"
+                value={draft.adminClaimValue}
+                placeholder="ops-admins"
+                onChange={(event) => onDraftChange({ ...draft, adminClaimValue: event.currentTarget.value })}
+              />
+            </ResponsiveGrid>
+            <Group justify="flex-end">
               <Button variant="light" color="gray" onClick={onCancel}>
                 Cancel
               </Button>
-            ) : null}
-            <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingId ?? "new")} onClick={onSave}>
-              {editingId ? "Save provider" : "Add provider"}
-            </Button>
-          </Group>
-        </Stack>
+              <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingId ?? "new")} onClick={onSave}>
+                {editingId ? "Save provider" : "Create provider"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
       </Stack>
     </Card>
   );
@@ -971,9 +925,14 @@ function providerToDraft(provider: SettingsResponse["units"]["authProvider"]["pr
     id: provider.id,
     providerId: provider.providerId,
     displayName: provider.displayName,
+    protocol: provider.protocol,
+    preset: provider.preset as SsoProviderPreset,
     buttonLabel: provider.buttonLabel,
     logoUrl: provider.logoUrl ?? "",
     discoveryUrl: provider.discoveryUrl ?? "",
+    authorizationUrl: provider.authorizationUrl ?? "",
+    tokenUrl: provider.tokenUrl ?? "",
+    userInfoUrl: provider.userInfoUrl ?? "",
     clientId: provider.clientId ?? "",
     clientSecret: "",
     scopes: provider.scopes.join(" "),
@@ -985,35 +944,47 @@ function providerToDraft(provider: SettingsResponse["units"]["authProvider"]["pr
   };
 }
 
+function applyProviderPreset(draft: SsoProviderDraft, presetValue: SsoProviderPreset): SsoProviderDraft {
+  const preset = ssoProviderPresetOptions.find((entry) => entry.value === presetValue);
+  if (!preset) {
+    return draft;
+  }
+  return {
+    ...draft,
+    preset: preset.value,
+    protocol: preset.protocol,
+    scopes: draft.scopes || preset.scopes,
+    discoveryUrl: preset.discoveryUrl ?? draft.discoveryUrl,
+  };
+}
+
+function presetLabel(value: string): string {
+  return ssoProviderPresetOptions.find((preset) => preset.value === value)?.label ?? value;
+}
+
 function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
   const sources = settings.mailSources;
   return (
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
-            <Text fw={700}>Gmail Workspace Ingest</Text>
-            <Text size="sm" c="dimmed">
-              Gmail uses Google Workspace delegation with a JSON service account credential. Demo mode can run without Gmail; real mailbox mode requires a runnable Gmail source.
-            </Text>
-          </Stack>
+	          <Stack gap={4}>
+	            <Text fw={700}>Gmail Workspace Ingest</Text>
+	          </Stack>
           <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
             {settings.units.mail.status}
           </Badge>
         </Group>
-        <ResponsiveGrid minWidth={220} gap="xs">
-          <SignalFact label="Mode impact" value={settings.dataMode.value === "demo" ? "Gmail optional in Demo mode" : "Gmail required in Real mailbox mode"} />
-          <SignalFact label="Runnable Gmail sources" value={String(sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length)} />
-          <SignalFact label="Service account key" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
-        </ResponsiveGrid>
+	        <ResponsiveGrid minWidth={220} gap="xs">
+	          <SignalFact label="Runnable Gmail sources" value={String(sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length)} />
+	          <SignalFact label="Service account key" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
+	        </ResponsiveGrid>
 
-        {sources.length === 0 ? (
-          <Alert color={settings.dataMode.value === "real_mailbox" ? "red" : "blue"} title="No mail sources configured">
-            {settings.dataMode.value === "real_mailbox"
-              ? "Real mailbox mode requires delegated mailbox access and a service account key reference."
-              : "Gmail is optional in Demo mode. Use demo data until real mailbox settings are ready."}
-          </Alert>
-        ) : (
+	        {sources.length === 0 ? (
+	          <Alert color="red" title="No mail sources configured">
+	            Add a runnable Gmail source before ingest.
+	          </Alert>
+	        ) : (
           <Table.ScrollContainer minWidth={840}>
             <Table>
               <Table.Thead>
@@ -1057,9 +1028,7 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
           </Table.ScrollContainer>
         )}
 
-        <Text size="sm" c="dimmed">
-          {settings.units.mail.detail} Use Test Mail Source from Overview for a read-only connection check.
-        </Text>
+	        <Text size="sm" c="dimmed">{settings.units.mail.detail}</Text>
       </Stack>
     </Card>
   );
@@ -1144,25 +1113,21 @@ function SignalFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClear }: {
+function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave }: {
   group: SettingsGroup;
   draft: DraftValues;
   saving: boolean;
   onDraftChange: (key: string, value: PatchValue) => void;
   onSave: () => void;
-  onClear: (setting: SettingDescriptor) => void;
 }) {
-  const visibleSettings = group.id === "advanced" ? group.settings : group.settings.filter((setting) => !setting.advanced);
+  const visibleSettings = group.settings.filter((setting) => !setting.advanced);
   const editableSettings = visibleSettings.filter((setting) => setting.editable);
   return (
     <Card>
       <Group justify="space-between" align="flex-start">
         <Stack gap={4}>
           <Text fw={700}>{group.label}</Text>
-          <Text size="sm" c="dimmed">
-            Edit the current values here. Secret fields only show whether a value is configured.
-          </Text>
-        </Stack>
+	        </Stack>
         <Badge color={groupStateColor(group.state)} variant="light">
           {group.state}
         </Badge>
@@ -1177,18 +1142,15 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
       <Stack gap="md" mt="md">
         {visibleSettings.map((setting) => (
           <SettingEditor
-            key={setting.key}
-            setting={setting}
-            draftValue={draft[setting.key]}
-            onChange={(value) => onDraftChange(setting.key, value)}
-            onClear={() => onClear(setting)}
-          />
-        ))}
-      </Stack>
+	            key={setting.key}
+	            setting={setting}
+	            draftValue={draft[setting.key]}
+	            onChange={(value) => onDraftChange(setting.key, value)}
+	          />
+	        ))}
+	      </Stack>
 
-      {group.id === "advanced" ? <AdvancedSourceTable settings={group.settings} /> : null}
-
-      {editableSettings.length > 0 ? (
+	      {editableSettings.length > 0 ? (
         <Group justify="flex-end" mt="lg">
           <Button leftSection={<Save size={16} aria-hidden="true" />} loading={saving} onClick={onSave}>
             Save {group.label}
@@ -1199,11 +1161,10 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave, onClea
   );
 }
 
-function SettingEditor({ setting, draftValue, onChange, onClear }: {
+function SettingEditor({ setting, draftValue, onChange }: {
   setting: SettingDescriptor;
   draftValue: PatchValue | undefined;
   onChange: (value: PatchValue) => void;
-  onClear: () => void;
 }) {
   const pendingClear = draftValue === null;
   const value = draftValue !== undefined && draftValue !== null ? draftValue : setting.secret ? "" : setting.value ?? "";
@@ -1236,12 +1197,7 @@ function SettingEditor({ setting, draftValue, onChange, onClear }: {
             </Text>
           ) : null}
         </Stack>
-        {setting.clearable ? (
-          <Button size="xs" variant="light" color="gray" onClick={onClear}>
-            Clear saved setting
-          </Button>
-        ) : null}
-      </Group>
+	      </Group>
 
       {setting.editable ? (
         <Box mt="sm">
@@ -1291,7 +1247,7 @@ function renderInput(
     return (
       <PasswordInput
         label="New secret"
-        placeholder="Leave blank for no change"
+        placeholder="Leave blank to unset"
         value={typeof value === "string" ? value : ""}
         onChange={(event) => onChange(event.currentTarget.value)}
       />
@@ -1313,55 +1269,6 @@ function renderInput(
       value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
       onChange={(event) => onChange(event.currentTarget.value)}
     />
-  );
-}
-
-function AdvancedSourceTable({ settings }: { settings: SettingDescriptor[] }) {
-  return (
-    <Table.ScrollContainer minWidth={760} mt="lg">
-      <Table>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Setting</Table.Th>
-            <Table.Th>Source</Table.Th>
-            <Table.Th>State</Table.Th>
-            <Table.Th>Value</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {settings.map((setting) => (
-            <Table.Tr key={setting.key}>
-              <Table.Td>
-                <Text fw={600}>{setting.key}</Text>
-              </Table.Td>
-              <Table.Td><SourceBadge source={setting.source} /></Table.Td>
-              <Table.Td><StateBadge setting={setting} /></Table.Td>
-              <Table.Td>{setting.displayValue}</Table.Td>
-            </Table.Tr>
-          ))}
-        </Table.Tbody>
-      </Table>
-    </Table.ScrollContainer>
-  );
-}
-
-function SourceBadge({ source }: { source: SettingDescriptor["source"] }) {
-  const colors = {
-    database: "blue",
-    runtime: "grape",
-    default: "teal",
-    unset: "red",
-  } satisfies Record<SettingDescriptor["source"], string>;
-  const labels = {
-    database: "Database",
-    runtime: "Environment",
-    default: "Default",
-    unset: "Unset",
-  } satisfies Record<SettingDescriptor["source"], string>;
-  return (
-    <Badge color={colors[source]} variant="light" size="xs">
-      {labels[source]}
-    </Badge>
   );
 }
 
@@ -1423,12 +1330,6 @@ function buildOverviewUnits(settings: SettingsResponse): Array<{
 }> {
   return [
     {
-      label: "Data Mode",
-      status: "Ready",
-      detail: settings.dataMode.value === "demo" ? "Demo mode uses synthetic data and keeps Gmail optional." : "Real mailbox mode requires a runnable Gmail source.",
-      action: settings.dataMode.value === "demo" ? "Seed demo data when you want a preview." : "Configure Gmail Workspace ingest.",
-    },
-    {
       label: "Auth & Admin Access",
       status: settings.security.authBootstrap.status === "ready" ? "Ready" : "Needs attention",
       detail: settings.security.authBootstrap.detail,
@@ -1438,7 +1339,7 @@ function buildOverviewUnits(settings: SettingsResponse): Array<{
       label: "Gmail Ingest",
       status: unitOverviewStatus(settings.units.mail.status),
       detail: settings.units.mail.detail,
-      action: settings.dataMode.value === "demo" ? "Optional until Real mailbox mode is selected." : "Add a runnable Gmail source.",
+      action: "Add a runnable Gmail source.",
     },
     {
       label: "Juno Live",
@@ -1475,42 +1376,12 @@ function overviewStatusColor(status: "Ready" | "Needs attention" | "Disabled"): 
   return "gray";
 }
 
-function summarizeAction(
-  action: SettingsActionName,
-  payload: ActionResult & { settings?: SettingsResponse; error?: string; status?: string; ok?: boolean },
-  httpStatus: number,
-): ActionSummary {
-  if (httpStatus >= 400) {
-    return {
-      title: "Action failed",
-      detail: `API returned ${httpStatus}: ${payload.error ?? "No additional detail returned."}`,
-      color: "red",
-    };
-  }
-  if (action === "run-demo-seed") {
-    return {
-      title: "Demo seed finished",
-      detail: payload.error ?? "Synthetic demo data action completed.",
-      color: payload.ok === false ? "yellow" : "green",
-    };
-  }
-  if (action === "test-gmail") {
-    return {
-      title: "Mail source check finished",
-      detail: payload.status ? `Result: ${String(payload.status)}` : "Read-only Gmail smoke check completed.",
-      color: payload.ok === false ? "yellow" : "green",
-    };
-  }
-  return {
-    title: "Juno session check finished",
-    detail: payload.status ? `Result: ${String(payload.status)}` : "Read-only Juno session preflight completed.",
-    color: payload.ok === false ? "yellow" : "green",
-  };
+function summarizeActionTitle(action: SettingsActionName): string {
+  return action === "test-gmail" ? "Mail source check finished" : "Juno session check finished";
 }
 
 function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {
-  return settings.groups.find((group) => group.id === "advanced")?.settings.find((setting) => setting.key === key)
-    ?? settings.groups.flatMap((group) => group.settings).find((setting) => setting.key === key);
+  return settings.groups.flatMap((group) => group.settings).find((setting) => setting.key === key);
 }
 
 function findGroupSetting(group: SettingsGroup, key: string): SettingDescriptor | undefined {
@@ -1530,16 +1401,4 @@ function normalizeOrigin(value: string): string {
   } catch {
     return value.replace(/\/+$/, "");
   }
-}
-
-
-function maskActionResult(payload: ActionResult): ActionResult {
-  return JSON.parse(
-    JSON.stringify(payload, (key, value) => {
-      if (/secret|password|token|authorization|cookie|private_key|service_account/i.test(key)) {
-        return "[redacted]";
-      }
-      return value;
-    }),
-  ) as ActionResult;
 }

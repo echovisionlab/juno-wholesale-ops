@@ -5,6 +5,9 @@ import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
+import { getRequestOrigin } from "@/lib/http/request-origin";
+
+export { getRequestOrigin };
 
 export async function authorizeSettingsRequest(request: Request): Promise<Response | null> {
   const authorization = await requireAdmin(request);
@@ -51,17 +54,4 @@ export function safeSettingsActionError(error: unknown): string {
   }
   const message = error.message.replace(/\{[^{}]*(?:private_key|client_email|token|password|secret)[^{}]*\}/gi, "[redacted]");
   return message.length > 240 ? `${message.slice(0, 237)}...` : message;
-}
-
-export function getRequestOrigin(request: Request): string {
-  const url = new URL(request.url);
-  const forwardedProto = firstForwardedHeader(request.headers.get("x-forwarded-proto"));
-  const forwardedHost = firstForwardedHeader(request.headers.get("x-forwarded-host"));
-  const host = forwardedHost ?? request.headers.get("host") ?? url.host;
-  const proto = forwardedProto ?? url.protocol.replace(/:$/, "");
-  return `${proto}://${host}`;
-}
-
-function firstForwardedHeader(value: string | null): string | null {
-  return value?.split(",")[0]?.trim() || null;
 }

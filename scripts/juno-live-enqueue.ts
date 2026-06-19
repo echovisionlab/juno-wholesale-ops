@@ -7,7 +7,6 @@ async function main() {
   const snapshotId = getArgValue("--snapshot-id");
   const limit = Number(getArgValue("--limit") ?? "1000");
   const settings = resolveJunoLiveSettings(
-    env,
     await withJunoLiveRepository(env.DATABASE_URL, (repository) => repository.getServiceSettingsRow()),
   );
   const result = await enqueueLiveLookupJobs({

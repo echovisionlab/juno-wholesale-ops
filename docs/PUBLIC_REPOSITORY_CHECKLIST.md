@@ -21,7 +21,7 @@ repository public until the owner explicitly approves that final action.
 - [ ] No real wholesale data in repository.
 - [ ] No real Gmail payloads or raw attachments in repository.
 - [ ] No webhook URLs, auth headers, cookies, service account keys, or Juno credentials in repository.
-- [ ] Demo fixtures synthetic-only.
+- [ ] Synthetic fixture workbooks only.
 - [ ] README quick start verified.
 - [ ] LICENSE present.
 - [ ] SECURITY.md present.
@@ -36,7 +36,7 @@ repository public until the owner explicitly approves that final action.
 - [ ] `pnpm validate` passes.
 - [ ] `pnpm build` passes.
 - [ ] `docker build -t juno-wholesale-ops:local .` passes.
-- [ ] Browser demo check completed.
+- [ ] Browser synthetic fixture check completed.
 - [ ] Tag creation approved.
 - [ ] GitHub Release draft prepared.
 - [ ] Repository visibility change approved after release candidate review.

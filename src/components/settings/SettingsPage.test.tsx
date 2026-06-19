@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { MantineProvider } from "@mantine/core";
+import { Notifications } from "@mantine/notifications";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,119 +41,108 @@ describe("SettingsPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders editable values and masked secrets without source noise", async () => {
-    const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
+  it("renders concise Settings Center sections without removed diagnostics or demo controls", async () => {
+    const writeText = vi.fn().mockResolvedValueOnce(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     await renderSettingsPage(settingsFixture());
 
     expect(pageText()).toContain("Settings Center");
-    expect(pageText()).toContain("Read-only observation only");
+    expect(pageText()).toContain("Read-only operator settings.");
     expect(pageText()).toContain("Auth bootstrap");
     expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).not.toContain("Auth secret");
+    expect(pageText()).not.toContain("Clear saved setting");
+    expect(pageText()).not.toContain("Diagnostics");
+    expect(pageText()).not.toContain("No diagnostics captured");
+    expect(pageText()).not.toContain("Run demo seed");
+    expect(pageText()).not.toContain("Web public port");
+    expect(pageText()).not.toContain("Runtime fallback");
+    expect(pageText()).not.toContain("Demo mode");
+
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
-    expect(pageText()).toContain("Continue with Workspace");
+    expect(pageText()).toContain("Workspace");
+    expect(pageText()).toContain("OpenID Connect");
     expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
-    expect(pageText()).toContain("Copy callback URL");
     clickButton("Copy callback URL");
     await act(async () => undefined);
     expect(writeText).toHaveBeenCalledWith("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
     expect(pageText()).toContain("Callback URL copied.");
-    clickButton("Copy callback URL");
-    await act(async () => undefined);
-    expect(pageText()).toContain("Browser denied clipboard access. Callback URL remains visible for manual copy.");
-    expect(pageText()).toContain("Client secret");
-    expect(pageText()).toContain("configured");
-    expect(pageText()).not.toContain("raw-db-secret");
-    clickButton("Overview");
-    expect(pageText()).toContain("Operator settings");
-    expect(pageText()).not.toContain("runtime fallback values");
-    expect(pageText()).not.toContain("Effective:");
+
     clickButton("Juno Live");
-    expect(pageText()).toContain("missing");
+    expect(pageText()).toContain("Juno login password");
     expect(pageText()).toContain("Current secret: Configured");
-    expect(pageText()).not.toContain("Saved setting configured");
-    clickButton("Advanced");
-    expect(pageText()).toContain("Environment");
-    expect(pageText()).toContain("Default");
-    expect(pageText()).not.toContain("Runtime fallback configured");
-    expect(pageText()).not.toContain("raw-db-secret");
-    expect(pageText()).not.toContain("raw-runtime-secret");
   });
 
-  it("clears a saved setting and keeps diagnostics sanitized under Advanced", async () => {
-    const fetchMock = vi.fn()
-      .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture({ junoPasswordSource: "runtime" }), changed: ["juno_login_password"], warnings: [] }))
-      .mockResolvedValueOnce(jsonResponse({ ok: false, status: "missing_settings", service_account: "raw-secret-token" }));
-    const writeText = vi.fn().mockResolvedValue(undefined);
+  it("saves settings and reports the result with Mantine notifications", async () => {
+    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ settings: settingsFixture(), changed: ["juno_login_email"], warnings: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    Object.assign(navigator, { clipboard: { writeText } });
 
     await renderSettingsPage(settingsFixture());
     clickButton("Juno Live");
-    await act(async () => undefined);
-    clickButton("Clear saved setting");
+    changeInput("Juno login email", "buyer@example.test");
+    clickButton("Save Juno Live");
     await act(async () => undefined);
 
     expect(fetchMock).toHaveBeenCalledWith("/api/settings", {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ juno: { juno_login_password: null } }),
+      body: JSON.stringify({ juno: { juno_login_email: "buyer@example.test" } }),
     });
-    expect(pageText()).toContain("Current secret: Configured");
-
-    clickButton("Overview");
-    clickButton("Test Mail Source");
-    await act(async () => undefined);
-    expect(pageText()).toContain("Mail source check finished");
-    expect(pageText()).toContain("Detailed diagnostics are available only under Advanced");
-    expect(pageText()).not.toContain("raw-secret-token");
-    expect(pageText()).not.toContain("[redacted]");
-
-    clickButton("Advanced");
-    expect(pageText()).toContain("Diagnostics");
-    expect(pageText()).toContain("View sanitized JSON");
-    expect(pageText()).not.toContain("[redacted]");
-    clickButton("View sanitized JSON");
-    expect(pageText()).toContain("[redacted]");
-    expect(pageText()).not.toContain("raw-secret-token");
-
-    clickButton("Copy diagnostics");
-    await act(async () => undefined);
-    expect(writeText).toHaveBeenCalledOnce();
-    expect(writeText.mock.calls[0]?.[0]).toContain("[redacted]");
-    expect(writeText.mock.calls[0]?.[0]).not.toContain("raw-secret-token");
+    expect(pageText()).toContain("Settings saved");
   });
 
-  it("handles diagnostics clipboard denial without exposing raw diagnostics", async () => {
-    const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ ok: false, status: "missing_settings", service_account: "raw-secret-token" }));
-    const writeText = vi.fn().mockRejectedValue(new Error("denied"));
+  it("manages SSO providers through a list and modal actions", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture(), changed: [], warnings: [] }))
+      .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture(), changed: [], warnings: [] }))
+      .mockResolvedValueOnce(jsonResponse({ settings: settingsFixture(), changed: [], warnings: [] }));
     vi.stubGlobal("fetch", fetchMock);
-    Object.assign(navigator, { clipboard: { writeText } });
 
     await renderSettingsPage(settingsFixture());
-    clickButton("Test Mail Source");
+    clickButton("Auth");
+    clickButton("Add provider");
     await act(async () => undefined);
-    clickButton("Advanced");
-    clickButton("View sanitized JSON");
-    clickButton("Copy diagnostics");
+    expect(pageText()).toContain("Add SSO provider");
+    expect(pageText()).toContain("Provider preset");
+    expect(pageText()).not.toContain("OAuth 1.0");
+    changeInput("Provider preset", "custom_oauth2");
+    expect(pageText()).toContain("Authorization URL");
+    expect(pageText()).toContain("Token URL");
+    expect(pageText()).toContain("User info URL");
+
+    changeInput("Provider ID", "dev-oidc");
+    changeInput("Display name", "Dev OIDC");
+    changeInput("Authorization URL", "https://login.example.test/oauth/authorize");
+    changeInput("Token URL", "https://login.example.test/oauth/token");
+    changeInput("User info URL", "https://login.example.test/oauth/userinfo");
+    changeInput("Client ID", "client-id");
+    changeInput("Client secret", "client-secret");
+    clickButton("Create provider");
     await act(async () => undefined);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/settings/auth/sso-providers");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      providerId: "dev-oidc",
+      displayName: "Dev OIDC",
+      protocol: "oauth2",
+      preset: "custom_oauth2",
+      authorizationUrl: "https://login.example.test/oauth/authorize",
+      tokenUrl: "https://login.example.test/oauth/token",
+      userInfoUrl: "https://login.example.test/oauth/userinfo",
+    });
+    expect(pageText()).toContain("Provider created");
 
-    expect(pageText()).toContain("Browser denied clipboard access. Diagnostics remain visible for manual copy.");
-    expect(pageText()).toContain("[redacted]");
-    expect(pageText()).not.toContain("raw-secret-token");
-  });
+    const toggle = document.body.querySelector('input[aria-label="Workspace enabled"]') as HTMLInputElement;
+    await act(async () => {
+      toggle.click();
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/settings/auth/sso-providers");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ id: "provider-1", enabled: false });
 
-  it("does not expose a redundant refresh status diagnostics action", async () => {
-    await renderSettingsPage(settingsFixture());
-
-    expect(pageText()).not.toContain("Refresh status");
-    expect(pageText()).toContain("Run read-only smoke checks from here.");
-    clickButton("Advanced");
-    expect(pageText()).toContain("Run a read-only smoke check from Overview first.");
-    clickButton("View sanitized JSON");
-    expect(pageText()).not.toContain("Sanitized JSON");
+    clickButton("Delete");
+    await act(async () => undefined);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings/auth/sso-providers");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ id: "provider-1" });
   });
 });
 
@@ -160,6 +150,7 @@ async function renderSettingsPage(initialSettings: SettingsResponse | null = nul
   await act(async () => {
     root.render(
       <MantineProvider defaultColorScheme="light" theme={theme}>
+        <Notifications />
         <SettingsPage initialSettings={initialSettings} initialError={initialError} />
       </MantineProvider>,
     );
@@ -167,8 +158,7 @@ async function renderSettingsPage(initialSettings: SettingsResponse | null = nul
   await act(async () => undefined);
 }
 
-function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" } = {}): SettingsResponse {
-  const junoPasswordSource = options.junoPasswordSource ?? "database";
+function settingsFixture(): SettingsResponse {
   return {
     environment: {
       nodeEnv: "development",
@@ -177,12 +167,6 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
       deploymentMode: "development",
       lastUpdatedAt: "2026-06-18T00:00:00.000Z",
       readOnlyBoundary: { noCart: true, noOrdering: true, noCheckout: true },
-    },
-    dataMode: {
-      value: "demo",
-      source: "default",
-      status: "demo",
-      detail: "Synthetic demo data mode. Mail sources are optional.",
     },
     units: {
       authProvider: {
@@ -200,9 +184,14 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
             displayName: "Workspace",
             buttonLabel: "Continue with Workspace",
             logoUrl: null,
+            protocol: "oidc",
+            preset: "custom_oidc",
             enabled: true,
             status: "ready",
             discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
+            authorizationUrl: null,
+            tokenUrl: null,
+            userInfoUrl: null,
             clientId: "client-id",
             clientSecretConfigured: true,
             scopes: ["openid", "email", "profile"],
@@ -285,19 +274,11 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
     ],
     groups: [
       {
-        id: "system",
-        label: "System",
-        state: "complete",
-        settings: [
-          setting("database_url", "Database URL", "runtime", "configured", "Configured", true, false),
-        ],
-      },
-      {
         id: "auth",
         label: "Auth",
         state: "complete",
         settings: [
-          setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
+          setting("auth_base_url", "Site address", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
           setting("auth_email_password_login_enabled", "Email/password login", "database", "configured", "Enabled", false, true, "boolean"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
         ],
@@ -314,35 +295,10 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         state: "missing",
         settings: [
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
-          {
-            ...setting(
-              "juno_login_password",
-              "Juno login password",
-              junoPasswordSource,
-              "configured",
-              "Configured",
-              true,
-              true,
-            ),
-            clearable: junoPasswordSource === "database",
-          },
+          setting("juno_login_password", "Juno login password", "database", "configured", "Configured", true, true),
         ],
       },
       { id: "notifications", label: "Notifications", state: "disabled", settings: [] },
-      {
-        id: "advanced",
-        label: "Advanced",
-        state: "missing",
-        settings: [
-          setting("database_url", "Database URL", "runtime", "configured", "Configured", true, false),
-          setting("juno_browser_headless", "Headless browser", "default", "configured", "Enabled", false, true, "boolean"),
-          setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
-          setting("auth_email_password_login_enabled", "Email/password login", "database", "configured", "Enabled", false, true, "boolean"),
-          setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
-          setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
-          setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", "Configured", true, true),
-        ],
-      },
     ],
   };
 }
@@ -382,20 +338,44 @@ function jsonResponse(value: unknown): Response {
   });
 }
 
-function clickButton(name: string): void {
-  const button = Array.from(document.querySelectorAll("button")).find((entry) => entry.textContent?.includes(name));
-  if (!button) {
-    throw new Error(`Missing button ${name}`);
-  }
-  act(() => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
-}
-
 function pageText(): string {
   return document.body.textContent ?? "";
 }
 
-function setReactActEnvironment(): void {
-  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+function clickButton(name: string): void {
+  const matches = [...document.body.querySelectorAll("button,[role='tab']")]
+    .find((element) => element.textContent?.trim() === name);
+  const button = [...document.body.querySelectorAll("button,[role='tab']")]
+    .filter((element) => element.textContent?.trim() === name)
+    .at(-1) ?? matches;
+  if (!button) {
+    throw new Error(`Missing button ${name}. Page text: ${pageText()}`);
+  }
+  act(() => {
+    (button as HTMLElement).click();
+  });
+}
+
+function changeInput(label: string, value: string): void {
+  const input = document.body.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
+    ?? [...document.body.querySelectorAll("label")]
+      .find((element) => element.textContent?.trim() === label)
+      ?.parentElement?.querySelector("input,textarea,select") as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+  if (!input) {
+    throw new Error(`Missing input ${label}. Page text: ${pageText()}`);
+  }
+  act(() => {
+    const prototype = input instanceof HTMLTextAreaElement
+      ? HTMLTextAreaElement.prototype
+      : input instanceof HTMLSelectElement
+        ? HTMLSelectElement.prototype
+        : HTMLInputElement.prototype;
+    Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+function setReactActEnvironment() {
+  (globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 }

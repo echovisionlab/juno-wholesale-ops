@@ -1,4 +1,3 @@
-import { loadRuntimeEnv } from "@/lib/env";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 import { ensureServiceSettingsRow } from "@/lib/settings/repository";
 import {
@@ -16,9 +15,8 @@ export async function POST(request: Request) {
 
   const database = databaseUrlResponse();
 
-  const env = loadRuntimeEnv(process.env);
   const settingsRow = await ensureServiceSettingsRow(database.databaseUrl);
-  const settings = resolveJunoLiveSettings(env, settingsRow);
+  const settings = resolveJunoLiveSettings(settingsRow);
   const missing = [
     settings.loginEmail ? null : "juno_login_email",
     settings.loginPassword ? null : "juno_login_password",

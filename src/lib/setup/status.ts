@@ -8,11 +8,10 @@ import {
   shouldContinueAutomaticLookup,
   type JunoLiveServiceSettingsRow,
 } from "@/lib/juno-live/settings";
-import type { DataMode } from "@/lib/settings/descriptors";
 
 export type SetupStepState = "complete" | "missing" | "disabled" | "warning";
 
-export type SetupSettingSource = "database" | "runtime" | "unset";
+export type SetupSettingSource = "database" | "default" | "runtime" | "unset";
 
 export type SetupSettingState = "configured" | "missing" | "disabled";
 
@@ -34,7 +33,7 @@ export type SetupGuardrail = {
 };
 
 export type SetupStep = {
-  id: "database" | "data" | "mail" | "juno" | "auth";
+  id: "database" | "mail" | "juno" | "auth";
   label: string;
   state: SetupStepState;
   detail: string;
@@ -56,12 +55,11 @@ export function buildAppSetupStatus(options: {
   mailSources?: PublicMailboxSource[];
   ssoProviders?: SsoProviderRecord[];
 }): AppSetupStatus {
-  const dataMode = resolveDataMode(options.env, options.settingsRow);
   const mailSources = options.mailSources ?? [];
   const runnableMailSources = mailSources.filter(isRunnableMailSource);
-  const mailMissing = dataMode === "real_mailbox" && runnableMailSources.length === 0 ? ["mail_source"] : [];
-  const liveSettings = resolveJunoLiveSettings(options.env, options.settingsRow);
-  const junoLookupEnabled = isJunoLookupEnabled(options.env, options.settingsRow);
+  const mailMissing = runnableMailSources.length === 0 ? ["mail_source"] : [];
+  const liveSettings = resolveJunoLiveSettings(options.settingsRow);
+  const junoLookupEnabled = isJunoLookupEnabled(options.settingsRow);
   const junoMissing = [
     junoLookupEnabled && !liveSettings.loginEmail ? "juno_login_email" : null,
     junoLookupEnabled && !liveSettings.loginPassword ? "juno_login_password" : null,
@@ -102,64 +100,37 @@ export function buildAppSetupStatus(options: {
       ],
     }),
     setupStep({
-      id: "data",
-      label: "Data mode",
-      missing: [],
-      detail: dataMode === "demo" ? "synthetic demo data" : "real mailbox ingestion",
-      action: dataMode === "demo" ? "Run demo seed when you want sample catalog rows." : null,
-      settings: [
-        rowBackedSetting({
-          key: "data_mode",
-          label: "Data mode",
-          rowValue: options.settingsRow?.data_mode,
-          runtimeValue: options.env.JUNO_WHOLESALE_OPS_DATA_MODE,
-          emptyValue: "demo",
-        }),
-      ],
-      guardrails: [
-        {
-          label: "Mailbox requirement",
-          state: dataMode === "demo" ? "warning" : "ok",
-          detail: dataMode === "demo"
-            ? "Demo mode does not require mail source credentials."
-            : "Real mailbox mode requires at least one runnable mail source.",
-        },
-      ],
-    }),
-    setupStep({
       id: "mail",
       label: "Mail sources",
       missing: mailMissing,
-      detail: dataMode === "demo" ? "optional while demo mode is selected" : "required for catalog email ingestion",
+      detail: "required for catalog email ingestion",
       action: mailMissing.length > 0 ? "Create an active Gmail source with Google Workspace delegation and a JSON service account credential." : null,
       settings: [
         staticSetting({
           key: "active_mail_sources",
           label: "Active sources",
           value: String(mailSources.filter((source) => source.isActive).length),
-          required: dataMode === "real_mailbox",
+          required: true,
         }),
         staticSetting({
           key: "runnable_gmail_sources",
           label: "Runnable Gmail sources",
           value: String(runnableMailSources.length),
-          required: dataMode === "real_mailbox",
+          required: true,
         }),
         staticSetting({
           key: "credential_state",
           label: "Credential state",
           value: runnableMailSources.length > 0 ? "configured" : "not configured",
-          required: dataMode === "real_mailbox",
+          required: true,
           secret: true,
         }),
       ],
       guardrails: [
         {
           label: "Cursored mail search",
-          state: dataMode === "demo" ? "warning" : "ok",
-          detail: dataMode === "demo"
-            ? "Mail ingest is optional in demo mode."
-            : "Ingest uses mailbox source cursor state and content hashes to avoid duplicate sheets.",
+          state: "ok",
+          detail: "Ingest uses mailbox source cursor state and content hashes to avoid duplicate sheets.",
         },
       ],
     }),
@@ -174,14 +145,12 @@ export function buildAppSetupStatus(options: {
           key: "juno_login_email",
           label: "Login email",
           rowValue: options.settingsRow?.juno_login_email,
-          runtimeValue: options.env.JUNO_LOGIN_EMAIL,
           required: junoLookupEnabled,
         }),
         rowBackedSetting({
           key: "juno_login_password",
           label: "Login password",
           rowValue: options.settingsRow?.juno_login_password,
-          runtimeValue: options.env.JUNO_LOGIN_PASSWORD,
           required: junoLookupEnabled,
           secret: true,
         }),
@@ -189,26 +158,25 @@ export function buildAppSetupStatus(options: {
           key: "juno_live_poll_interval_ms",
           label: "Automatic lookup interval",
           rowValue: options.settingsRow?.juno_live_poll_interval_ms,
-          runtimeValue: options.env.JUNO_LIVE_POLL_INTERVAL_MS,
           emptyValue: "manual only",
         }),
         rowBackedSetting({
           key: "juno_live_delay_min_ms",
           label: "Minimum page delay",
           rowValue: options.settingsRow?.juno_live_delay_min_ms,
-          runtimeValue: options.env.JUNO_LIVE_DELAY_MIN_MS,
+          defaultValue: liveSettings.delayMinMs,
         }),
         rowBackedSetting({
           key: "juno_live_delay_max_ms",
           label: "Maximum page delay",
           rowValue: options.settingsRow?.juno_live_delay_max_ms,
-          runtimeValue: options.env.JUNO_LIVE_DELAY_MAX_MS,
+          defaultValue: liveSettings.delayMaxMs,
         }),
         rowBackedSetting({
           key: "juno_live_concurrency",
           label: "Parallel pages",
           rowValue: options.settingsRow?.juno_live_concurrency,
-          runtimeValue: liveSettings.concurrency,
+          defaultValue: liveSettings.concurrency,
         }),
       ],
       guardrails: [
@@ -246,14 +214,13 @@ export function buildAppSetupStatus(options: {
           key: "auth_base_url",
           label: "Site address",
           rowValue: options.settingsRow?.auth_base_url,
-          runtimeValue: options.env.AUTH_BASE_URL,
           required: true,
         }),
         rowBackedSetting({
           key: "auth_email_password_login_enabled",
           label: "Email/password login",
           rowValue: options.settingsRow?.auth_email_password_login_enabled,
-          runtimeValue: true,
+          defaultValue: true,
         }),
       ],
       guardrails: [
@@ -294,14 +261,10 @@ function guardrailStepState(guardrails: SetupGuardrail[]): SetupStepState {
   return guardrails.some((guardrail) => guardrail.state === "warning") ? "warning" : "complete";
 }
 
-function resolveDataMode(env: RuntimeEnv, row: JunoLiveServiceSettingsRow | null): DataMode {
-  return row?.data_mode ?? env.JUNO_WHOLESALE_OPS_DATA_MODE;
-}
-
-function isJunoLookupEnabled(env: RuntimeEnv, row: JunoLiveServiceSettingsRow | null): boolean {
-  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? env.JUNO_LIVE_ENQUEUE_ON_INGEST;
-  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? env.JUNO_LIVE_AUTO_ENQUEUE_ON_INTERVAL;
-  const pollInterval = row?.juno_live_poll_interval_ms ?? env.JUNO_LIVE_POLL_INTERVAL_MS;
+function isJunoLookupEnabled(row: JunoLiveServiceSettingsRow | null): boolean {
+  const enqueueOnIngest = row?.juno_live_enqueue_on_ingest ?? false;
+  const autoEnqueueOnInterval = row?.juno_live_auto_enqueue_on_interval ?? false;
+  const pollInterval = row?.juno_live_poll_interval_ms ?? null;
   return Boolean(enqueueOnIngest || autoEnqueueOnInterval || pollInterval);
 }
 
@@ -372,15 +335,15 @@ function rowBackedSetting(options: {
   key: string;
   label: string;
   rowValue: string | number | boolean | null | undefined;
-  runtimeValue: string | number | boolean | null | undefined;
+  defaultValue?: string | number | boolean | null | undefined;
   required?: boolean;
   secret?: boolean;
   emptyValue?: string;
 }): SetupSetting {
   const rowConfigured = hasSettingValue(options.rowValue);
-  const runtimeConfigured = hasSettingValue(options.runtimeValue);
-  const source: SetupSettingSource = rowConfigured ? "database" : runtimeConfigured ? "runtime" : "unset";
-  const value = rowConfigured ? options.rowValue : runtimeConfigured ? options.runtimeValue : undefined;
+  const defaultConfigured = hasSettingValue(options.defaultValue);
+  const source: SetupSettingSource = rowConfigured ? "database" : defaultConfigured ? "default" : "unset";
+  const value = rowConfigured ? options.rowValue : defaultConfigured ? options.defaultValue : undefined;
 
   return buildSetting({
     key: options.key,

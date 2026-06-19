@@ -37,19 +37,17 @@ describe("runStartupMigrations", () => {
 
     await expect(
       runStartupMigrations({
-        env: {
-          DATABASE_URL: container.getConnectionUri(),
-          AUTH_SECRET: "a".repeat(32),
-          AUTH_BASE_URL: "https://app.example.test",
-          AUTH_INITIAL_ADMIN_EMAIL: "admin@example.test",
-          AUTH_INITIAL_ADMIN_PASSWORD: "password123",
-        },
+	        env: {
+	          DATABASE_URL: container.getConnectionUri(),
+	          AUTH_INITIAL_ADMIN_EMAIL: "admin@example.test",
+	          AUTH_INITIAL_ADMIN_PASSWORD: "password123",
+	        },
         logger,
       }),
     ).resolves.toEqual({
-      status: "applied",
-      migrationCount: 18,
-      latestVersion: 18,
+	      status: "applied",
+	      migrationCount: 19,
+	      latestVersion: 19,
     });
 
     const pool = new Pool({ connectionString: container.getConnectionUri(), max: 1 });
@@ -60,10 +58,10 @@ describe("runStartupMigrations", () => {
     } finally {
       await pool.end();
     }
-    expect(logger.infoMessages).toEqual([
-      JSON.stringify({ event: "database_migrations_ready", migrationCount: 18, latestVersion: 18 }),
-      JSON.stringify({ event: "initial_admin_seeded", email: "admin@example.test" }),
-    ]);
+	    expect(logger.infoMessages).toEqual([
+	      JSON.stringify({ event: "database_migrations_ready", migrationCount: 19, latestVersion: 19 }),
+	      JSON.stringify({ event: "initial_admin_seeded", email: "admin@example.test" }),
+	    ]);
   });
 
   it("uses the default logger and reports an empty migration list", async () => {

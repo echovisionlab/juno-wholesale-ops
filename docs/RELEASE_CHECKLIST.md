@@ -13,7 +13,7 @@ until the owner explicitly approves those final actions.
 - [ ] Demo fixtures confirmed synthetic
 - [ ] README links checked
 - [ ] Security and privacy docs reviewed
-- [ ] Settings Center reviewed: editable inputs show current values, secrets stay masked, diagnostics stay Advanced-only, and production auth warning is clear
+- [ ] Settings Center reviewed: editable inputs show current values, secrets stay masked, and production auth readiness is clear
 - [ ] Release notes drafted
 - [ ] GitHub Actions green
 - [ ] Public repository checklist reviewed
@@ -25,7 +25,7 @@ until the owner explicitly approves those final actions.
 - [ ] No cart, wishlist, checkout, purchase action, or Juno account mutation added
 - [ ] No sales-volume claims without observed evidence
 
-## Demo Check
+## Synthetic Fixture Check
 
 ```bash
 pnpm db:dev:up
@@ -40,7 +40,7 @@ pnpm dev
 Confirm:
 
 - [ ] Dashboard has no browser console warnings or errors.
-- [ ] Today Signals renders from demo data.
+- [ ] Today Signals renders from synthetic fixture data.
 - [ ] Movement Signals renders.
 - [ ] Catalog Trends renders.
 - [ ] Operator Digest renders.
@@ -49,7 +49,7 @@ Confirm:
 - [ ] Dashboard links to Settings Center and preserves API status failures.
 - [ ] No external webhook call is made.
 
-Reset demo rows after review:
+Reset synthetic rows after review:
 
 ```bash
 set -a

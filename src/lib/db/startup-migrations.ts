@@ -32,9 +32,7 @@ export async function runStartupMigrations(options: {
   try {
     const migrations = await migrate(pool, migrationsDir);
     const repository = new JunoLiveRepository(pool);
-    if (!env.AUTH_SECRET) {
-      await ensureDatabaseAuthSecretClient(pool);
-    }
+    await ensureDatabaseAuthSecretClient(pool);
     const initialAdmin = await seedInitialAdmin({
       databaseUrl: env.DATABASE_URL,
       settings: resolveAppAuthSettings(env, await repository.getServiceSettingsRow()),

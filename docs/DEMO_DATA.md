@@ -1,6 +1,7 @@
-# Demo Data
+# Synthetic Fixture Seed
 
-Demo data is fully synthetic and intended for local release checks.
+The local seed fixtures are fully synthetic and intended for development and
+release checks.
 
 Fixtures:
 
@@ -8,7 +9,7 @@ Fixtures:
 - `demo/fixtures/catalog/in-stock-demo.xlsx`
 
 Rows use visibly synthetic artists, labels, catalog numbers, barcodes, and
-Juno IDs. Demo Juno IDs use the `demo-` prefix.
+Juno IDs. Synthetic Juno IDs use the `demo-` prefix.
 
 ## Seed
 
@@ -22,8 +23,8 @@ pnpm demo:seed
 The seed command:
 
 - parses the synthetic XLSX fixtures
-- records demo catalog snapshots
-- creates demo watch rules
+- records synthetic catalog snapshots
+- creates synthetic watch rules
 - generates observed signals and movement signals
 - queues in-app read-only notifications
 - does not call Gmail, Juno, or external webhooks
@@ -37,6 +38,6 @@ set +a
 pnpm demo:reset -- --confirm-demo-reset
 ```
 
-Reset deletes only demo supplier, demo snapshots, demo signals, demo live
-observations, demo notification records, and demo watch rules. It requires the
-confirm flag and refuses `NODE_ENV=production`.
+Reset deletes only synthetic fixture supplier, snapshots, signals, live
+observations, notification records, and watch rules. It requires the confirm
+flag and refuses `NODE_ENV=production`.

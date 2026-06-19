@@ -47,8 +47,8 @@ are intentionally out of scope for this release.
 - Read-only live stock observation through Playwright browser workers.
 - Read-only notification delivery with in-app, logging, and generic webhook
   channels.
-- Synthetic demo mode that does not require real Juno wholesale email or XLSX
-  data.
+- Synthetic fixture seed for local validation without real Juno wholesale email
+  or XLSX data.
 - Public safety checks for release readiness.
 
 ## Read-only boundary
@@ -115,27 +115,22 @@ mkdir -p .data/cloudflared
 cp infra/cloudflared/dev.template.yml .data/cloudflared/config.yml
 # Fill .data/cloudflared/config.yml with your local tunnel id and hostname.
 # Keep .data/cloudflared/credentials.json private.
-# Set JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN=http://127.0.0.1:3006
-# and JUNO_WHOLESALE_OPS_DEV_ALLOWED_ORIGINS=<your-dev-hostname>
-# in .env if the tunneled hostname is used for the dashboard.
 pnpm tunnel:dev:up
 pnpm dev
 ```
 
 The tunnel compose service is local-only and forwards the configured hostname
 to the host Next.js dev server on port `3006`. It is not used by production
-deployment files. Next dev blocks cross-origin dev resources by default, so the
-tunneled hostname must be listed in `JUNO_WHOLESALE_OPS_DEV_ALLOWED_ORIGINS`
-for client-side interactions and HMR to work through the tunnel.
+deployment files.
 
-## Demo mode
+## Synthetic fixture seed
 
-Demo mode uses only synthetic catalog workbooks:
+Local validation uses only synthetic catalog workbooks:
 
 - `demo/fixtures/catalog/preorders-demo.xlsx`
 - `demo/fixtures/catalog/in-stock-demo.xlsx`
 
-Seed the demo:
+Seed synthetic rows:
 
 ```bash
 set -a
@@ -144,7 +139,7 @@ set +a
 pnpm demo:seed
 ```
 
-Reset demo rows only:
+Reset synthetic rows only:
 
 ```bash
 set -a
@@ -165,11 +160,8 @@ instead of falling back to database settings when it is missing.
 Important values:
 
 - `DATABASE_URL`
-- `JUNO_WHOLESALE_OPS_DATA_MODE`
-- `AUTH_SECRET` optional runtime bootstrap value for the internal Better Auth secret
-- `AUTH_BASE_URL` bootstrap value for the Settings Center Site address
-- `JUNO_LOGIN_EMAIL`
-- `JUNO_LOGIN_PASSWORD`
+- `AUTH_INITIAL_ADMIN_EMAIL`
+- `AUTH_INITIAL_ADMIN_PASSWORD`
 
 Operator settings are edited as current values in the Settings Center. Runtime
 environment is only for process-required values and initial bootstrap defaults.
@@ -178,21 +170,16 @@ Mail ingest configuration does not use env fallback or legacy Gmail settings. It
 shown in the dashboard; only configured/unset status is shown.
 
 The app Settings Center at `/settings` is the primary operator UX for runtime
-readiness, saved operator settings, read-only smoke checks, and diagnostics. It is
-organized by operating unit instead of internal storage fields: Data Mode,
-Auth/Admin Access, Gmail Workspace Ingest, Juno Live Session, and Notifications.
-Sanitized diagnostics JSON is available only from Advanced and stays collapsed
-by default. Editable fields show their current value directly in the input.
+readiness, saved operator settings, and read-only smoke checks.
 
 `DATABASE_URL` remains runtime-only and cannot be persisted through the Settings
 Center. Export `.env` into the current shell before running local CLI scripts
-such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`. The public
-app URL is the primary saved `Site address` setting;
-`AUTH_BASE_URL` is only a bootstrap value before that saved setting exists.
-External SSO setup shows the provider callback URL that must be registered in
-the provider console. Auth is always enabled. If `AUTH_SECRET` is absent,
-startup creates an internal random Better Auth secret in the database; it is not
-an operator-facing setting. At least one admin bootstrap path is still required.
+such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`.
+The public app URL is the saved `Site address` setting. External SSO setup shows
+the provider callback URL that must be registered in the provider console. Auth
+is always enabled. Startup creates an internal random Better Auth secret in the
+database when one is missing; it is not an operator-facing setting. At least one
+admin bootstrap path is still required.
 Secret fields such as mail source credentials, Juno passwords, OIDC client
 secrets, and webhook configuration are write-only and masked in API responses.
 
@@ -234,7 +221,7 @@ pnpm juno:live:worker -- --loop
 
 It uses Playwright Chromium with a persistent profile and randomized delays.
 Automatic polling is disabled unless credentials and a poll interval are
-configured. Credentials belong in saved secret fields, runtime env, or secret mounts.
+configured. Credentials belong in saved secret fields or private secret storage.
 
 ## Insights
 
@@ -308,7 +295,7 @@ Production recommendations:
   release tag.
 - Tagged releases can deploy through Komodo after image promotion when the
   production stack and Komodo GitHub secrets are configured.
-- Use mounted secrets, runtime env, or saved secret fields for credentials.
+- Use private secret storage or saved secret fields for credentials.
 - Back up Postgres and raw attachment storage.
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
 - Run `pnpm validate`, `pnpm build`, and Docker build before release.

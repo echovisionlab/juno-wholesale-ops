@@ -45,6 +45,7 @@
   "dependencies": {
     "@mantine/core": "^9.3.2",
     "@mantine/hooks": "^9.3.2",
+    "@mantine/notifications": "^9.3.2",
     "@t3-oss/env-nextjs": "^0.13.11",
     "better-auth": "1.6.19",
     "kysely": "^0.29.2",

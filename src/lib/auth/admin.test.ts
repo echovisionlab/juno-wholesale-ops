@@ -103,6 +103,7 @@ describe("requireAdmin", () => {
         role: "admin",
       },
     });
+    expect(getRuntimeBetterAuthMock).toHaveBeenCalledWith({ requestOrigin: "http://app.test" });
     expect(getSession).toHaveBeenCalledWith({ headers: request.headers });
   });
 

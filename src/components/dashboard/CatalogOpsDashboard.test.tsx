@@ -383,7 +383,7 @@ describe("CatalogOpsDashboard", () => {
             label: "Mail ingest",
             state: "disabled",
             detail: "optional",
-            action: "Optional while demo mode is selected.",
+            action: "Configure a runnable mailbox source in Settings.",
             missing: [],
             settings: [],
             guardrails: [],
@@ -402,7 +402,7 @@ describe("CatalogOpsDashboard", () => {
       },
     });
 
-    expect(pageText()).toContain("Runtime configuration is usable");
+    expect(pageText()).toContain("Configuration is usable");
     expect(pageText()).toContain("Review");
     expect(pageText()).toContain("Blocked");
     expect(pageText()).toContain("Stored value");

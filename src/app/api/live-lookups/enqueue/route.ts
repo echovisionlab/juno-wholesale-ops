@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
-import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
+import { getDatabaseUrl } from "@/lib/env";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
 
@@ -12,9 +12,7 @@ export async function POST(request: Request) {
   }
 
   const databaseUrl = getDatabaseUrl();
-  const env = loadRuntimeEnv(process.env);
   const settings = resolveJunoLiveSettings(
-    env,
     await withJunoLiveRepository(databaseUrl, (repository) => repository.getServiceSettingsRow()),
   );
   const body = await request.json().catch(() => ({}));

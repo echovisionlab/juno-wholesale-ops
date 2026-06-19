@@ -10,7 +10,7 @@
 - Watch rules and observed signal generation.
 - Movement, trend, and operator digest insights.
 - Read-only notification delivery.
-- Synthetic demo mode.
+- Synthetic fixture seed for local validation.
 - Public safety checks.
 - Self-hosting, privacy, security, and release documentation.
 

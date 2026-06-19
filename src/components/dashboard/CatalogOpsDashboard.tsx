@@ -1164,7 +1164,7 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
       <Card>
         <Text fw={700}>Setup status unavailable</Text>
         <Text size="sm" c="dimmed" mt={4}>
-          Configuration status will appear after the server can evaluate runtime settings.
+          Configuration status will appear after the server can evaluate required settings.
         </Text>
         <Button component="a" href="/settings" variant="light" mt="md">
           Open Settings Center
@@ -1178,7 +1178,7 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
       <Alert
         color={setupStatus?.ready ? "green" : "red"}
         icon={setupStatus?.ready ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
-        title={setupStatus?.ready ? "Runtime configuration is usable" : "Configuration action required"}
+        title={setupStatus?.ready ? "Configuration is usable" : "Configuration action required"}
       >
         {setupStatus?.ready
           ? "Required settings are present. Review warnings before enabling unattended automation."

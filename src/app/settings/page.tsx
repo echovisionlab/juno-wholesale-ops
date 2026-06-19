@@ -1,11 +1,13 @@
 import { SettingsPage } from "@/components/settings/SettingsPage";
 import { requireAdmin } from "@/lib/auth/admin";
+import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
+import { listMailboxSources, redactMailboxSource } from "@/lib/ingest/mail-source";
 import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/repository";
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { headers } from "next/headers";
-import { getRequestOrigin } from "@/app/api/settings/_shared";
+import { getRequestOrigin } from "@/lib/http/request-origin";
 
 export const dynamic = "force-dynamic";
 
@@ -27,6 +29,8 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
     const settingsRow = await ensureServiceSettingsRow(databaseUrl);
     const request = new Request("http://localhost/settings", { headers: requestHeaders });
     const adminUserCount = await countAdminUsers(databaseUrl).catch(() => null);
+    const mailSources = (await listMailboxSources(databaseUrl)).map(redactMailboxSource);
+    const ssoProviders = await listSsoProviders(databaseUrl);
     return {
       settings: buildSettingsResponse({
         env,
@@ -35,6 +39,8 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
         nodeEnv: process.env.NODE_ENV ?? "development",
         currentRequestOrigin: getRequestOrigin(request),
         adminUserCount,
+        mailSources,
+        ssoProviders,
       }),
       error: null,
     };

@@ -4,12 +4,10 @@ import type {
   SettingDefinition,
   SettingDescriptor,
   SettingSource,
-  DataMode,
 } from "./descriptors";
 
 export type RawRuntimeEnv = Record<string, string | undefined>;
 export type SettingResolutionContext = {
-  dataMode: DataMode;
   externalProviderEnabled: boolean;
   junoLookupEnabled: boolean;
 };
@@ -22,18 +20,13 @@ export function resolveSettingDescriptor(options: {
   context: SettingResolutionContext;
 }): SettingDescriptor {
   const rowValue = options.definition.rowColumn ? options.row?.[options.definition.rowColumn] : undefined;
-  const runtimeValue = getRuntimeValue(options.definition, options.env);
-  const rawRuntimeValue = getRawRuntimeValue(options.definition, options.rawEnv);
   const source = resolveSettingSource({
     definition: options.definition,
     rowValue,
-    runtimeValue,
-    rawRuntimeValue,
   });
   const value = resolveEffectiveValue({
     definition: options.definition,
     rowValue,
-    runtimeValue,
     source,
   });
   const configured = hasSettingValue(value);
@@ -60,15 +53,6 @@ export function resolveSettingDescriptor(options: {
   };
 }
 
-export function getRuntimeValue(definition: SettingDefinition, env: RuntimeEnv): string | number | boolean | undefined {
-  return definition.envKey ? env[definition.envKey] : undefined;
-}
-
-function getRawRuntimeValue(definition: SettingDefinition, rawEnv: RawRuntimeEnv): string | undefined {
-  const key = definition.runtimeEnvKey ?? definition.envKey;
-  return key ? rawEnv[key] : undefined;
-}
-
 export function hasSettingValue(value: unknown): boolean {
   if (typeof value === "string") {
     return value.trim().length > 0;
@@ -86,16 +70,11 @@ function maskSecret(value: unknown): string {
 function resolveSettingSource(options: {
   definition: SettingDefinition;
   rowValue: unknown;
-  runtimeValue: unknown;
-  rawRuntimeValue: string | undefined;
 }): SettingSource {
   if (hasSettingValue(options.rowValue)) {
     return "database";
   }
-  if (hasSettingValue(options.rawRuntimeValue)) {
-    return "runtime";
-  }
-  if (options.definition.defaultValue !== undefined || hasSettingValue(options.runtimeValue)) {
+  if (options.definition.defaultValue !== undefined) {
     return "default";
   }
   return "unset";
@@ -104,23 +83,15 @@ function resolveSettingSource(options: {
 function resolveEffectiveValue(options: {
   definition: SettingDefinition;
   rowValue: unknown;
-  runtimeValue: unknown;
   source: SettingSource;
 }): string | number | boolean | null | undefined {
   if (options.source === "database") {
     return options.rowValue as string | number | boolean | null | undefined;
   }
-  if (options.source === "runtime" || options.source === "default") {
-    return normalizeEffectiveValue(options.runtimeValue) ?? options.definition.defaultValue;
+  if (options.source === "default") {
+    return options.definition.defaultValue;
   }
   return null;
-}
-
-function normalizeEffectiveValue(value: unknown): string | number | boolean | null | undefined {
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean" || value === null || value === undefined) {
-    return value;
-  }
-  return undefined;
 }
 
 function normalizeDescriptorValue(value: unknown): string | number | boolean | null {
@@ -152,9 +123,6 @@ function isDefinitionRequired(
 ): boolean {
   if (definition.requiredWhen === "always") {
     return true;
-  }
-  if (definition.requiredWhen === "real_mailbox") {
-    return context.dataMode === "real_mailbox";
   }
   if (definition.requiredWhen === "juno_lookup_enabled") {
     return context.junoLookupEnabled;
