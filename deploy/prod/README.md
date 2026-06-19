@@ -69,6 +69,10 @@ KOMODO_API_KEY and KOMODO_API_SECRET
 API key credentials. Do not put production database URLs or supplier credentials
 in GitHub Actions secrets.
 
+`KOMODO_SMOKE_TLS_VERIFY=false` is available for Caddy-routed smoke checks when
+the public certificate chain is valid for browsers but newer than the GitHub
+runner trust store. Keep the smoke URL pointed at the public Caddy route.
+
 The external Caddy/proxy layer must add:
 
 ```caddyfile
