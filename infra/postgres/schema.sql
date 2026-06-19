@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 21fe9f9d8e58825cedb60fd16e8ac2dace6b9f7a57f655b9b0ef915f1bcd3d87
+-- migration-manifest-sha256: fe56e49ec1e43519b91d88a5821b28535f17a80f477b263c18570b810ed91540
 --
 -- PostgreSQL database dump
 --
@@ -377,8 +377,13 @@ CREATE TABLE public.mail_mailbox_source (
     is_active boolean DEFAULT true NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    storage_backend text DEFAULT 'local_drive'::text NOT NULL,
+    storage_config jsonb DEFAULT '{}'::jsonb NOT NULL,
+    storage_secret text,
     CONSTRAINT mail_mailbox_source_ingest_lookback_ms_check CHECK ((ingest_lookback_ms > 0)),
-    CONSTRAINT mail_mailbox_source_max_results_check CHECK (((max_results > 0) AND (max_results <= 500)))
+    CONSTRAINT mail_mailbox_source_max_results_check CHECK (((max_results > 0) AND (max_results <= 500))),
+    CONSTRAINT mail_mailbox_source_storage_backend_check CHECK ((storage_backend = ANY (ARRAY['local_drive'::text, 's3_compatible'::text]))),
+    CONSTRAINT mail_mailbox_source_storage_config_check CHECK (((storage_backend = 'local_drive'::text) OR ((storage_config ? 'endpoint'::text) AND (storage_config ? 'bucket'::text) AND (storage_config ? 'accessKeyId'::text) AND (storage_secret IS NOT NULL))))
 );
 
 

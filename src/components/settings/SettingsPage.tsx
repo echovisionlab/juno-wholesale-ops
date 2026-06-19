@@ -55,6 +55,7 @@ import type {
   PublicMailboxSource,
 } from "@/lib/ingest/mail-source";
 import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
+import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type {
   NotificationChannel,
@@ -83,7 +84,15 @@ type MailSourceDraft = {
   maxResults: number;
   lookbackMs: number;
   processedLabel: string;
+  storageBackend: AttachmentStorageBackend;
   storageDir: string;
+  storageEndpoint: string;
+  storageBucket: string;
+  storagePrefix: string;
+  storageRegion: string;
+  storageAccessKeyId: string;
+  storageSecret: string;
+  storageForcePathStyle: boolean;
   attachmentPattern: string;
   supplierCode: string;
   isActive: boolean;
@@ -147,7 +156,15 @@ const emptyMailSourceDraft: MailSourceDraft = {
   maxResults: 25,
   lookbackMs: 604800000,
   processedLabel: "Wholesale Processed",
+  storageBackend: "local_drive",
   storageDir: ".data/mail",
+  storageEndpoint: "http://localhost:29100",
+  storageBucket: "juno-wholesale-ops",
+  storagePrefix: "mail-attachments",
+  storageRegion: "us-east-1",
+  storageAccessKeyId: "",
+  storageSecret: "",
+  storageForcePathStyle: true,
   attachmentPattern: "xlsx",
   supplierCode: "juno",
   isActive: true,
@@ -174,6 +191,11 @@ const mailCredentialTypeOptions: Array<{ value: MailCredentialType; label: strin
   { value: "oauth_client_secret", label: "OAuth client secret" },
   { value: "api_token", label: "API token" },
   { value: "none", label: "None" },
+];
+
+const attachmentStorageBackendOptions: Array<{ value: AttachmentStorageBackend; label: string }> = [
+  { value: "local_drive", label: "Local drive" },
+  { value: "s3_compatible", label: "S3 compatible / MinIO" },
 ];
 
 const notificationChannelTypeOptions: Array<{ value: NotificationChannelType; label: string }> = [
@@ -1489,6 +1511,18 @@ function formatMailAuthType(authType: MailAuthType): string {
   return mailAuthTypeOptions.find((option) => option.value === authType)?.label ?? authType;
 }
 
+function formatStorageBackend(backend: AttachmentStorageBackend): string {
+  return attachmentStorageBackendOptions.find((option) => option.value === backend)?.label ?? backend;
+}
+
+function formatMailSourceStorageTarget(source: PublicMailboxSource): string {
+  if (source.storageBackend === "local_drive") {
+    return source.storageDir;
+  }
+  const prefix = source.storagePrefix.replace(/^\/+|\/+$/g, "");
+  return `s3://${source.storageBucket}${prefix ? `/${prefix}` : ""}`;
+}
+
 function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
   return {
     id: source.id,
@@ -1505,7 +1539,15 @@ function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
     maxResults: source.maxResults,
     lookbackMs: source.lookbackMs,
     processedLabel: source.processedLabel,
+    storageBackend: source.storageBackend,
     storageDir: source.storageDir,
+    storageEndpoint: source.storageEndpoint,
+    storageBucket: source.storageBucket,
+    storagePrefix: source.storagePrefix,
+    storageRegion: source.storageRegion,
+    storageAccessKeyId: source.storageAccessKeyId,
+    storageSecret: "",
+    storageForcePathStyle: source.storageForcePathStyle,
     attachmentPattern: source.attachmentPattern,
     supplierCode: source.supplierCode,
     isActive: source.isActive,
@@ -1562,13 +1604,24 @@ function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSou
     maxResults: draft.maxResults,
     lookbackMs: draft.lookbackMs,
     processedLabel: draft.processedLabel,
+    storageBackend: draft.storageBackend,
     storageDir: draft.storageDir,
+    storageEndpoint: draft.storageEndpoint,
+    storageBucket: draft.storageBucket,
+    storagePrefix: draft.storagePrefix,
+    storageRegion: draft.storageRegion,
+    storageAccessKeyId: draft.storageAccessKeyId,
+    storageSecret: draft.storageSecret,
+    storageForcePathStyle: draft.storageForcePathStyle,
     attachmentPattern: draft.attachmentPattern,
     supplierCode: draft.supplierCode,
     isActive: draft.isActive,
   };
   if (editing && "credentialSecret" in payload && !draft.credentialSecret.trim()) {
     delete payload.credentialSecret;
+  }
+  if (editing && "storageSecret" in payload && !draft.storageSecret.trim()) {
+    delete payload.storageSecret;
   }
   return payload;
 }
@@ -1662,7 +1715,10 @@ function MailSourcesCard({
                     <Table.Td maw={260}>
                       <Text size="sm" lineClamp={2}>{source.query}</Text>
                     </Table.Td>
-                    <Table.Td>{source.storageDir}</Table.Td>
+                    <Table.Td>
+                      <Text size="sm">{formatStorageBackend(source.storageBackend)}</Text>
+                      <Text size="xs" c="dimmed" lineClamp={1}>{formatMailSourceStorageTarget(source)}</Text>
+                    </Table.Td>
                     <Table.Td>
                       <Badge color={source.isActive ? "green" : "gray"} variant="light" size="xs">
                         {source.isActive ? "active" : "inactive"}
@@ -1705,7 +1761,7 @@ function MailSourcesCard({
                 />
                 <TextInput
                   label="Source name"
-                  placeholder="Primary wholesale inbox"
+                  placeholder="Primary supplier inbox"
                   value={draft.name}
                   onChange={(event) => onDraftChange({ ...draft, name: event.currentTarget.value })}
                 />
@@ -1730,7 +1786,7 @@ function MailSourcesCard({
                 <TextInput
                   label="Mailbox address"
                   description="Delegated inbox that receives supplier catalog emails."
-                  placeholder="ops@example.com"
+                  placeholder="catalogs@example.com"
                   value={draft.mailboxAddress}
                   onChange={(event) => onDraftChange({ ...draft, mailboxAddress: event.currentTarget.value })}
                 />
@@ -1807,12 +1863,73 @@ function MailSourcesCard({
                   value={draft.supplierCode}
                   onChange={(event) => onDraftChange({ ...draft, supplierCode: event.currentTarget.value })}
                 />
-                <TextInput
-                  label="Storage dir"
-                  placeholder=".data/mail"
-                  value={draft.storageDir}
-                  onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
+              </ResponsiveGrid>
+            </Stack>
+
+            <Divider />
+
+            <Stack gap="xs">
+              <Text fw={700}>Attachment Storage</Text>
+              <ResponsiveGrid minWidth={240} gap="sm">
+                <Select
+                  label="Backend"
+                  value={draft.storageBackend}
+                  data={attachmentStorageBackendOptions}
+                  allowDeselect={false}
+                  onChange={(value) => value && onDraftChange({ ...draft, storageBackend: value as AttachmentStorageBackend })}
                 />
+                {draft.storageBackend === "local_drive" ? (
+                  <TextInput
+                    label="Local path"
+                    placeholder=".data/mail-attachments"
+                    value={draft.storageDir}
+                    onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
+                  />
+                ) : (
+                  <>
+                    <TextInput
+                      label="Endpoint"
+                      placeholder="http://localhost:29100"
+                      value={draft.storageEndpoint}
+                      onChange={(event) => onDraftChange({ ...draft, storageEndpoint: event.currentTarget.value })}
+                    />
+                    <TextInput
+                      label="Bucket"
+                      placeholder="juno-wholesale-ops"
+                      value={draft.storageBucket}
+                      onChange={(event) => onDraftChange({ ...draft, storageBucket: event.currentTarget.value })}
+                    />
+                    <TextInput
+                      label="Prefix"
+                      placeholder="mail-attachments"
+                      value={draft.storagePrefix}
+                      onChange={(event) => onDraftChange({ ...draft, storagePrefix: event.currentTarget.value })}
+                    />
+                    <TextInput
+                      label="Region"
+                      placeholder="us-east-1"
+                      value={draft.storageRegion}
+                      onChange={(event) => onDraftChange({ ...draft, storageRegion: event.currentTarget.value })}
+                    />
+                    <TextInput
+                      label="Access key ID"
+                      placeholder="minio-access-key"
+                      value={draft.storageAccessKeyId}
+                      onChange={(event) => onDraftChange({ ...draft, storageAccessKeyId: event.currentTarget.value })}
+                    />
+                    <PasswordInput
+                      label={editingId ? "New secret access key" : "Secret access key"}
+                      placeholder={editingId ? "Leave blank to keep configured" : "Paste secret access key"}
+                      value={draft.storageSecret}
+                      onChange={(event) => onDraftChange({ ...draft, storageSecret: event.currentTarget.value })}
+                    />
+                    <Switch
+                      label="Path-style URLs"
+                      checked={draft.storageForcePathStyle}
+                      onChange={(event) => onDraftChange({ ...draft, storageForcePathStyle: event.currentTarget.checked })}
+                    />
+                  </>
+                )}
               </ResponsiveGrid>
             </Stack>
 
@@ -2282,12 +2399,13 @@ const mailSourceTestStatusMessages: Partial<Record<MailSourceConnectionTestResul
   credential_missing: "Credential JSON is required.",
   invalid_configuration: "Complete the required connection fields.",
   provider_not_implemented: "This adapter cannot be tested yet.",
+  storage_failed: "Attachment storage check failed.",
 };
 
 export function formatMailSourceTestStatus(result: MailSourceConnectionTestResult): string {
   if (result.ok) {
     const count = result.messageCount ?? 0;
-    return `${count} message${count === 1 ? "" : "s"} matched.`;
+    return `${count} message${count === 1 ? "" : "s"} matched; storage checked.`;
   }
   if (result.error) {
     return result.error;

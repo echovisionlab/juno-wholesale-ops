@@ -7,7 +7,10 @@ credentials. The maintainers do not receive catalog data from your deployment.
 
 - Postgres stores catalog snapshots, settings, signals, and notification
   records.
-- Each mailbox source has a `storage_dir` for raw XLSX attachments outside git.
+- Each mailbox source has an attachment storage backend for raw XLSX
+  attachments outside git.
+- LocalDrive stores under a local `.data` path. S3-compatible storage supports
+  MinIO or S3-compatible self-hosted object storage.
 - Playwright stores browser profile data in the configured local profile path.
 
 ## Credentials

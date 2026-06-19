@@ -1,6 +1,4 @@
 import crypto from "node:crypto";
-import fs from "node:fs/promises";
-import path from "node:path";
 import { GOOGLE_GMAIL_MODIFY_SCOPE, hasGmailModifyScope, loadRuntimeEnv, parseScopes } from "@/lib/env";
 import {
   decodeBase64Url,
@@ -23,11 +21,13 @@ import {
   assertRunnableGmailMailboxSource,
   getRunnableGmailSources,
   listActiveMailboxSources,
+  toAttachmentStorageConfig,
   type RunnableGmailMailboxSource,
 } from "@/lib/ingest/settings";
 import { processInsightsForSnapshot } from "@/lib/insights/repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
 import { resolveJunoLiveSettings } from "@/lib/juno-live/settings";
+import { storeAttachment } from "@/lib/storage/attachment-storage";
 
 async function main() {
   const writeMode = process.argv.includes("--write");
@@ -183,7 +183,12 @@ async function processSource(options: {
         }
 
         const sha256 = crypto.createHash("sha256").update(bytes).digest("hex");
-        const storageUri = await saveAttachment(options.source.storageDir, sha256, attachment.filename, bytes);
+        const storageUri = await storeAttachment({
+          storage: toAttachmentStorageConfig(options.source),
+          sha256,
+          filename: attachment.filename,
+          bytes,
+        });
         const catalog = await parseJunoCatalog(bytes, attachment.filename);
         attachmentCount += 1;
         parsedRows += catalog.rowCount;
@@ -320,24 +325,6 @@ main().catch((error: unknown) => {
   console.error(error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
-
-async function saveAttachment(
-  storageDir: string,
-  sha256: string,
-  filename: string,
-  bytes: Buffer,
-): Promise<string> {
-  const safeFilename = filename.replace(/[^A-Za-z0-9._-]+/g, "_");
-  const dir = path.join(storageDir, sha256.slice(0, 2), sha256.slice(2, 4));
-  await fs.mkdir(dir, { recursive: true });
-  const filePath = path.join(dir, `${sha256}-${safeFilename}`);
-  await fs.writeFile(filePath, bytes, { flag: "wx" }).catch((error: NodeJS.ErrnoException) => {
-    if (error.code !== "EEXIST") {
-      throw error;
-    }
-  });
-  return filePath;
-}
 
 function buildMessageRecord(source: RunnableGmailMailboxSource, message: GmailMessage) {
   const internalDate = message.internalDate ? Number(message.internalDate) : null;

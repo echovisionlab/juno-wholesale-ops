@@ -102,7 +102,7 @@ describe("SettingsPage", () => {
       mailboxAddress: "ops@example.test",
       query: "filename:xlsx",
       messageCount: 1,
-    })).toBe("1 message matched.");
+    })).toBe("1 message matched; storage checked.");
     expect(formatMailSourceTestStatus({
       ok: true,
       status: "connection_ready",
@@ -110,7 +110,7 @@ describe("SettingsPage", () => {
       mailboxAddress: "ops@example.test",
       query: "filename:xlsx",
       messageCount: 2,
-    })).toBe("2 messages matched.");
+    })).toBe("2 messages matched; storage checked.");
     expect(formatMailSourceTestStatus({
       ok: false,
       status: "connection_failed",
@@ -274,6 +274,7 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Provider adapter");
     expect(pageText()).toContain("Connection");
     expect(pageText()).toContain("Ingest");
+    expect(pageText()).toContain("Attachment Storage");
     expect(pageText()).toContain("Delegated inbox that receives supplier catalog emails.");
     expect(pageText()).toContain("Paste the Google service account JSON.");
     expect(pageText()).toContain("Gmail access uses a fixed read-only scope.");
@@ -281,7 +282,7 @@ describe("SettingsPage", () => {
     expect(pageText()).not.toContain("Scopes");
     expect(pageText()).not.toContain("Credential reference");
     expect(pageText()).not.toContain("Runtime secret name");
-    expect(findInput("Mailbox address").getAttribute("placeholder")).toBe("ops@example.com");
+    expect(findInput("Mailbox address").getAttribute("placeholder")).toBe("catalogs@example.com");
     expect(findInput("Query").getAttribute("placeholder")).toBe("filename:xlsx newer_than:7d");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(true);
     changeInput("Source name", "Supplier inbox");
@@ -298,6 +299,8 @@ describe("SettingsPage", () => {
       mailboxAddress: "stock@example.test",
       credentialSecret: "{\"client_email\":\"service@example.test\"}",
       scopes: "https://www.googleapis.com/auth/gmail.readonly",
+      storageBackend: "local_drive",
+      storageDir: ".data/mail",
     });
     expect(pageText()).toContain("Connection ready");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(false);
@@ -313,6 +316,8 @@ describe("SettingsPage", () => {
       mailboxAddress: "stock@example.test",
       credentialSecret: "{\"client_email\":\"service@example.test\"}",
       scopes: "https://www.googleapis.com/auth/gmail.readonly",
+      storageBackend: "local_drive",
+      storageDir: ".data/mail",
       connectionTestPassed: true,
     });
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings");
@@ -492,7 +497,15 @@ function settingsFixture(): SettingsResponse {
         maxResults: 25,
         lookbackMs: 604800000,
         processedLabel: "Processed",
+        storageBackend: "local_drive",
         storageDir: ".data/mail",
+        storageEndpoint: "",
+        storageBucket: "",
+        storagePrefix: "mail-attachments",
+        storageRegion: "us-east-1",
+        storageAccessKeyId: "",
+        storageSecretConfigured: false,
+        storageForcePathStyle: true,
         attachmentPattern: "xlsx",
         supplierCode: "juno",
         isActive: true,

@@ -19,6 +19,8 @@ Notes:
 
 - `gmail:ingest:write` runs active Gmail mailbox sources, writes new catalog
   snapshots, and runs snapshot insights.
+- Mail Source connection tests check mailbox access and attachment storage
+  write/delete access before saving source configuration.
 - `juno:live:worker` observes product pages read-only.
 - `insights:refresh` refreshes movement and trend signals.
 - `notifications:refresh` queues read-only notifications and performs dry-run

@@ -94,6 +94,7 @@ Core directories:
 ```bash
 pnpm install
 pnpm db:dev:up
+pnpm storage:dev:up # optional MinIO for S3-compatible attachment storage
 cp .env.example .env
 set -a
 . ./.env
@@ -107,6 +108,9 @@ Open `http://localhost:3006`.
 
 Local Postgres maps to host port `5437` so it can coexist with another
 development database on `5432`.
+
+Optional local MinIO maps to host ports `29100` and `29101`. The compose image
+matches the dsub local stack MinIO release that still includes the console UI.
 
 Optional local Cloudflare Tunnel:
 
@@ -205,9 +209,15 @@ pnpm gmail:ingest:write
 raw catalog rows in Postgres, then runs insight processing only when a new
 snapshot is inserted.
 
-Raw XLSX attachments are stored in the mailbox source `storage_dir`, which is
-usually a local `.data` path. Keep that directory out of git and include it in
-private backup planning.
+Raw XLSX attachments are stored through the mailbox source attachment storage
+backend:
+
+- `Local drive`: stores attachments under a local `.data` path.
+- `S3 compatible / MinIO`: stores attachments in a configured bucket and prefix.
+
+Run the Mail Source connection test before saving; it checks both mailbox access
+and attachment storage write/delete access. Keep local storage paths and object
+storage buckets out of git and include them in private backup planning.
 
 ## Live stock observation
 

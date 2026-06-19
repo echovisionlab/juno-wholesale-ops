@@ -4,6 +4,7 @@
 
 ```bash
 pnpm db:dev:up
+pnpm storage:dev:up # optional MinIO for S3-compatible attachment storage
 cp .env.example .env
 set -a
 . ./.env
@@ -16,9 +17,13 @@ After migrations, open `/settings`. Process env is limited to `DATABASE_URL`
 and optional initial admin bootstrap values. Saved Postgres settings are the
 primary operator settings surface. Mail ingest uses separate
 `mail_connection` and `mail_mailbox_source` records, with no env fallback for
-mailbox addresses, Gmail service account JSON, storage directories, or supplier
-codes. The Settings Center shows current editable values directly in inputs,
-masks secrets, and avoids raw payload dumps.
+mailbox addresses, Gmail service account JSON, attachment storage settings, or
+supplier codes. The Settings Center shows current editable values directly in
+inputs, masks secrets, and avoids raw payload dumps.
+
+Local MinIO is available through `pnpm storage:dev:up` for S3-compatible storage
+testing. It uses the same MinIO release as the dsub local stack and exposes the
+console on `http://localhost:29101`.
 
 ## Production Checklist
 
@@ -31,8 +36,12 @@ masks secrets, and avoids raw payload dumps.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.
+- Choose `Local drive` or `S3 compatible / MinIO` attachment storage per mailbox
+  source. Saving requires a passing connection test that checks mailbox access
+  and storage write/delete access.
 - Keep Juno credentials in saved secret fields or private secret storage.
-- Store raw attachments outside the application image.
+- Store raw attachments outside the application image, either in private local
+  storage or private object storage.
 - Back up Postgres and attachment storage.
 - Keep browser profile storage private.
 - Prefer webhook `secret_ref` over inline config.

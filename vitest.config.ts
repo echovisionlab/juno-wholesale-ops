@@ -70,6 +70,7 @@ export default defineConfig({
         "src/lib/notifications/script-options.ts",
         "src/lib/public-safety/check.ts",
         "src/lib/setup/status.ts",
+        "src/lib/storage/attachment-storage.ts",
       ],
       reporter: ["text", "lcov"],
       thresholds: {
