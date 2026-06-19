@@ -73,7 +73,7 @@ describe("testMailboxSourceConnection", () => {
       { ok: true, json: {} },
     ]);
 
-    await expect(testMailboxSourceConnection(mailSource())).resolves.toEqual({
+    await expect(testMailboxSourceConnection(mailSource({ scopes: "https://www.googleapis.com/auth/gmail.modify" }))).resolves.toEqual({
       ok: true,
       status: "connection_ready",
       provider: "gmail",
@@ -83,6 +83,7 @@ describe("testMailboxSourceConnection", () => {
     });
 
     const calls = fetchMock.mock.calls as unknown as Array<[URL | string, RequestInit | undefined]>;
+    expect(decodeJwtPayload(readAssertion(calls[0][1])).scope).toBe(GOOGLE_GMAIL_READONLY_SCOPE);
     expect(String(calls[1][0])).toContain("gmail.googleapis.com");
     expect(String(calls[1][0])).toContain("maxResults=10");
 
@@ -155,6 +156,26 @@ function mailSource(overrides: Partial<MailboxSourceInput> = {}): MailboxSourceI
 function generatePrivateKey() {
   const { privateKey } = crypto.generateKeyPairSync("rsa", { modulusLength: 2048 });
   return privateKey.export({ type: "pkcs8", format: "pem" }).toString();
+}
+
+function readAssertion(init: RequestInit | undefined): string {
+  const body = init?.body;
+  if (!(body instanceof URLSearchParams)) {
+    throw new Error("Expected OAuth token request body");
+  }
+  const assertion = body.get("assertion");
+  if (!assertion) {
+    throw new Error("Expected OAuth assertion");
+  }
+  return assertion;
+}
+
+function decodeJwtPayload(assertion: string): { scope: string } {
+  const payload = assertion.split(".")[1];
+  if (!payload) {
+    throw new Error("Expected JWT payload");
+  }
+  return JSON.parse(Buffer.from(payload.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf8")) as { scope: string };
 }
 
 function mockFetch(

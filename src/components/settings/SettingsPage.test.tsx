@@ -8,7 +8,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { theme } from "@/theme";
-import { SettingsPage } from "./SettingsPage";
+import { formatJunoSessionCheckStatus, formatMailSourceTestStatus, SettingsPage } from "./SettingsPage";
 
 let root: Root;
 let container: HTMLDivElement;
@@ -81,6 +81,67 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Test session");
     expect(pageText()).not.toContain("Current secret");
     expect(pageText()).not.toContain("Read-only boundary");
+  });
+
+  it("formats preflight and connection statuses without raw enum values", () => {
+    expect(formatJunoSessionCheckStatus("read_only_preflight_passed")).toBe("Session settings are ready.");
+    expect(formatJunoSessionCheckStatus("missing_credentials")).toBe("Login credentials are missing.");
+    expect(formatJunoSessionCheckStatus("unexpected_status")).toBe("Session settings need attention.");
+    expect(formatJunoSessionCheckStatus("")).toBeUndefined();
+    expect(formatJunoSessionCheckStatus(null)).toBeUndefined();
+
+    expect(formatMailSourceTestStatus({
+      ok: true,
+      status: "connection_ready",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      messageCount: 1,
+    })).toBe("1 message matched.");
+    expect(formatMailSourceTestStatus({
+      ok: true,
+      status: "connection_ready",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      messageCount: 2,
+    })).toBe("2 messages matched.");
+    expect(formatMailSourceTestStatus({
+      ok: false,
+      status: "connection_failed",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+      error: "OAuth failed",
+    })).toBe("OAuth failed");
+    expect(formatMailSourceTestStatus({
+      ok: false,
+      status: "credential_missing",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+    })).toBe("Credential JSON is required.");
+    expect(formatMailSourceTestStatus({
+      ok: false,
+      status: "invalid_configuration",
+      provider: "gmail",
+      mailboxAddress: "",
+      query: "",
+    })).toBe("Complete the required connection fields.");
+    expect(formatMailSourceTestStatus({
+      ok: false,
+      status: "provider_not_implemented",
+      provider: "imap",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+    })).toBe("This adapter cannot be tested yet.");
+    expect(formatMailSourceTestStatus({
+      ok: false,
+      status: "connection_failed",
+      provider: "gmail",
+      mailboxAddress: "ops@example.test",
+      query: "filename:xlsx",
+    })).toBe("Connection failed.");
   });
 
   it("shows auth warnings in the attention-only overview", async () => {
@@ -203,6 +264,13 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Provider adapter");
     expect(pageText()).toContain("Connection");
     expect(pageText()).toContain("Ingest");
+    expect(pageText()).toContain("Delegated inbox that receives supplier catalog emails.");
+    expect(pageText()).toContain("Paste the Google service account JSON.");
+    expect(pageText()).toContain("Gmail access uses a fixed read-only scope.");
+    expect(pageText()).not.toContain("Gmail Workspace Scopes");
+    expect(pageText()).not.toContain("Scopes");
+    expect(findInput("Mailbox address").getAttribute("placeholder")).toBe("ops@example.com");
+    expect(findInput("Query").getAttribute("placeholder")).toBe("filename:xlsx newer_than:7d");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(true);
     changeInput("Source name", "Supplier inbox");
     changeInput("Mailbox address", "stock@example.test");
@@ -217,6 +285,7 @@ describe("SettingsPage", () => {
       credentialType: "google_service_account_json",
       mailboxAddress: "stock@example.test",
       credentialSecret: "{\"client_email\":\"service@example.test\"}",
+      scopes: "https://www.googleapis.com/auth/gmail.readonly",
     });
     expect(pageText()).toContain("Connection ready");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(false);
@@ -231,6 +300,7 @@ describe("SettingsPage", () => {
       credentialType: "google_service_account_json",
       mailboxAddress: "stock@example.test",
       credentialSecret: "{\"client_email\":\"service@example.test\"}",
+      scopes: "https://www.googleapis.com/auth/gmail.readonly",
       connectionTestPassed: true,
     });
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings");
@@ -267,11 +337,14 @@ describe("SettingsPage", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/notifications/rules");
     expect(pageText()).toContain("Notification Channels");
     expect(pageText()).toContain("Notification Rules");
+    expect(pageText()).toContain("Flow");
+    expect(pageText()).toContain("Add a channel, then add a rule that filters observed signals.");
     expect(pageText()).toContain("Add channel");
     expect(pageText()).toContain("Add rule");
     expect(pageText()).not.toContain("dashboard Notification Center");
 
     await clickButtonAndWait("Add channel");
+    expect(findInput("Channel name").getAttribute("placeholder")).toBe("Ops in-app");
     changeInput("Channel name", "Ops log");
     changeInput("Channel type", "logging");
     clickButton("Create channel");
@@ -577,13 +650,7 @@ function clickElement(element: HTMLElement): void {
 }
 
 function changeInput(label: string, value: string): void {
-  const input = document.body.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
-    ?? [...document.body.querySelectorAll("label")]
-      .find((element) => element.textContent?.trim() === label)
-      ?.parentElement?.querySelector("input,textarea,select") as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
-  if (!input) {
-    throw new Error(`Missing input ${label}. Page text: ${pageText()}`);
-  }
+  const input = findInput(label);
   act(() => {
     const prototype = input instanceof HTMLTextAreaElement
       ? HTMLTextAreaElement.prototype
@@ -594,6 +661,17 @@ function changeInput(label: string, value: string): void {
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
+}
+
+function findInput(label: string): HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement {
+  const input = document.body.querySelector(`[aria-label="${label}"]`) as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null
+    ?? [...document.body.querySelectorAll("label")]
+      .find((element) => element.textContent?.trim() === label)
+      ?.parentElement?.querySelector("input,textarea,select") as HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement | null;
+  if (!input) {
+    throw new Error(`Missing input ${label}. Page text: ${pageText()}`);
+  }
+  return input;
 }
 
 function setReactActEnvironment() {

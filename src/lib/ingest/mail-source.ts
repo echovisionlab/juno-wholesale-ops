@@ -462,7 +462,7 @@ function normalizeMailboxInput(input: MailboxSourceInput): RequiredMailboxSource
     credentialType: input.credentialType,
     credentialSecret: normalizeNullableText(input.credentialSecret),
     credentialReference: normalizeNullableText(input.credentialReference),
-    scopes: normalizeText(input.scopes) ?? GOOGLE_GMAIL_READONLY_SCOPE,
+    scopes: input.provider === "gmail" ? GOOGLE_GMAIL_READONLY_SCOPE : normalizeText(input.scopes) ?? GOOGLE_GMAIL_READONLY_SCOPE,
     mailboxAddress: requiredText("mailbox_address", input.mailboxAddress),
     displayName: normalizeNullableText(input.displayName),
     providerMailboxId: normalizeNullableText(input.providerMailboxId),

@@ -386,7 +386,11 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         setSettings(payload.settings);
       }
       if (response.ok) {
-        notifications.show({ color: payload.ok === false ? "yellow" : "green", title: "Juno session check finished", message: payload.status ? String(payload.status) : undefined });
+        notifications.show({
+          color: payload.ok === false ? "yellow" : "green",
+          title: "Juno session check finished",
+          message: formatJunoSessionCheckStatus(payload.status),
+        });
       }
     } finally {
       setJunoSessionPending(false);
@@ -424,7 +428,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       notifications.show({
         color: result.test.ok ? "green" : "yellow",
         title: result.test.ok ? "Connection ready" : "Connection test failed",
-        message: result.test.error ?? result.test.status,
+        message: formatMailSourceTestStatus(result.test),
       });
     } finally {
       setMailSourcePending(null);
@@ -1503,7 +1507,7 @@ function applyMailProviderPreset(draft: MailSourceDraft, provider: MailProvider)
       provider,
       authType: "google_workspace_delegation",
       credentialType: "google_service_account_json",
-      scopes: draft.scopes || gmailReadonlyScope,
+      scopes: gmailReadonlyScope,
     };
   }
   if (provider === "imap") {
@@ -1539,7 +1543,7 @@ function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSou
     credentialType: draft.credentialType,
     credentialSecret: draft.credentialSecret,
     credentialReference: draft.credentialReference,
-    scopes: draft.scopes,
+    scopes: draft.provider === "gmail" ? gmailReadonlyScope : draft.scopes,
     mailboxAddress: draft.mailboxAddress,
     displayName: draft.displayName,
     providerMailboxId: draft.providerMailboxId,
@@ -1693,6 +1697,7 @@ function MailSourcesCard({
                 />
                 <TextInput
                   label="Source name"
+                  placeholder="Primary wholesale inbox"
                   value={draft.name}
                   onChange={(event) => onDraftChange({ ...draft, name: event.currentTarget.value })}
                 />
@@ -1716,11 +1721,14 @@ function MailSourcesCard({
               <ResponsiveGrid minWidth={240} gap="sm">
                 <TextInput
                   label="Mailbox address"
+                  description="Delegated inbox that receives supplier catalog emails."
+                  placeholder="ops@example.com"
                   value={draft.mailboxAddress}
                   onChange={(event) => onDraftChange({ ...draft, mailboxAddress: event.currentTarget.value })}
                 />
                 <TextInput
                   label="Display name"
+                  placeholder="Wholesale inbox"
                   value={draft.displayName}
                   onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
                 />
@@ -1741,15 +1749,22 @@ function MailSourcesCard({
               </ResponsiveGrid>
               <PasswordInput
                 label={editingId ? "New credential secret" : "Credential secret"}
-                placeholder={editingId ? "Current credential stays configured" : undefined}
+                description={draft.provider === "gmail" ? "Paste the Google service account JSON." : undefined}
+                placeholder={editingId ? "Leave blank to keep configured" : "Paste credential value"}
                 value={draft.credentialSecret}
                 onChange={(event) => onDraftChange({ ...draft, credentialSecret: event.currentTarget.value })}
               />
               <TextInput
                 label="Credential reference"
+                placeholder="Runtime secret name"
                 value={draft.credentialReference}
                 onChange={(event) => onDraftChange({ ...draft, credentialReference: event.currentTarget.value })}
               />
+              {draft.provider === "gmail" ? (
+                <Text size="xs" c="dimmed">
+                  Gmail access uses a fixed read-only scope.
+                </Text>
+              ) : null}
             </Stack>
 
             <Divider />
@@ -1759,11 +1774,13 @@ function MailSourcesCard({
               <ResponsiveGrid minWidth={240} gap="sm">
                 <TextInput
                   label="Query"
+                  placeholder="filename:xlsx newer_than:7d"
                   value={draft.query}
                   onChange={(event) => onDraftChange({ ...draft, query: event.currentTarget.value })}
                 />
                 <TextInput
                   label="Attachment pattern"
+                  placeholder=".xlsx"
                   value={draft.attachmentPattern}
                   onChange={(event) => onDraftChange({ ...draft, attachmentPattern: event.currentTarget.value })}
                 />
@@ -1784,34 +1801,22 @@ function MailSourcesCard({
                 />
                 <TextInput
                   label="Supplier code"
+                  placeholder="juno"
                   value={draft.supplierCode}
                   onChange={(event) => onDraftChange({ ...draft, supplierCode: event.currentTarget.value })}
                 />
                 <TextInput
                   label="Storage dir"
+                  placeholder=".data/mail"
                   value={draft.storageDir}
                   onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
                 />
               </ResponsiveGrid>
             </Stack>
 
-            {draft.provider === "gmail" ? (
-              <>
-                <Divider />
-                <Stack gap="xs">
-                  <Text fw={700}>Gmail Workspace</Text>
-                  <TextInput
-                    label="Scopes"
-                    value={draft.scopes}
-                    onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
-                  />
-                </Stack>
-              </>
-            ) : null}
-
             {testResult ? (
               <Alert color={testResult.ok ? "green" : "yellow"} title={testResult.ok ? "Connection ready" : "Connection test failed"}>
-                {testResult.ok ? `${testResult.messageCount ?? 0} message${testResult.messageCount === 1 ? "" : "s"} matched.` : testResult.error ?? testResult.status}
+                {formatMailSourceTestStatus(testResult)}
               </Alert>
             ) : null}
 
@@ -1974,6 +1979,13 @@ function NotificationsSettingsCard({
           <SignalFact label="Dispatch" value="dry-run default" />
         </ResponsiveGrid>
 
+        <Stack gap={4}>
+          <Text size="sm" fw={700}>Flow</Text>
+          <Text size="sm" c="dimmed">
+            Add a channel, then add a rule that filters observed signals. Dispatch stays dry-run unless explicitly sent.
+          </Text>
+        </Stack>
+
         <Text size="sm" c="dimmed">{settings.units.notifications.detail}</Text>
 
         <Stack gap="sm">
@@ -1981,7 +1993,9 @@ function NotificationsSettingsCard({
             <Text fw={700}>Notification Channels</Text>
           </Group>
           {safeChannels.length === 0 ? (
-            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading channels" : "No notification channels configured"} />
+            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading channels" : "No notification channels configured"}>
+              Create an in-app, logging, or webhook destination before adding rules.
+            </Alert>
           ) : (
             <Table.ScrollContainer minWidth={720}>
               <Table verticalSpacing="sm">
@@ -2044,7 +2058,9 @@ function NotificationsSettingsCard({
         <Stack gap="sm">
           <Text fw={700}>Notification Rules</Text>
           {safeRules.length === 0 ? (
-            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading rules" : "No notification rules configured"} />
+            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading rules" : "No notification rules configured"}>
+              Rules choose which observed signals queue alerts for a channel.
+            </Alert>
           ) : (
             <Table.ScrollContainer minWidth={840}>
               <Table verticalSpacing="sm">
@@ -2116,6 +2132,7 @@ function NotificationsSettingsCard({
             <ResponsiveGrid minWidth={240} gap="sm">
               <TextInput
                 label="Channel name"
+                placeholder="Ops in-app"
                 value={channelDraft.name}
                 onChange={(event) => onChannelDraftChange({ ...channelDraft, name: event.currentTarget.value })}
               />
@@ -2134,13 +2151,14 @@ function NotificationsSettingsCard({
             {channelDraft.type === "webhook" ? (
               <PasswordInput
                 label={editingChannelId ? "New webhook URL" : "Webhook URL"}
-                placeholder={editingChannelId ? "Current URL stays configured" : undefined}
+                placeholder={editingChannelId ? "Leave blank to keep configured" : "https://example.test/ops-webhook"}
                 value={channelDraft.webhookUrl}
                 onChange={(event) => onChannelDraftChange({ ...channelDraft, webhookUrl: event.currentTarget.value })}
               />
             ) : null}
             <TextInput
               label="Secret ref"
+              placeholder="NOTIFICATION_WEBHOOK_URL"
               value={channelDraft.secretRef}
               onChange={(event) => onChannelDraftChange({ ...channelDraft, secretRef: event.currentTarget.value })}
             />
@@ -2160,6 +2178,7 @@ function NotificationsSettingsCard({
             <ResponsiveGrid minWidth={240} gap="sm">
               <TextInput
                 label="Rule name"
+                placeholder="Watch hits to in-app"
                 value={ruleDraft.name}
                 onChange={(event) => onRuleDraftChange({ ...ruleDraft, name: event.currentTarget.value })}
               />
@@ -2171,6 +2190,7 @@ function NotificationsSettingsCard({
               />
               <NumberInput
                 label="Min score"
+                description="0 includes all scores."
                 value={ruleDraft.minScore}
                 allowDecimal={false}
                 min={-100}
@@ -2179,6 +2199,7 @@ function NotificationsSettingsCard({
               />
               <NumberInput
                 label="Cooldown minutes"
+                description="Suppress repeated deliveries."
                 value={ruleDraft.cooldownMinutes}
                 allowDecimal={false}
                 min={0}
@@ -2202,12 +2223,14 @@ function NotificationsSettingsCard({
             </ResponsiveGrid>
             <MultiSelect
               label="Signal types"
+              placeholder="All observed signals"
               data={notificationSignalTypeOptions}
               value={ruleDraft.signalTypes}
               onChange={(values) => onRuleDraftChange({ ...ruleDraft, signalTypes: values as SignalEventType[] })}
             />
             <MultiSelect
               label="Severities"
+              placeholder="All severities"
               data={notificationSeverityOptions}
               value={ruleDraft.severities}
               onChange={(values) => onRuleDraftChange({ ...ruleDraft, severities: values as SignalSeverity[] })}
@@ -2239,6 +2262,35 @@ function formatNotificationChannelType(type: NotificationChannelType): string {
 
 function formatSignalType(type: SignalEventType): string {
   return notificationSignalTypeOptions.find((option) => option.value === type)?.label ?? type;
+}
+
+const junoSessionStatusMessages: Record<string, string> = {
+  missing_credentials: "Login credentials are missing.",
+  read_only_preflight_passed: "Session settings are ready.",
+};
+
+export function formatJunoSessionCheckStatus(status: unknown): string | undefined {
+  if (typeof status !== "string" || !status.trim()) {
+    return undefined;
+  }
+  return junoSessionStatusMessages[status] ?? "Session settings need attention.";
+}
+
+const mailSourceTestStatusMessages: Partial<Record<MailSourceConnectionTestResult["status"], string>> = {
+  credential_missing: "Credential JSON is required.",
+  invalid_configuration: "Complete the required connection fields.",
+  provider_not_implemented: "This adapter cannot be tested yet.",
+};
+
+export function formatMailSourceTestStatus(result: MailSourceConnectionTestResult): string {
+  if (result.ok) {
+    const count = result.messageCount ?? 0;
+    return `${count} message${count === 1 ? "" : "s"} matched.`;
+  }
+  if (result.error) {
+    return result.error;
+  }
+  return mailSourceTestStatusMessages[result.status] ?? "Connection failed.";
 }
 
 function notificationChannelToDraft(channel: NotificationChannel): NotificationChannelDraft {
