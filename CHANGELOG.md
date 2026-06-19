@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.0...v0.3.1) (2026-06-19)
+
+
+### Bug Fixes
+
+* keep komodo smoke on caddy route ([#34](https://github.com/echovisionlab/juno-wholesale-ops/issues/34)) ([1e3ea69](https://github.com/echovisionlab/juno-wholesale-ops/commit/1e3ea69ae7359bfdfb0719095cdd6488e8981386))
+
 ## [0.3.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.2.0...v0.3.0) (2026-06-19)
 
 
