@@ -1,13 +1,22 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { requireAdmin } from "@/lib/auth/admin";
+import { GOOGLE_GMAIL_READONLY_SCOPE } from "@/lib/env";
 import {
   createSsoProvider,
   deleteSsoProvider,
   listSsoProviders,
   updateSsoProvider,
 } from "@/lib/auth/sso-provider-repository";
-import { createMailboxSource, deleteMailboxSource, listMailboxSources, updateMailboxSource } from "@/lib/ingest/mail-source";
+import {
+  createMailboxSource,
+  deleteMailboxSource,
+  listActiveMailboxSources,
+  listMailboxSources,
+  updateMailboxSource,
+} from "@/lib/ingest/mail-source";
 import { testMailboxSourceConnection } from "@/lib/ingest/mail-source-test";
+import { GmailClient } from "@/lib/ingest/gmail";
+import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
   createWatchRule,
@@ -123,6 +132,19 @@ vi.mock("@/lib/ingest/mail-source-test", () => ({
   testMailboxSourceConnection: vi.fn(),
 }));
 
+vi.mock("@/lib/ingest/gmail", () => ({
+  GmailClient: vi.fn(function GmailClientMock() {
+    return {
+      listMessages: vi.fn(async () => []),
+    };
+  }),
+}));
+
+vi.mock("@/lib/ingest/google-auth", () => ({
+  getDelegatedAccessToken: vi.fn(async () => "gmail-access-token"),
+  parseServiceAccountKeyJson: vi.fn(() => ({ client_email: "service@example.test", private_key: "key" })),
+}));
+
 vi.mock("@/lib/insights/repository", () => ({
   createWatchRule: vi.fn(),
   deleteWatchRule: vi.fn(),
@@ -179,9 +201,13 @@ const listSsoProvidersMock = vi.mocked(listSsoProviders);
 const updateSsoProviderMock = vi.mocked(updateSsoProvider);
 const createMailboxSourceMock = vi.mocked(createMailboxSource);
 const deleteMailboxSourceMock = vi.mocked(deleteMailboxSource);
+const listActiveMailboxSourcesMock = vi.mocked(listActiveMailboxSources);
 const listMailboxSourcesMock = vi.mocked(listMailboxSources);
 const updateMailboxSourceMock = vi.mocked(updateMailboxSource);
 const testMailboxSourceConnectionMock = vi.mocked(testMailboxSourceConnection);
+const gmailClientMock = vi.mocked(GmailClient);
+const getDelegatedAccessTokenMock = vi.mocked(getDelegatedAccessToken);
+const parseServiceAccountKeyJsonMock = vi.mocked(parseServiceAccountKeyJson);
 const getGmailIngestStateMock = vi.mocked(getGmailIngestState);
 const getTodaySignalsMock = vi.mocked(getTodaySignals);
 const getMovementSignalsMock = vi.mocked(getMovementSignals);
@@ -229,6 +255,7 @@ describe("admin guarded API routes", () => {
     createSsoProviderMock.mockResolvedValue({} as never);
     updateSsoProviderMock.mockResolvedValue({} as never);
     deleteSsoProviderMock.mockResolvedValue({ deleted: true });
+    listActiveMailboxSourcesMock.mockResolvedValue([]);
     listMailboxSourcesMock.mockResolvedValue([]);
     createMailboxSourceMock.mockResolvedValue(mailSource());
     updateMailboxSourceMock.mockResolvedValue(mailSource());
@@ -240,6 +267,13 @@ describe("admin guarded API routes", () => {
       mailboxAddress: "ops@example.test",
       query: "filename:xlsx",
       messageCount: 1,
+    });
+    parseServiceAccountKeyJsonMock.mockReturnValue({ client_email: "service@example.test", private_key: "key" });
+    getDelegatedAccessTokenMock.mockResolvedValue("gmail-access-token");
+    gmailClientMock.mockImplementation(function GmailClientMock() {
+      return {
+        listMessages: vi.fn(async () => []),
+      };
     });
     ensureServiceSettingsRowMock.mockResolvedValue(emptySettingsRow());
     updateServiceSettingsMock.mockImplementation(async () => emptySettingsRow());
@@ -443,6 +477,33 @@ describe("admin guarded API routes", () => {
       status: 200,
       body: { ok: false, status: "missing_mail_source" },
     });
+
+    listActiveMailboxSourcesMock.mockResolvedValueOnce([
+      {
+        ...mailSource(),
+        scopes: "https://www.googleapis.com/auth/gmail.modify",
+      },
+    ]);
+    await expect(expectJson(testGmailSettings(jsonRequest({ mode: "smoke" })))).resolves.toMatchObject({
+      status: 200,
+      body: {
+        ok: true,
+        status: "read_only_smoke_passed",
+        results: [
+          expect.objectContaining({
+            sourceId: "source-1",
+            mailboxAddress: "operator@example.test",
+            status: "read_only_smoke_passed",
+          }),
+        ],
+      },
+    });
+    expect(parseServiceAccountKeyJsonMock).toHaveBeenCalledWith("secret");
+    expect(getDelegatedAccessTokenMock).toHaveBeenCalledWith(expect.objectContaining({
+      subject: "operator@example.test",
+      scopes: [GOOGLE_GMAIL_READONLY_SCOPE],
+    }));
+    expect(gmailClientMock).toHaveBeenCalledWith("operator@example.test", "gmail-access-token");
 
     ensureServiceSettingsRowMock.mockResolvedValueOnce({
       ...emptySettingsRow(),

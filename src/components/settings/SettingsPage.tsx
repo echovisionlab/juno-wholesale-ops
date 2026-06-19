@@ -75,7 +75,6 @@ type MailSourceDraft = {
   authType: MailAuthType;
   credentialType: MailCredentialType;
   credentialSecret: string;
-  credentialReference: string;
   scopes: string;
   mailboxAddress: string;
   displayName: string;
@@ -140,7 +139,6 @@ const emptyMailSourceDraft: MailSourceDraft = {
   authType: "google_workspace_delegation",
   credentialType: "google_service_account_json",
   credentialSecret: "",
-  credentialReference: "",
   scopes: gmailReadonlyScope,
   mailboxAddress: "",
   displayName: "",
@@ -345,7 +343,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         issues?: string[];
       };
       if (!response.ok || !payload.settings) {
-        const message = payload.issues?.join(" ") ?? payload.error ?? `Settings save returned ${response.status}`;
+        const message = formatSettingsActionError(
+          payload.issues?.join(" ") ?? payload.error,
+          `Settings save returned ${response.status}`,
+        );
         setError(message);
         notifications.show({ color: "red", title: "Save failed", message });
         return;
@@ -378,7 +379,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok) {
-        const message = payload.error ?? `Juno session check returned ${response.status}`;
+        const message = formatSettingsActionError(payload.error, `Juno session check returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Check failed", message });
       }
@@ -419,7 +420,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!result.test) {
-        const message = result.error ?? `Mail source test returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Mail source test returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Connection test failed", message });
         return;
@@ -454,7 +455,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok) {
-        const message = result.error ?? `Mail source save returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Mail source save returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: editing ? "Mail source update failed" : "Mail source create failed", message });
         return;
@@ -483,7 +484,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok) {
-        const message = result.error ?? `Mail source update returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Mail source update returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Mail source update failed", message });
         return;
@@ -521,7 +522,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         issues?: string[];
       };
       if (!response.ok || !result.settings) {
-        const message = result.issues?.join(" ") ?? result.error ?? `SSO provider save returned ${response.status}`;
+        const message = formatSettingsActionError(
+          result.issues?.join(" ") ?? result.error,
+          `SSO provider save returned ${response.status}`,
+        );
         setError(message);
         notifications.show({ color: "red", title: editing ? "Provider update failed" : "Provider create failed", message });
         return;
@@ -551,7 +555,10 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         issues?: string[];
       };
       if (!response.ok || !result.settings) {
-        const message = result.issues?.join(" ") ?? result.error ?? `SSO provider update returned ${response.status}`;
+        const message = formatSettingsActionError(
+          result.issues?.join(" ") ?? result.error,
+          `SSO provider update returned ${response.status}`,
+        );
         setError(message);
         notifications.show({ color: "red", title: "Provider update failed", message });
         return;
@@ -577,7 +584,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!response.ok || !result.settings) {
-        const message = result.error ?? `SSO provider delete returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `SSO provider delete returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Provider delete failed", message });
         return;
@@ -610,10 +617,16 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
         error?: string;
       };
       if (!channelsResponse.ok || !channelsPayload.channels) {
-        throw new Error(channelsPayload.error ?? `Notification channels returned ${channelsResponse.status}`);
+        throw new Error(formatSettingsActionError(
+          channelsPayload.error,
+          `Notification channels returned ${channelsResponse.status}`,
+        ));
       }
       if (!rulesResponse.ok || !rulesPayload.rules) {
-        throw new Error(rulesPayload.error ?? `Notification rules returned ${rulesResponse.status}`);
+        throw new Error(formatSettingsActionError(
+          rulesPayload.error,
+          `Notification rules returned ${rulesResponse.status}`,
+        ));
       }
       setNotificationChannels(channelsPayload.channels);
       setNotificationRules(rulesPayload.rules);
@@ -639,7 +652,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification channel save returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification channel save returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: editing ? "Channel update failed" : "Channel create failed", message });
         return;
@@ -665,7 +678,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification channel update returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification channel update returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Channel update failed", message });
         return;
@@ -688,7 +701,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification channel delete returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification channel delete returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Channel delete failed", message });
         return;
@@ -713,7 +726,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification rule save returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification rule save returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: editing ? "Rule update failed" : "Rule create failed", message });
         return;
@@ -739,7 +752,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification rule update returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification rule update returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Rule update failed", message });
         return;
@@ -762,7 +775,7 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       });
       const result = (await response.json().catch(() => ({}))) as { error?: string };
       if (!response.ok) {
-        const message = result.error ?? `Notification rule delete returned ${response.status}`;
+        const message = formatSettingsActionError(result.error, `Notification rule delete returned ${response.status}`);
         setError(message);
         notifications.show({ color: "red", title: "Rule delete failed", message });
         return;
@@ -1484,7 +1497,6 @@ function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
     authType: source.authType,
     credentialType: source.credentialType,
     credentialSecret: "",
-    credentialReference: source.credentialReference ?? "",
     scopes: source.scopes,
     mailboxAddress: source.mailboxAddress,
     displayName: source.displayName ?? "",
@@ -1542,7 +1554,6 @@ function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSou
     authType: draft.authType,
     credentialType: draft.credentialType,
     credentialSecret: draft.credentialSecret,
-    credentialReference: draft.credentialReference,
     scopes: draft.provider === "gmail" ? gmailReadonlyScope : draft.scopes,
     mailboxAddress: draft.mailboxAddress,
     displayName: draft.displayName,
@@ -1558,9 +1569,6 @@ function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSou
   };
   if (editing && "credentialSecret" in payload && !draft.credentialSecret.trim()) {
     delete payload.credentialSecret;
-  }
-  if (editing && "credentialReference" in payload && !draft.credentialReference.trim()) {
-    delete payload.credentialReference;
   }
   return payload;
 }
@@ -1753,12 +1761,6 @@ function MailSourcesCard({
                 placeholder={editingId ? "Leave blank to keep configured" : "Paste credential value"}
                 value={draft.credentialSecret}
                 onChange={(event) => onDraftChange({ ...draft, credentialSecret: event.currentTarget.value })}
-              />
-              <TextInput
-                label="Credential reference"
-                placeholder="Runtime secret name"
-                value={draft.credentialReference}
-                onChange={(event) => onDraftChange({ ...draft, credentialReference: event.currentTarget.value })}
               />
               {draft.provider === "gmail" ? (
                 <Text size="xs" c="dimmed">
@@ -2291,6 +2293,28 @@ export function formatMailSourceTestStatus(result: MailSourceConnectionTestResul
     return result.error;
   }
   return mailSourceTestStatusMessages[result.status] ?? "Connection failed.";
+}
+
+const settingsActionErrorMessages: Record<string, string> = {
+  invalid_settings: "Review the highlighted settings.",
+  mail_source_connection_test_required: "Run a successful connection test before saving.",
+  mail_source_connection_test_failed: "Connection test failed. Check the source settings.",
+  mail_source_not_found: "Mail source was not found.",
+  notification_channel_not_found: "Notification channel was not found.",
+  notification_rule_not_found: "Notification rule was not found.",
+  provider_not_found: "Provider was not found.",
+  sso_provider_not_found: "Provider was not found.",
+};
+
+export function formatSettingsActionError(error: unknown, fallback: string): string {
+  if (typeof error !== "string" || !error.trim()) {
+    return fallback;
+  }
+  const trimmed = error.trim();
+  if (settingsActionErrorMessages[trimmed]) {
+    return settingsActionErrorMessages[trimmed];
+  }
+  return /^[a-z]+(?:_[a-z0-9]+)+$/.test(trimmed) ? fallback : trimmed;
 }
 
 function notificationChannelToDraft(channel: NotificationChannel): NotificationChannelDraft {

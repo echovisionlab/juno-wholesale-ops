@@ -8,7 +8,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { theme } from "@/theme";
-import { formatJunoSessionCheckStatus, formatMailSourceTestStatus, SettingsPage } from "./SettingsPage";
+import {
+  formatJunoSessionCheckStatus,
+  formatMailSourceTestStatus,
+  formatSettingsActionError,
+  SettingsPage,
+} from "./SettingsPage";
 
 let root: Root;
 let container: HTMLDivElement;
@@ -142,6 +147,11 @@ describe("SettingsPage", () => {
       mailboxAddress: "ops@example.test",
       query: "filename:xlsx",
     })).toBe("Connection failed.");
+
+    expect(formatSettingsActionError("mail_source_connection_test_required", "Save failed")).toBe("Run a successful connection test before saving.");
+    expect(formatSettingsActionError("notification_channel_not_found", "Channel failed")).toBe("Notification channel was not found.");
+    expect(formatSettingsActionError("unknown_backend_code", "Action failed")).toBe("Action failed");
+    expect(formatSettingsActionError("Readable backend message", "Action failed")).toBe("Readable backend message");
   });
 
   it("shows auth warnings in the attention-only overview", async () => {
@@ -269,6 +279,8 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("Gmail access uses a fixed read-only scope.");
     expect(pageText()).not.toContain("Gmail Workspace Scopes");
     expect(pageText()).not.toContain("Scopes");
+    expect(pageText()).not.toContain("Credential reference");
+    expect(pageText()).not.toContain("Runtime secret name");
     expect(findInput("Mailbox address").getAttribute("placeholder")).toBe("ops@example.com");
     expect(findInput("Query").getAttribute("placeholder")).toBe("filename:xlsx newer_than:7d");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(true);
