@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.1...v0.3.2) (2026-06-19)
+
+
+### Bug Fixes
+
+* harden gmail ingest storage integration ([30d97a8](https://github.com/echovisionlab/juno-wholesale-ops/commit/30d97a8752c57fecf263ae4c81a358daaef86643))
+* harden gmail ingest storage integration ([bbe694b](https://github.com/echovisionlab/juno-wholesale-ops/commit/bbe694b14300cfb3b91db4b95068a95a550f5494))
+
 ## [0.3.1](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.0...v0.3.1) (2026-06-19)
 
 
