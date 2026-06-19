@@ -69,7 +69,7 @@ export async function testMailboxSourceConnection(input: MailboxSourceInput): Pr
     const accessToken = await getDelegatedAccessToken({
       key,
       subject: mailboxAddress,
-      scopes: parseScopes(input.scopes ?? GOOGLE_GMAIL_READONLY_SCOPE),
+      scopes: parseScopes(GOOGLE_GMAIL_READONLY_SCOPE),
     });
     const gmail = new GmailClient(mailboxAddress, accessToken);
     const messages = await gmail.listMessages(query, Math.min(input.maxResults ?? 10, 10));

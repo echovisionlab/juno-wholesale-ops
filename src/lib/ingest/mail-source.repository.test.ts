@@ -53,7 +53,7 @@ describe("mail source repository", () => {
       authType: "google_workspace_delegation",
       credentialType: "google_service_account_json",
       credentialSecret: "{\"client_email\":\"ops@example.com\",\"private_key\":\"key\"}",
-      scopes: "https://www.googleapis.com/auth/gmail.readonly",
+      scopes: "https://www.googleapis.com/auth/gmail.modify",
       mailboxAddress: "ops@example.com",
       displayName: "Ops mailbox",
       query: "filename:xlsx",
@@ -69,6 +69,7 @@ describe("mail source repository", () => {
       mailboxAddress: "ops@example.com",
       maxResults: 50,
       credentialConfigured: true,
+      scopes: "https://www.googleapis.com/auth/gmail.readonly",
     });
 
     const updated = await updateMailboxSource(databaseUrl, {
@@ -77,12 +78,14 @@ describe("mail source repository", () => {
       query: "newer_than:7d filename:xlsx",
       maxResults: 25,
       credentialSecret: "{\"client_email\":\"ops2@example.com\",\"private_key\":\"key\"}",
+      scopes: "https://www.googleapis.com/auth/gmail.modify",
     });
     expect(updated).toMatchObject({
       displayName: "Updated mailbox",
       query: "newer_than:7d filename:xlsx",
       maxResults: 25,
       credentialConfigured: true,
+      scopes: "https://www.googleapis.com/auth/gmail.readonly",
     });
 
     await expect(deleteMailboxSource(databaseUrl, created.id)).resolves.toBe(true);
