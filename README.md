@@ -166,34 +166,29 @@ Important values:
 
 - `DATABASE_URL`
 - `JUNO_WHOLESALE_OPS_DATA_MODE`
-- `AUTH_SECRET` optional runtime override for the internal Better Auth secret
-- `AUTH_BASE_URL` bootstrap fallback for the Settings Center Site address
+- `AUTH_SECRET` optional runtime bootstrap value for the internal Better Auth secret
+- `AUTH_BASE_URL` bootstrap value for the Settings Center Site address
 - `JUNO_LOGIN_EMAIL`
 - `JUNO_LOGIN_PASSWORD`
 
-Operator settings resolve from runtime bootstrap values and saved Postgres
-settings where those settings explicitly support runtime fallback. Mail ingest
-configuration does not use env fallback or legacy Gmail settings. It lives in
+Operator settings are edited as current values in the Settings Center. Runtime
+environment is only for process-required values and initial bootstrap defaults.
+Mail ingest configuration does not use env fallback or legacy Gmail settings. It lives in
 `mail_connection` and `mail_mailbox_source` records. Secret values are never
 shown in the dashboard; only configured/unset status is shown.
 
 The app Settings Center at `/settings` is the primary operator UX for runtime
-readiness, saved settings, reset-to-runtime actions, and diagnostics. It is
+readiness, saved operator settings, read-only smoke checks, and diagnostics. It is
 organized by operating unit instead of internal storage fields: Data Mode,
 Auth/Admin Access, Gmail Workspace Ingest, Juno Live Session, and Notifications.
-Refresh status updates the cards and next actions; sanitized diagnostics JSON is
-available only from Advanced and stays collapsed by default. Resolution is
-always:
-
-```text
-effective value = saved setting ?? runtime fallback ?? default value
-```
+Sanitized diagnostics JSON is available only from Advanced and stays collapsed
+by default. Editable fields show their current value directly in the input.
 
 `DATABASE_URL` remains runtime-only and cannot be persisted through the Settings
 Center. Export `.env` into the current shell before running local CLI scripts
 such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`. The public
 app URL is the primary saved `Site address` setting;
-`AUTH_BASE_URL` is only a bootstrap fallback before that saved setting exists.
+`AUTH_BASE_URL` is only a bootstrap value before that saved setting exists.
 External SSO setup shows the provider callback URL that must be registered in
 the provider console. Auth is always enabled. If `AUTH_SECRET` is absent,
 startup creates an internal random Better Auth secret in the database; it is not
@@ -239,7 +234,7 @@ pnpm juno:live:worker -- --loop
 
 It uses Playwright Chromium with a persistent profile and randomized delays.
 Automatic polling is disabled unless credentials and a poll interval are
-configured. Credentials belong in runtime fallback or secret mounts, not source.
+configured. Credentials belong in saved secret fields, runtime env, or secret mounts.
 
 ## Insights
 
@@ -313,7 +308,7 @@ Production recommendations:
   release tag.
 - Tagged releases can deploy through Komodo after image promotion when the
   production stack and Komodo GitHub secrets are configured.
-- Use mounted secrets or runtime fallback for credentials.
+- Use mounted secrets, runtime env, or saved secret fields for credentials.
 - Back up Postgres and raw attachment storage.
 - Keep `.data`, `.env`, service account JSON, and browser profiles out of git.
 - Run `pnpm validate`, `pnpm build`, and Docker build before release.

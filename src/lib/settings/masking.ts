@@ -43,7 +43,7 @@ export function resolveSettingDescriptor(options: {
     key: options.definition.key,
     label: options.definition.label,
     value: options.definition.secret ? null : normalizeDescriptorValue(value),
-    displayValue: displaySettingValue(options.definition, value, source),
+    displayValue: displaySettingValue(options.definition, value),
     source,
     state: configured ? "configured" : required ? "missing" : "disabled",
     secret: options.definition.secret,
@@ -76,15 +76,9 @@ export function hasSettingValue(value: unknown): boolean {
   return value !== null && value !== undefined;
 }
 
-function maskSecret(value: unknown, source: SettingSource): string {
+function maskSecret(value: unknown): string {
   if (!hasSettingValue(value)) {
     return "Not configured";
-  }
-  if (source === "database") {
-    return "Saved setting configured";
-  }
-  if (source === "runtime") {
-    return "Runtime fallback configured";
   }
   return "Configured";
 }
@@ -139,10 +133,9 @@ function normalizeDescriptorValue(value: unknown): string | number | boolean | n
 function displaySettingValue(
   definition: SettingDefinition,
   value: string | number | boolean | null | undefined,
-  source: SettingSource,
 ): string {
   if (definition.secret) {
-    return maskSecret(value, source);
+    return maskSecret(value);
   }
   if (!hasSettingValue(value)) {
     return definition.required ? "Not configured" : "Not set";

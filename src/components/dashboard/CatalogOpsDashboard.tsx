@@ -1302,7 +1302,6 @@ function setupStepPresentation(step: SetupStep): { label: string; color: string 
 }
 
 function SetupSettingRow({ setting }: { setting: SetupSetting }) {
-  const source = setupSettingSourcePresentation(setting);
   const state = setupSettingStatePresentation(setting);
 
   return (
@@ -1313,9 +1312,6 @@ function SetupSettingRow({ setting }: { setting: SetupSetting }) {
             {setting.label}
           </Text>
           <Group gap={4}>
-            <Badge color={source.color} size="xs" variant="light">
-              {source.label}
-            </Badge>
             <Badge color={state.color} size="xs" variant="light">
               {state.label}
             </Badge>
@@ -1348,16 +1344,6 @@ function SetupGuardrailRow({ guardrail }: { guardrail: SetupGuardrail }) {
       </Group>
     </Box>
   );
-}
-
-function setupSettingSourcePresentation(setting: SetupSetting): { label: string; color: string } {
-  if (setting.source === "database") {
-    return { label: "Saved setting", color: "blue" };
-  }
-  if (setting.source === "runtime") {
-    return { label: "Runtime fallback", color: "grape" };
-  }
-  return { label: "Not set", color: "red" };
 }
 
 function setupSettingStatePresentation(setting: SetupSetting): { label: string; color: string } {

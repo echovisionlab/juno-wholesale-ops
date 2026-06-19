@@ -40,7 +40,7 @@ describe("SettingsPage", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders source badges and masked secrets without raw values", async () => {
+  it("renders editable values and masked secrets without source noise", async () => {
     const writeText = vi.fn().mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error("denied"));
     Object.assign(navigator, { clipboard: { writeText } });
     await renderSettingsPage(settingsFixture());
@@ -66,15 +66,17 @@ describe("SettingsPage", () => {
     expect(pageText()).toContain("configured");
     expect(pageText()).not.toContain("raw-db-secret");
     clickButton("Overview");
-    expect(pageText()).toContain("Saved setting");
-    expect(pageText()).toContain("runtime fallback values");
+    expect(pageText()).toContain("Operator settings");
+    expect(pageText()).not.toContain("runtime fallback values");
+    expect(pageText()).not.toContain("Effective:");
     clickButton("Juno Live");
-    expect(pageText()).toContain("Not set");
-    expect(pageText()).toContain("Saved setting configured");
+    expect(pageText()).toContain("missing");
+    expect(pageText()).toContain("Current secret: Configured");
+    expect(pageText()).not.toContain("Saved setting configured");
     clickButton("Advanced");
-    expect(pageText()).toContain("Runtime fallback");
+    expect(pageText()).toContain("Environment");
     expect(pageText()).toContain("Default");
-    expect(pageText()).toContain("Runtime fallback configured");
+    expect(pageText()).not.toContain("Runtime fallback configured");
     expect(pageText()).not.toContain("raw-db-secret");
     expect(pageText()).not.toContain("raw-runtime-secret");
   });
@@ -98,7 +100,7 @@ describe("SettingsPage", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ juno: { juno_login_password: null } }),
     });
-    expect(pageText()).toContain("Runtime fallback configured");
+    expect(pageText()).toContain("Current secret: Configured");
 
     clickButton("Overview");
     clickButton("Test Mail Source");
@@ -287,7 +289,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         label: "System",
         state: "complete",
         settings: [
-          setting("database_url", "Database URL", "runtime", "configured", "Runtime fallback configured", true, false),
+          setting("database_url", "Database URL", "runtime", "configured", "Configured", true, false),
         ],
       },
       {
@@ -318,7 +320,7 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
               "Juno login password",
               junoPasswordSource,
               "configured",
-              junoPasswordSource === "database" ? "Saved setting configured" : "Runtime fallback configured",
+              "Configured",
               true,
               true,
             ),
@@ -332,13 +334,13 @@ function settingsFixture(options: { junoPasswordSource?: "database" | "runtime" 
         label: "Advanced",
         state: "missing",
         settings: [
-          setting("database_url", "Database URL", "runtime", "configured", "Runtime fallback configured", true, false),
+          setting("database_url", "Database URL", "runtime", "configured", "Configured", true, false),
           setting("juno_browser_headless", "Headless browser", "default", "configured", "Enabled", false, true, "boolean"),
           setting("auth_base_url", "Auth base URL", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
           setting("auth_email_password_login_enabled", "Email/password login", "database", "configured", "Enabled", false, true, "boolean"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
-          setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", junoPasswordSource === "database" ? "Saved setting configured" : "Runtime fallback configured", true, true),
+          setting("juno_login_password", "Juno login password", junoPasswordSource, "configured", "Configured", true, true),
         ],
       },
     ],

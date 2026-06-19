@@ -328,7 +328,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("no recorded mail ingest run");
   });
 
-  it("renders setup warning, saved setting, secret, and optional setting states", () => {
+  it("renders setup warning, configured, secret, and optional setting states", () => {
     renderDashboard({
       ...dashboardFixture,
       setupStatus: {
@@ -344,7 +344,7 @@ describe("CatalogOpsDashboard", () => {
             settings: [
               {
                 key: "saved_setting",
-                label: "Saved setting",
+                label: "Stored value",
                 source: "database",
                 state: "configured",
                 value: "configured value",
@@ -405,7 +405,8 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Runtime configuration is usable");
     expect(pageText()).toContain("Review");
     expect(pageText()).toContain("Blocked");
-    expect(pageText()).toContain("Saved setting");
+    expect(pageText()).toContain("Stored value");
+    expect(pageText()).not.toContain("Runtime fallback");
     expect(pageText()).toContain("Secret set");
     expect(pageText()).toContain("Optional");
     expect(pageText()).toContain("last observed");

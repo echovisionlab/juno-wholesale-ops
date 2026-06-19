@@ -13,7 +13,7 @@ function runtimeEnv(overrides: Record<string, string | boolean | number | undefi
 }
 
 describe("settings response and validation", () => {
-  it("resolves saved settings, runtime fallback, defaults, unset values, and masked secrets", () => {
+  it("resolves saved settings, runtime values, defaults, unset values, and masked secrets", () => {
     const env = runtimeEnv({
       DATABASE_URL: "postgres://user:pass@localhost:5432/app",
       AUTH_SECRET: "x".repeat(32),
@@ -43,7 +43,7 @@ describe("settings response and validation", () => {
     });
     expect(descriptor(response, "juno_login_password")).toMatchObject({
       source: "runtime",
-      displayValue: "Runtime fallback configured",
+      displayValue: "Configured",
       value: null,
       secret: true,
     });
