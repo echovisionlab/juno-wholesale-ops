@@ -3,6 +3,7 @@
 import { MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { act } from "react";
+import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
@@ -144,6 +145,100 @@ describe("SettingsPage", () => {
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings/auth/sso-providers");
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ id: "provider-1" });
   });
+
+  it("manages mail sources from the Mail Sources tab", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ source: settingsFixture().mailSources[0] }))
+      .mockResolvedValueOnce(jsonResponse(settingsFixture()))
+      .mockResolvedValueOnce(jsonResponse({ source: { ...settingsFixture().mailSources[0], isActive: false } }))
+      .mockResolvedValueOnce(jsonResponse(settingsFixture()));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderSettingsPage(settingsFixture());
+    clickButton("Mail Sources");
+    expect(pageText()).toContain("Add source");
+    expect(pageText()).toContain("Runnable ingest");
+    expect(pageText()).not.toContain("Gmail Workspace Ingest");
+
+    await clickButtonAndWait("Add source");
+    expect(pageText()).toContain("Add mail source");
+    changeInput("Source name", "Supplier inbox");
+    changeInput("Mailbox address", "stock@example.test");
+    changeInput("Credential secret", "{\"client_email\":\"service@example.test\"}");
+    clickButton("Create source");
+    await act(async () => undefined);
+
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/mail-sources");
+    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+      name: "Supplier inbox",
+      provider: "gmail",
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      mailboxAddress: "stock@example.test",
+      credentialSecret: "{\"client_email\":\"service@example.test\"}",
+    });
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/settings");
+    expect(pageText()).toContain("Mail source created");
+
+    const toggle = document.body.querySelector('input[aria-label="Gmail source active"]') as HTMLInputElement | null;
+    if (!toggle) {
+      throw new Error(`Missing mail source active switch. Page text: ${pageText()}`);
+    }
+    await act(async () => {
+      toggle.click();
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/mail-sources");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ id: "source-1", isActive: false });
+  });
+
+  it("manages notification channels and rules from the Notifications tab", async () => {
+    const channels = [notificationChannelFixture()];
+    const rules = [notificationRuleFixture()];
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ channels }))
+      .mockResolvedValueOnce(jsonResponse({ rules }))
+      .mockResolvedValueOnce(jsonResponse({ channel: { ...channels[0], id: "channel-2", name: "Ops log", type: "logging" } }))
+      .mockResolvedValueOnce(jsonResponse({ channels }))
+      .mockResolvedValueOnce(jsonResponse({ rules }))
+      .mockResolvedValueOnce(jsonResponse({ rule: { ...rules[0], enabled: false } }))
+      .mockResolvedValueOnce(jsonResponse({ channels }))
+      .mockResolvedValueOnce(jsonResponse({ rules: [{ ...rules[0], enabled: false }] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderSettingsPage(settingsFixture());
+    clickButton("Notifications");
+    await act(async () => undefined);
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/notifications/channels");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/notifications/rules");
+    expect(pageText()).toContain("Notification Channels");
+    expect(pageText()).toContain("Notification Rules");
+    expect(pageText()).toContain("Add channel");
+    expect(pageText()).toContain("Add rule");
+    expect(pageText()).not.toContain("dashboard Notification Center");
+
+    await clickButtonAndWait("Add channel");
+    changeInput("Channel name", "Ops log");
+    changeInput("Channel type", "logging");
+    clickButton("Create channel");
+    await act(async () => undefined);
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/notifications/channels");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+      name: "Ops log",
+      type: "logging",
+      enabled: true,
+      config: {},
+    });
+
+    const toggle = document.body.querySelector('input[aria-label="Watch hits rule enabled"]') as HTMLInputElement | null;
+    if (!toggle) {
+      throw new Error(`Missing notification rule switch. Page text: ${pageText()}`);
+    }
+    await act(async () => {
+      toggle.click();
+    });
+    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/rules");
+    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
+  });
 });
 
 async function renderSettingsPage(initialSettings: SettingsResponse | null = null, initialError: string | null = null): Promise<void> {
@@ -209,7 +304,7 @@ function settingsFixture(): SettingsResponse {
         id: "mail_sources",
         label: "Mail sources",
         status: "ready",
-        detail: "1 runnable Gmail source configured.",
+        detail: "1 runnable mail source configured.",
         configured: true,
         optional: false,
       },
@@ -338,11 +433,60 @@ function jsonResponse(value: unknown): Response {
   });
 }
 
+function notificationChannelFixture() {
+  return {
+    id: "channel-1",
+    name: "In-app",
+    type: "in_app",
+    enabled: true,
+    config: {},
+    secretRef: null,
+    configSummary: "Dashboard-only read-only alerts",
+    createdAt: "2026-06-18T00:00:00.000Z",
+    updatedAt: "2026-06-18T00:00:00.000Z",
+  };
+}
+
+function notificationRuleFixture() {
+  return {
+    id: "rule-1",
+    name: "Watch hits",
+    channelId: "channel-1",
+    channelName: "In-app",
+    channelType: "in_app",
+    channelEnabled: true,
+    enabled: true,
+    signalTypes: ["watch_hit"],
+    severities: ["watch"],
+    minScore: 10,
+    includeWatchHits: true,
+    includeDigest: false,
+    cooldownMinutes: 60,
+    createdAt: "2026-06-18T00:00:00.000Z",
+    updatedAt: "2026-06-18T00:00:00.000Z",
+  };
+}
+
 function pageText(): string {
   return document.body.textContent ?? "";
 }
 
 function clickButton(name: string): void {
+  const button = findButton(name);
+  act(() => {
+    clickElement(button);
+  });
+}
+
+async function clickButtonAndWait(name: string): Promise<void> {
+  const button = findButton(name);
+  await act(async () => {
+    clickElement(button);
+    await new Promise((resolve) => window.setTimeout(resolve, 0));
+  });
+}
+
+function findButton(name: string): HTMLElement {
   const matches = [...document.body.querySelectorAll("button,[role='tab']")]
     .find((element) => element.textContent?.trim() === name);
   const button = [...document.body.querySelectorAll("button,[role='tab']")]
@@ -351,9 +495,30 @@ function clickButton(name: string): void {
   if (!button) {
     throw new Error(`Missing button ${name}. Page text: ${pageText()}`);
   }
-  act(() => {
-    (button as HTMLElement).click();
-  });
+  return button as HTMLElement;
+}
+
+function clickElement(element: HTMLElement): void {
+  const propsKey = Object.keys(element).find((key) => key.startsWith("__reactProps"));
+  const props = propsKey
+    ? (element as unknown as Record<string, { onClick?: (event: unknown) => void }>)[propsKey]
+    : null;
+  if (typeof props?.onClick === "function") {
+    flushSync(() => props.onClick?.({
+      button: 0,
+      currentTarget: element,
+      defaultPrevented: false,
+      isDefaultPrevented: () => false,
+      isPropagationStopped: () => false,
+      nativeEvent: new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }),
+      persist() {},
+      target: element,
+      preventDefault() {},
+      stopPropagation() {},
+    }));
+    return;
+  }
+  element.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }));
 }
 
 function changeInput(label: string, value: string): void {

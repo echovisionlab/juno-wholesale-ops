@@ -144,7 +144,7 @@ function buildNextActions(groups: SettingsGroup[], warnings: SettingsResponse["w
     actions.push({
       id: "configure-mail-source",
       label: "Configure a mail source",
-      detail: "Create an active Gmail mailbox source with Google Workspace delegation and a JSON service account credential.",
+      detail: "Create an active mail source with a configured read-only credential.",
       href: "/settings",
       action: "test-gmail",
       severity: "warning",
@@ -282,11 +282,11 @@ function buildMailUnit(sources: PublicMailboxSource[]): SettingsResponse["units"
     label: "Mail sources",
     status: missing ? "missing" : warning ? "warning" : runnableSources.length > 0 ? "ready" : "disabled",
     detail: missing
-      ? "At least one active Gmail source with a configured JSON service account credential is required."
+      ? "At least one active mail source with an implemented read-only adapter is required."
       : warning
         ? "One or more active mail sources use a provider adapter that is not implemented yet."
         : runnableSources.length > 0
-          ? `${runnableSources.length} runnable Gmail source${runnableSources.length === 1 ? "" : "s"} configured.`
+          ? `${runnableSources.length} runnable mail source${runnableSources.length === 1 ? "" : "s"} configured.`
           : "No runnable mail source configured.",
     configured: runnableSources.length > 0,
     optional: false,

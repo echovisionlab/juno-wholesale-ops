@@ -12,6 +12,7 @@ import {
   Divider,
   Group,
   Modal,
+  MultiSelect,
   NativeSelect,
   NumberInput,
   PasswordInput,
@@ -46,6 +47,22 @@ import type {
   SettingDescriptor,
   SettingsWarning,
 } from "@/lib/settings/descriptors";
+import type {
+  MailAuthType,
+  MailCredentialType,
+  MailProvider,
+  MailboxSourceInput,
+  MailboxSourcePatch,
+  PublicMailboxSource,
+} from "@/lib/ingest/mail-source";
+import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
+import type {
+  NotificationChannel,
+  NotificationChannelInput,
+  NotificationChannelType,
+  NotificationRule,
+  NotificationRuleInput,
+} from "@/lib/notifications/types";
 
 type PatchValue = string | number | boolean | null;
 type DraftValues = Record<string, PatchValue>;
@@ -53,6 +70,27 @@ type ActionResult = Record<string, unknown>;
 type SettingsActionName = "test-gmail" | "test-juno-session";
 type SsoProviderProtocol = "oidc" | "oauth2";
 type SsoProviderPreset = "custom_oidc" | "custom_oauth2" | "google_oidc" | "microsoft_entra_oidc" | "auth0_oidc" | "okta_oidc";
+type MailSourceDraft = {
+  id?: string;
+  name: string;
+  provider: MailProvider;
+  authType: MailAuthType;
+  credentialType: MailCredentialType;
+  credentialSecret: string;
+  credentialReference: string;
+  scopes: string;
+  mailboxAddress: string;
+  displayName: string;
+  providerMailboxId: string;
+  query: string;
+  maxResults: number;
+  lookbackMs: number;
+  processedLabel: string;
+  storageDir: string;
+  attachmentPattern: string;
+  supplierCode: string;
+  isActive: boolean;
+};
 type SsoProviderDraft = {
   id?: string;
   providerId: string;
@@ -73,6 +111,119 @@ type SsoProviderDraft = {
   adminEmailAllowlist: string;
   adminClaim: string;
   adminClaimValue: string;
+};
+type NotificationChannelDraft = {
+  id?: string;
+  name: string;
+  type: NotificationChannelType;
+  enabled: boolean;
+  webhookUrl: string;
+  secretRef: string;
+};
+type NotificationRuleDraft = {
+  id?: string;
+  name: string;
+  channelId: string;
+  enabled: boolean;
+  signalTypes: SignalEventType[];
+  severities: SignalSeverity[];
+  minScore: number;
+  includeWatchHits: boolean;
+  includeDigest: boolean;
+  cooldownMinutes: number;
+};
+
+const gmailReadonlyScope = "https://www.googleapis.com/auth/gmail.readonly";
+
+const emptyMailSourceDraft: MailSourceDraft = {
+  name: "",
+  provider: "gmail",
+  authType: "google_workspace_delegation",
+  credentialType: "google_service_account_json",
+  credentialSecret: "",
+  credentialReference: "",
+  scopes: gmailReadonlyScope,
+  mailboxAddress: "",
+  displayName: "",
+  providerMailboxId: "",
+  query: "filename:xlsx",
+  maxResults: 25,
+  lookbackMs: 604800000,
+  processedLabel: "Wholesale Processed",
+  storageDir: ".data/mail",
+  attachmentPattern: "xlsx",
+  supplierCode: "juno",
+  isActive: true,
+};
+
+const mailProviderOptions: Array<{ value: MailProvider; label: string }> = [
+  { value: "gmail", label: "Gmail Workspace" },
+  { value: "imap", label: "IMAP" },
+  { value: "microsoft_graph", label: "Microsoft Graph" },
+  { value: "generic", label: "Generic mailbox" },
+];
+
+const mailAuthTypeOptions: Array<{ value: MailAuthType; label: string }> = [
+  { value: "google_workspace_delegation", label: "Google Workspace delegation" },
+  { value: "basic", label: "Basic" },
+  { value: "oauth2", label: "OAuth 2.0" },
+  { value: "api_token", label: "API token" },
+  { value: "none", label: "None" },
+];
+
+const mailCredentialTypeOptions: Array<{ value: MailCredentialType; label: string }> = [
+  { value: "google_service_account_json", label: "Google service account JSON" },
+  { value: "password", label: "Password" },
+  { value: "oauth_client_secret", label: "OAuth client secret" },
+  { value: "api_token", label: "API token" },
+  { value: "none", label: "None" },
+];
+
+const notificationChannelTypeOptions: Array<{ value: NotificationChannelType; label: string }> = [
+  { value: "in_app", label: "In-app" },
+  { value: "logging", label: "Logging" },
+  { value: "webhook", label: "Webhook" },
+];
+
+const notificationSignalTypeOptions: Array<{ value: SignalEventType; label: string }> = [
+  { value: "new_arrival", label: "New arrival" },
+  { value: "watch_hit", label: "Watch hit" },
+  { value: "low_catalog_stock", label: "Low catalog stock" },
+  { value: "exclude_match", label: "Exclude match" },
+  { value: "observed_restock", label: "Observed restock" },
+  { value: "observed_stock_drop", label: "Observed stock drop" },
+  { value: "observed_live_low_stock", label: "Observed live low stock" },
+  { value: "observed_status_change", label: "Observed status change" },
+  { value: "observed_price_change", label: "Observed price change" },
+  { value: "fast_mover_candidate", label: "Fast mover candidate" },
+  { value: "trend_spike", label: "Trend spike" },
+];
+
+const notificationSeverityOptions: Array<{ value: SignalSeverity; label: string }> = [
+  { value: "info", label: "Info" },
+  { value: "watch", label: "Watch" },
+  { value: "warning", label: "Warning" },
+  { value: "critical", label: "Critical" },
+];
+
+const emptyNotificationChannelDraft: NotificationChannelDraft = {
+  name: "",
+  type: "in_app",
+  enabled: true,
+  webhookUrl: "",
+  secretRef: "",
+};
+
+const emptyNotificationRuleDraft: NotificationRuleDraft = {
+  name: "",
+  channelId: "",
+  enabled: true,
+  signalTypes: [],
+  severities: [],
+  minScore: 0,
+  includeWatchHits: true,
+  includeDigest: false,
+  cooldownMinutes: 60,
 };
 
 const emptySsoProviderDraft: SsoProviderDraft = {
@@ -122,10 +273,24 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
   const [error, setError] = useState<string | null>(initialError);
   const [savingGroup, setSavingGroup] = useState<string | null>(null);
   const [actionPending, setActionPending] = useState<string | null>(null);
+  const [mailSourceDraft, setMailSourceDraft] = useState<MailSourceDraft>(emptyMailSourceDraft);
+  const [editingMailSourceId, setEditingMailSourceId] = useState<string | null>(null);
+  const [mailSourcePending, setMailSourcePending] = useState<string | null>(null);
+  const [mailSourceModalOpen, setMailSourceModalOpen] = useState(false);
   const [ssoProviderDraft, setSsoProviderDraft] = useState<SsoProviderDraft>(emptySsoProviderDraft);
   const [editingSsoProviderId, setEditingSsoProviderId] = useState<string | null>(null);
   const [ssoProviderPending, setSsoProviderPending] = useState<string | null>(null);
   const [ssoProviderModalOpen, setSsoProviderModalOpen] = useState(false);
+  const [notificationChannels, setNotificationChannels] = useState<NotificationChannel[] | null>(null);
+  const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(null);
+  const [notificationLoading, setNotificationLoading] = useState(false);
+  const [notificationPending, setNotificationPending] = useState<string | null>(null);
+  const [notificationChannelDraft, setNotificationChannelDraft] = useState<NotificationChannelDraft>(emptyNotificationChannelDraft);
+  const [editingNotificationChannelId, setEditingNotificationChannelId] = useState<string | null>(null);
+  const [notificationChannelModalOpen, setNotificationChannelModalOpen] = useState(false);
+  const [notificationRuleDraft, setNotificationRuleDraft] = useState<NotificationRuleDraft>(emptyNotificationRuleDraft);
+  const [editingNotificationRuleId, setEditingNotificationRuleId] = useState<string | null>(null);
+  const [notificationRuleModalOpen, setNotificationRuleModalOpen] = useState(false);
   const shouldLoadOnClient = !initialSettings && !initialError;
 
   const loadSettings = useCallback(async () => {
@@ -228,6 +393,61 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
     }
   }
 
+  async function saveMailSource() {
+    const editing = Boolean(editingMailSourceId);
+    const payload = mailSourcePayload(mailSourceDraft, editing);
+    setMailSourcePending(editing ? editingMailSourceId : "new");
+    setError(null);
+    try {
+      const response = await fetch("/api/mail-sources", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        const message = result.error ?? `Mail source save returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: editing ? "Mail source update failed" : "Mail source create failed", message });
+        return;
+      }
+      await loadSettings();
+      setMailSourceDraft(emptyMailSourceDraft);
+      setEditingMailSourceId(null);
+      setMailSourceModalOpen(false);
+      notifications.show({ color: "green", title: editing ? "Mail source updated" : "Mail source created", message: "Saved" });
+    } finally {
+      setMailSourcePending(null);
+    }
+  }
+
+  async function toggleMailSource(id: string, isActive: boolean) {
+    setMailSourcePending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/mail-sources", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, isActive }),
+      });
+      const result = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      if (!response.ok) {
+        const message = result.error ?? `Mail source update returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Mail source update failed", message });
+        return;
+      }
+      await loadSettings();
+      notifications.show({ color: "green", title: isActive ? "Mail source enabled" : "Mail source disabled", message: "Saved" });
+    } finally {
+      setMailSourcePending(null);
+    }
+  }
+
   async function saveSsoProvider() {
     const editing = Boolean(editingSsoProviderId);
     const payload = {
@@ -323,6 +543,187 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
       notifications.show({ color: "green", title: "Provider deleted", message: "Saved" });
     } finally {
       setSsoProviderPending(null);
+    }
+  }
+
+  const loadNotificationResources = useCallback(async () => {
+    setNotificationLoading(true);
+    setError(null);
+    try {
+      const [channelsResponse, rulesResponse] = await Promise.all([
+        fetch("/api/notifications/channels"),
+        fetch("/api/notifications/rules"),
+      ]);
+      const channelsPayload = (await channelsResponse.json().catch(() => ({}))) as {
+        channels?: NotificationChannel[];
+        error?: string;
+      };
+      const rulesPayload = (await rulesResponse.json().catch(() => ({}))) as {
+        rules?: NotificationRule[];
+        error?: string;
+      };
+      if (!channelsResponse.ok || !channelsPayload.channels) {
+        throw new Error(channelsPayload.error ?? `Notification channels returned ${channelsResponse.status}`);
+      }
+      if (!rulesResponse.ok || !rulesPayload.rules) {
+        throw new Error(rulesPayload.error ?? `Notification rules returned ${rulesResponse.status}`);
+      }
+      setNotificationChannels(channelsPayload.channels);
+      setNotificationRules(rulesPayload.rules);
+    } catch (loadError: unknown) {
+      const message = loadError instanceof Error ? loadError.message : "Notification settings unavailable";
+      setError(message);
+      notifications.show({ color: "red", title: "Notification settings failed", message });
+    } finally {
+      setNotificationLoading(false);
+    }
+  }, []);
+
+  async function saveNotificationChannel() {
+    const editing = Boolean(editingNotificationChannelId);
+    const payload = notificationChannelPayload(notificationChannelDraft, editing);
+    setNotificationPending(editing ? editingNotificationChannelId : "channel-new");
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/channels", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification channel save returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: editing ? "Channel update failed" : "Channel create failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      setNotificationChannelDraft(emptyNotificationChannelDraft);
+      setEditingNotificationChannelId(null);
+      setNotificationChannelModalOpen(false);
+      notifications.show({ color: "green", title: editing ? "Channel updated" : "Channel created", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
+    }
+  }
+
+  async function toggleNotificationChannel(id: string, enabled: boolean) {
+    setNotificationPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/channels", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification channel update returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Channel update failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      notifications.show({ color: "green", title: enabled ? "Channel enabled" : "Channel disabled", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
+    }
+  }
+
+  async function deleteNotificationChannel(id: string) {
+    setNotificationPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/channels", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification channel delete returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Channel delete failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      notifications.show({ color: "green", title: "Channel deleted", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
+    }
+  }
+
+  async function saveNotificationRule() {
+    const editing = Boolean(editingNotificationRuleId);
+    const payload = notificationRulePayload(notificationRuleDraft);
+    setNotificationPending(editing ? editingNotificationRuleId : "rule-new");
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/rules", {
+        method: editing ? "PATCH" : "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification rule save returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: editing ? "Rule update failed" : "Rule create failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      setNotificationRuleDraft(emptyNotificationRuleDraft);
+      setEditingNotificationRuleId(null);
+      setNotificationRuleModalOpen(false);
+      notifications.show({ color: "green", title: editing ? "Rule updated" : "Rule created", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
+    }
+  }
+
+  async function toggleNotificationRule(id: string, enabled: boolean) {
+    setNotificationPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/rules", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id, enabled }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification rule update returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Rule update failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      notifications.show({ color: "green", title: enabled ? "Rule enabled" : "Rule disabled", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
+    }
+  }
+
+  async function deleteNotificationRule(id: string) {
+    setNotificationPending(id);
+    setError(null);
+    try {
+      const response = await fetch("/api/notifications/rules", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      const result = (await response.json().catch(() => ({}))) as { error?: string };
+      if (!response.ok) {
+        const message = result.error ?? `Notification rule delete returned ${response.status}`;
+        setError(message);
+        notifications.show({ color: "red", title: "Rule delete failed", message });
+        return;
+      }
+      await loadNotificationResources();
+      notifications.show({ color: "green", title: "Rule deleted", message: "Saved" });
+    } finally {
+      setNotificationPending(null);
     }
   }
 
@@ -433,16 +834,105 @@ export function SettingsPage({ initialSettings = null, initialError = null }: Se
                             />
                           </>
                         ) : null}
-                        {groupId === "mail" ? <MailSourcesCard settings={settings} /> : null}
+                        {groupId === "mail" ? (
+                          <>
+                          <MailSourcesCard
+                            settings={settings}
+                            draft={mailSourceDraft}
+                            editingId={editingMailSourceId}
+                            pending={mailSourcePending}
+                            modalOpen={mailSourceModalOpen}
+                            onDraftChange={setMailSourceDraft}
+                            onAdd={() => {
+                              setMailSourceDraft(emptyMailSourceDraft);
+                              setEditingMailSourceId(null);
+                              setMailSourceModalOpen(true);
+                            }}
+                            onEdit={(source) => {
+                              setMailSourceDraft(mailSourceToDraft(source));
+                              setEditingMailSourceId(source.id);
+                              setMailSourceModalOpen(true);
+                            }}
+                            onModalClose={() => {
+                              setMailSourceModalOpen(false);
+                              setEditingMailSourceId(null);
+                              setMailSourceDraft(emptyMailSourceDraft);
+                            }}
+                            onSave={() => void saveMailSource()}
+                            onCancel={() => {
+                              setMailSourceModalOpen(false);
+                              setEditingMailSourceId(null);
+                              setMailSourceDraft(emptyMailSourceDraft);
+                            }}
+                            onToggle={(id, isActive) => void toggleMailSource(id, isActive)}
+                          />
+                          </>
+                        ) : null}
                         {groupId === "juno" ? <JunoLiveSessionCard settings={settings} group={groupsById[groupId]} /> : null}
-                        {groupId === "notifications" ? <NotificationsUnitCard settings={settings} /> : null}
-                        <SettingsGroupCard
-                          group={groupsById[groupId]}
-                          draft={draft}
-                          saving={savingGroup === groupId}
-                          onDraftChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
-                          onSave={() => groupsById[groupId] && void saveGroup(groupsById[groupId])}
-                        />
+                        {groupId === "notifications" ? (
+                          <NotificationsSettingsCard
+                            settings={settings}
+                            channels={notificationChannels}
+                            rules={notificationRules}
+                            loading={notificationLoading}
+                            pending={notificationPending}
+                            channelDraft={notificationChannelDraft}
+                            ruleDraft={notificationRuleDraft}
+                            editingChannelId={editingNotificationChannelId}
+                            editingRuleId={editingNotificationRuleId}
+                            channelModalOpen={notificationChannelModalOpen}
+                            ruleModalOpen={notificationRuleModalOpen}
+                            onRefresh={() => void loadNotificationResources()}
+                            onChannelDraftChange={setNotificationChannelDraft}
+                            onRuleDraftChange={setNotificationRuleDraft}
+                            onAddChannel={() => {
+                              setNotificationChannelDraft(emptyNotificationChannelDraft);
+                              setEditingNotificationChannelId(null);
+                              setNotificationChannelModalOpen(true);
+                            }}
+                            onEditChannel={(channel) => {
+                              setNotificationChannelDraft(notificationChannelToDraft(channel));
+                              setEditingNotificationChannelId(channel.id);
+                              setNotificationChannelModalOpen(true);
+                            }}
+                            onCloseChannelModal={() => {
+                              setNotificationChannelModalOpen(false);
+                              setEditingNotificationChannelId(null);
+                              setNotificationChannelDraft(emptyNotificationChannelDraft);
+                            }}
+                            onSaveChannel={() => void saveNotificationChannel()}
+                            onDeleteChannel={(id) => void deleteNotificationChannel(id)}
+                            onToggleChannel={(id, enabled) => void toggleNotificationChannel(id, enabled)}
+                            onAddRule={() => {
+                              const firstChannelId = notificationChannels?.[0]?.id ?? "";
+                              setNotificationRuleDraft({ ...emptyNotificationRuleDraft, channelId: firstChannelId });
+                              setEditingNotificationRuleId(null);
+                              setNotificationRuleModalOpen(true);
+                            }}
+                            onEditRule={(rule) => {
+                              setNotificationRuleDraft(notificationRuleToDraft(rule));
+                              setEditingNotificationRuleId(rule.id);
+                              setNotificationRuleModalOpen(true);
+                            }}
+                            onCloseRuleModal={() => {
+                              setNotificationRuleModalOpen(false);
+                              setEditingNotificationRuleId(null);
+                              setNotificationRuleDraft(emptyNotificationRuleDraft);
+                            }}
+                            onSaveRule={() => void saveNotificationRule()}
+                            onDeleteRule={(id) => void deleteNotificationRule(id)}
+                            onToggleRule={(id, enabled) => void toggleNotificationRule(id, enabled)}
+                          />
+                        ) : null}
+                        {groupsById[groupId].settings.length > 0 ? (
+                          <SettingsGroupCard
+                            group={groupsById[groupId]}
+                            draft={draft}
+                            saving={savingGroup === groupId}
+                            onDraftChange={(key, value) => setDraft((current) => ({ ...current, [key]: value }))}
+                            onSave={() => groupsById[groupId] && void saveGroup(groupsById[groupId])}
+                          />
+                        ) : null}
                       </Stack>
                     ) : null}
                   </Tabs.Panel>
@@ -806,7 +1296,7 @@ function AuthProviderCard({
 
         {callbackCopyStatus ? <Text size="xs" c="dimmed">{callbackCopyStatus}</Text> : null}
 
-        <Modal opened={modalOpen} onClose={onModalClose} title={editingId ? "Edit SSO provider" : "Add SSO provider"} size="lg">
+        <Modal opened={modalOpen} onClose={onModalClose} title={editingId ? "Edit SSO provider" : "Add SSO provider"} size="lg" transitionProps={{ duration: 0 }}>
           <Stack gap="sm">
             <ResponsiveGrid minWidth={240} gap="sm">
               <NativeSelect
@@ -962,29 +1452,147 @@ function presetLabel(value: string): string {
   return ssoProviderPresetOptions.find((preset) => preset.value === value)?.label ?? value;
 }
 
-function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
+function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
+  return {
+    id: source.id,
+    name: source.name,
+    provider: source.provider,
+    authType: source.authType,
+    credentialType: source.credentialType,
+    credentialSecret: "",
+    credentialReference: source.credentialReference ?? "",
+    scopes: source.scopes,
+    mailboxAddress: source.mailboxAddress,
+    displayName: source.displayName ?? "",
+    providerMailboxId: "",
+    query: source.query,
+    maxResults: source.maxResults,
+    lookbackMs: source.lookbackMs,
+    processedLabel: source.processedLabel,
+    storageDir: source.storageDir,
+    attachmentPattern: source.attachmentPattern,
+    supplierCode: source.supplierCode,
+    isActive: source.isActive,
+  };
+}
+
+function applyMailProviderPreset(draft: MailSourceDraft, provider: MailProvider): MailSourceDraft {
+  if (provider === "gmail") {
+    return {
+      ...draft,
+      provider,
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      scopes: draft.scopes || gmailReadonlyScope,
+    };
+  }
+  if (provider === "imap") {
+    return {
+      ...draft,
+      provider,
+      authType: "basic",
+      credentialType: "password",
+    };
+  }
+  if (provider === "microsoft_graph") {
+    return {
+      ...draft,
+      provider,
+      authType: "oauth2",
+      credentialType: "oauth_client_secret",
+    };
+  }
+  return {
+    ...draft,
+    provider,
+    authType: "api_token",
+    credentialType: "api_token",
+  };
+}
+
+function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSourceInput | MailboxSourcePatch {
+  const payload: MailboxSourceInput | MailboxSourcePatch = {
+    ...(editing && draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    provider: draft.provider,
+    authType: draft.authType,
+    credentialType: draft.credentialType,
+    credentialSecret: draft.credentialSecret,
+    credentialReference: draft.credentialReference,
+    scopes: draft.scopes,
+    mailboxAddress: draft.mailboxAddress,
+    displayName: draft.displayName,
+    providerMailboxId: draft.providerMailboxId,
+    query: draft.query,
+    maxResults: draft.maxResults,
+    lookbackMs: draft.lookbackMs,
+    processedLabel: draft.processedLabel,
+    storageDir: draft.storageDir,
+    attachmentPattern: draft.attachmentPattern,
+    supplierCode: draft.supplierCode,
+    isActive: draft.isActive,
+  };
+  if (editing && "credentialSecret" in payload && !draft.credentialSecret.trim()) {
+    delete payload.credentialSecret;
+  }
+  if (editing && "credentialReference" in payload && !draft.credentialReference.trim()) {
+    delete payload.credentialReference;
+  }
+  return payload;
+}
+
+function MailSourcesCard({
+  settings,
+  draft,
+  editingId,
+  pending,
+  modalOpen,
+  onDraftChange,
+  onAdd,
+  onEdit,
+  onModalClose,
+  onSave,
+  onCancel,
+  onToggle,
+}: {
+  settings: SettingsResponse;
+  draft: MailSourceDraft;
+  editingId: string | null;
+  pending: string | null;
+  modalOpen: boolean;
+  onDraftChange: (draft: MailSourceDraft) => void;
+  onAdd: () => void;
+  onEdit: (source: PublicMailboxSource) => void;
+  onModalClose: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  onToggle: (id: string, isActive: boolean) => void;
+}) {
   const sources = settings.mailSources;
+  const runnableCount = sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length;
   return (
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-	          <Stack gap={4}>
-	            <Text fw={700}>Gmail Workspace Ingest</Text>
-	          </Stack>
-          <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
-            {settings.units.mail.status}
-          </Badge>
+          <Group gap="xs">
+            <Text fw={700}>Mail Sources</Text>
+            <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
+              {settings.units.mail.status}
+            </Badge>
+          </Group>
+          <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAdd}>
+            Add source
+          </Button>
         </Group>
-	        <ResponsiveGrid minWidth={220} gap="xs">
-	          <SignalFact label="Runnable Gmail sources" value={String(sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length)} />
-	          <SignalFact label="Service account key" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
-	        </ResponsiveGrid>
+        <ResponsiveGrid minWidth={220} gap="xs">
+          <SignalFact label="Active sources" value={String(sources.filter((source) => source.isActive).length)} />
+          <SignalFact label="Runnable ingest" value={String(runnableCount)} />
+          <SignalFact label="Credentials" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
+        </ResponsiveGrid>
 
-	        {sources.length === 0 ? (
-	          <Alert color="red" title="No mail sources configured">
-	            Add a runnable Gmail source before ingest.
-	          </Alert>
-	        ) : (
+        {sources.length === 0 ? (
+          <Alert color="red" title="No mail sources configured" />
+        ) : (
           <Table.ScrollContainer minWidth={840}>
             <Table>
               <Table.Thead>
@@ -996,6 +1604,7 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
                   <Table.Th>Query</Table.Th>
                   <Table.Th>Storage</Table.Th>
                   <Table.Th>Status</Table.Th>
+                  <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
@@ -1021,6 +1630,21 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
                         {source.isActive ? "active" : "inactive"}
                       </Badge>
                     </Table.Td>
+                    <Table.Td>
+                      <Group gap="xs" wrap="nowrap">
+                        <Tooltip label={source.isActive ? "Disable source" : "Enable source"}>
+                          <Switch
+                            aria-label={`${source.name} active`}
+                            checked={source.isActive}
+                            disabled={pending === source.id}
+                            onChange={(event) => onToggle(source.id, event.currentTarget.checked)}
+                          />
+                        </Tooltip>
+                        <Button size="xs" variant="light" onClick={() => onEdit(source)}>
+                          Edit
+                        </Button>
+                      </Group>
+                    </Table.Td>
                   </Table.Tr>
                 ))}
               </Table.Tbody>
@@ -1028,7 +1652,123 @@ function MailSourcesCard({ settings }: { settings: SettingsResponse }) {
           </Table.ScrollContainer>
         )}
 
-	        <Text size="sm" c="dimmed">{settings.units.mail.detail}</Text>
+        <Text size="sm" c="dimmed">{settings.units.mail.detail}</Text>
+        <Modal opened={modalOpen} onClose={onModalClose} title={editingId ? "Edit mail source" : "Add mail source"} size="lg" transitionProps={{ duration: 0 }}>
+          <Stack gap="sm">
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <TextInput
+                label="Source name"
+                value={draft.name}
+                onChange={(event) => onDraftChange({ ...draft, name: event.currentTarget.value })}
+              />
+              <NativeSelect
+                label="Provider"
+                value={draft.provider}
+                data={mailProviderOptions}
+                onChange={(event) => onDraftChange(applyMailProviderPreset(draft, event.currentTarget.value as MailProvider))}
+              />
+              <NativeSelect
+                label="Auth type"
+                value={draft.authType}
+                data={mailAuthTypeOptions}
+                onChange={(event) => onDraftChange({ ...draft, authType: event.currentTarget.value as MailAuthType })}
+              />
+              <NativeSelect
+                label="Credential type"
+                value={draft.credentialType}
+                data={mailCredentialTypeOptions}
+                onChange={(event) => onDraftChange({ ...draft, credentialType: event.currentTarget.value as MailCredentialType })}
+              />
+              <TextInput
+                label="Mailbox address"
+                value={draft.mailboxAddress}
+                onChange={(event) => onDraftChange({ ...draft, mailboxAddress: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Display name"
+                value={draft.displayName}
+                onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Provider mailbox ID"
+                value={draft.providerMailboxId}
+                onChange={(event) => onDraftChange({ ...draft, providerMailboxId: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Query"
+                value={draft.query}
+                onChange={(event) => onDraftChange({ ...draft, query: event.currentTarget.value })}
+              />
+              <NumberInput
+                label="Max results"
+                value={draft.maxResults}
+                allowDecimal={false}
+                min={1}
+                max={500}
+                onChange={(value) => onDraftChange({ ...draft, maxResults: typeof value === "number" ? value : 25 })}
+              />
+              <NumberInput
+                label="Lookback ms"
+                value={draft.lookbackMs}
+                allowDecimal={false}
+                min={1}
+                onChange={(value) => onDraftChange({ ...draft, lookbackMs: typeof value === "number" ? value : 604800000 })}
+              />
+              <TextInput
+                label="Processed label"
+                value={draft.processedLabel}
+                onChange={(event) => onDraftChange({ ...draft, processedLabel: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Storage dir"
+                value={draft.storageDir}
+                onChange={(event) => onDraftChange({ ...draft, storageDir: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Attachment pattern"
+                value={draft.attachmentPattern}
+                onChange={(event) => onDraftChange({ ...draft, attachmentPattern: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Supplier code"
+                value={draft.supplierCode}
+                onChange={(event) => onDraftChange({ ...draft, supplierCode: event.currentTarget.value })}
+              />
+              <Switch
+                label="Active"
+                checked={draft.isActive}
+                onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
+              />
+            </ResponsiveGrid>
+            <Textarea
+              label={editingId ? "New credential secret" : "Credential secret"}
+              minRows={4}
+              placeholder={editingId ? "Current credential stays configured" : "Paste credential content"}
+              value={draft.credentialSecret}
+              onChange={(event) => onDraftChange({ ...draft, credentialSecret: event.currentTarget.value })}
+            />
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <TextInput
+                label="Credential reference"
+                value={draft.credentialReference}
+                onChange={(event) => onDraftChange({ ...draft, credentialReference: event.currentTarget.value })}
+              />
+              <TextInput
+                label="Scopes"
+                value={draft.scopes}
+                onChange={(event) => onDraftChange({ ...draft, scopes: event.currentTarget.value })}
+              />
+            </ResponsiveGrid>
+            <Group justify="flex-end">
+              <Button variant="light" color="gray" onClick={onCancel}>
+                Cancel
+              </Button>
+              <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingId ?? "new")} onClick={onSave}>
+                {editingId ? "Save source" : "Create source"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
       </Stack>
     </Card>
   );
@@ -1074,32 +1814,426 @@ function JunoLiveSessionCard({ settings, group }: { settings: SettingsResponse; 
   );
 }
 
-function NotificationsUnitCard({ settings }: { settings: SettingsResponse }) {
+function NotificationsSettingsCard({
+  settings,
+  channels,
+  rules,
+  loading,
+  pending,
+  channelDraft,
+  ruleDraft,
+  editingChannelId,
+  editingRuleId,
+  channelModalOpen,
+  ruleModalOpen,
+  onRefresh,
+  onChannelDraftChange,
+  onRuleDraftChange,
+  onAddChannel,
+  onEditChannel,
+  onCloseChannelModal,
+  onSaveChannel,
+  onDeleteChannel,
+  onToggleChannel,
+  onAddRule,
+  onEditRule,
+  onCloseRuleModal,
+  onSaveRule,
+  onDeleteRule,
+  onToggleRule,
+}: {
+  settings: SettingsResponse;
+  channels: NotificationChannel[] | null;
+  rules: NotificationRule[] | null;
+  loading: boolean;
+  pending: string | null;
+  channelDraft: NotificationChannelDraft;
+  ruleDraft: NotificationRuleDraft;
+  editingChannelId: string | null;
+  editingRuleId: string | null;
+  channelModalOpen: boolean;
+  ruleModalOpen: boolean;
+  onRefresh: () => void;
+  onChannelDraftChange: (draft: NotificationChannelDraft) => void;
+  onRuleDraftChange: (draft: NotificationRuleDraft) => void;
+  onAddChannel: () => void;
+  onEditChannel: (channel: NotificationChannel) => void;
+  onCloseChannelModal: () => void;
+  onSaveChannel: () => void;
+  onDeleteChannel: (id: string) => void;
+  onToggleChannel: (id: string, enabled: boolean) => void;
+  onAddRule: () => void;
+  onEditRule: (rule: NotificationRule) => void;
+  onCloseRuleModal: () => void;
+  onSaveRule: () => void;
+  onDeleteRule: (id: string) => void;
+  onToggleRule: (id: string, enabled: boolean) => void;
+}) {
+  useEffect(() => {
+    if (!channels && !rules && !loading) {
+      onRefresh();
+    }
+  }, [channels, loading, onRefresh, rules]);
+
+  const safeChannels = channels ?? [];
+  const safeRules = rules ?? [];
+
   return (
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Stack gap={4}>
+          <Group gap="xs">
             <Text fw={700}>Notifications</Text>
-            <Text size="sm" c="dimmed">
-              In-app notifications are valid by default. Generic webhook delivery remains optional and external sending requires explicit opt-in.
-            </Text>
-          </Stack>
-          <Badge color={unitStatusColor(settings.units.notifications.status)} variant="light">
-            {settings.units.notifications.status}
-          </Badge>
+            <Badge color={unitStatusColor(settings.units.notifications.status)} variant="light">
+              {settings.units.notifications.status}
+            </Badge>
+          </Group>
+          <Group gap="xs">
+            <Button size="xs" variant="light" loading={loading} onClick={onRefresh}>
+              Refresh
+            </Button>
+            <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAddChannel}>
+              Add channel
+            </Button>
+            <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} disabled={safeChannels.length === 0} onClick={onAddRule}>
+              Add rule
+            </Button>
+          </Group>
         </Group>
+
         <ResponsiveGrid minWidth={220} gap="xs">
-          <SignalFact label="In-app channel" value="ready" />
-          <SignalFact label="Webhook" value="optional; not configured is OK" />
-          <SignalFact label="Dispatch" value="dry-run by default" />
+          <SignalFact label="Channels" value={loading && !channels ? "loading" : String(safeChannels.length)} />
+          <SignalFact label="Enabled rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
+          <SignalFact label="Dispatch" value="dry-run default" />
         </ResponsiveGrid>
-        <Text size="sm" c="dimmed">
-          {settings.units.notifications.detail}
-        </Text>
+
+        <Text size="sm" c="dimmed">{settings.units.notifications.detail}</Text>
+
+        <Stack gap="sm">
+          <Group justify="space-between">
+            <Text fw={700}>Notification Channels</Text>
+          </Group>
+          {safeChannels.length === 0 ? (
+            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading channels" : "No notification channels configured"} />
+          ) : (
+            <Table.ScrollContainer minWidth={720}>
+              <Table verticalSpacing="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Channel</Table.Th>
+                    <Table.Th>Type</Table.Th>
+                    <Table.Th>Config</Table.Th>
+                    <Table.Th>Status</Table.Th>
+                    <Table.Th>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {safeChannels.map((channel) => (
+                    <Table.Tr key={channel.id}>
+                      <Table.Td>
+                        <Text fw={700}>{channel.name}</Text>
+                        <Text size="xs" c="dimmed">{channel.secretRef ? "secret ref configured" : "no secret ref"}</Text>
+                      </Table.Td>
+                      <Table.Td>{formatNotificationChannelType(channel.type)}</Table.Td>
+                      <Table.Td>{channel.configSummary}</Table.Td>
+                      <Table.Td>
+                        <Badge color={channel.enabled ? "green" : "gray"} variant="light" size="xs">
+                          {channel.enabled ? "enabled" : "disabled"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <Tooltip label={channel.enabled ? "Disable channel" : "Enable channel"}>
+                            <Switch
+                              aria-label={`${channel.name} channel enabled`}
+                              checked={channel.enabled}
+                              disabled={pending === channel.id}
+                              onChange={(event) => onToggleChannel(channel.id, event.currentTarget.checked)}
+                            />
+                          </Tooltip>
+                          <Button size="xs" variant="light" onClick={() => onEditChannel(channel)}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="xs"
+                            color="red"
+                            variant="light"
+                            leftSection={<Trash2 size={14} aria-hidden="true" />}
+                            loading={pending === channel.id}
+                            onClick={() => onDeleteChannel(channel.id)}
+                          >
+                            Delete
+                          </Button>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </Stack>
+
+        <Stack gap="sm">
+          <Text fw={700}>Notification Rules</Text>
+          {safeRules.length === 0 ? (
+            <Alert color={loading ? "blue" : "yellow"} title={loading ? "Loading rules" : "No notification rules configured"} />
+          ) : (
+            <Table.ScrollContainer minWidth={840}>
+              <Table verticalSpacing="sm">
+                <Table.Thead>
+                  <Table.Tr>
+                    <Table.Th>Rule</Table.Th>
+                    <Table.Th>Channel</Table.Th>
+                    <Table.Th>Signals</Table.Th>
+                    <Table.Th>Severities</Table.Th>
+                    <Table.Th>Threshold</Table.Th>
+                    <Table.Th>Status</Table.Th>
+                    <Table.Th>Actions</Table.Th>
+                  </Table.Tr>
+                </Table.Thead>
+                <Table.Tbody>
+                  {safeRules.map((rule) => (
+                    <Table.Tr key={rule.id}>
+                      <Table.Td>
+                        <Text fw={700}>{rule.name}</Text>
+                        <Text size="xs" c="dimmed">{rule.includeDigest ? "includes digest" : "signals only"}</Text>
+                      </Table.Td>
+                      <Table.Td>
+                        <Text>{rule.channelName}</Text>
+                        <Text size="xs" c="dimmed">{formatNotificationChannelType(rule.channelType)}</Text>
+                      </Table.Td>
+                      <Table.Td>{rule.signalTypes.length > 0 ? rule.signalTypes.map(formatSignalType).join(", ") : "All"}</Table.Td>
+                      <Table.Td>{rule.severities.length > 0 ? rule.severities.join(", ") : "All"}</Table.Td>
+                      <Table.Td>{`score ${rule.minScore}, ${rule.cooldownMinutes} min`}</Table.Td>
+                      <Table.Td>
+                        <Badge color={rule.enabled ? "green" : "gray"} variant="light" size="xs">
+                          {rule.enabled ? "enabled" : "disabled"}
+                        </Badge>
+                      </Table.Td>
+                      <Table.Td>
+                        <Group gap="xs" wrap="nowrap">
+                          <Tooltip label={rule.enabled ? "Disable rule" : "Enable rule"}>
+                            <Switch
+                              aria-label={`${rule.name} rule enabled`}
+                              checked={rule.enabled}
+                              disabled={pending === rule.id}
+                              onChange={(event) => onToggleRule(rule.id, event.currentTarget.checked)}
+                            />
+                          </Tooltip>
+                          <Button size="xs" variant="light" onClick={() => onEditRule(rule)}>
+                            Edit
+                          </Button>
+                          <Button
+                            size="xs"
+                            color="red"
+                            variant="light"
+                            leftSection={<Trash2 size={14} aria-hidden="true" />}
+                            loading={pending === rule.id}
+                            onClick={() => onDeleteRule(rule.id)}
+                          >
+                            Delete
+                          </Button>
+                        </Group>
+                      </Table.Td>
+                    </Table.Tr>
+                  ))}
+                </Table.Tbody>
+              </Table>
+            </Table.ScrollContainer>
+          )}
+        </Stack>
+
+        <Modal opened={channelModalOpen} onClose={onCloseChannelModal} title={editingChannelId ? "Edit notification channel" : "Add notification channel"} size="lg" transitionProps={{ duration: 0 }}>
+          <Stack gap="sm">
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <TextInput
+                label="Channel name"
+                value={channelDraft.name}
+                onChange={(event) => onChannelDraftChange({ ...channelDraft, name: event.currentTarget.value })}
+              />
+              <NativeSelect
+                label="Channel type"
+                value={channelDraft.type}
+                data={notificationChannelTypeOptions}
+                onChange={(event) => onChannelDraftChange({ ...channelDraft, type: event.currentTarget.value as NotificationChannelType })}
+              />
+              <Switch
+                label="Enabled"
+                checked={channelDraft.enabled}
+                onChange={(event) => onChannelDraftChange({ ...channelDraft, enabled: event.currentTarget.checked })}
+              />
+            </ResponsiveGrid>
+            {channelDraft.type === "webhook" ? (
+              <PasswordInput
+                label={editingChannelId ? "New webhook URL" : "Webhook URL"}
+                placeholder={editingChannelId ? "Current URL stays configured" : undefined}
+                value={channelDraft.webhookUrl}
+                onChange={(event) => onChannelDraftChange({ ...channelDraft, webhookUrl: event.currentTarget.value })}
+              />
+            ) : null}
+            <TextInput
+              label="Secret ref"
+              value={channelDraft.secretRef}
+              onChange={(event) => onChannelDraftChange({ ...channelDraft, secretRef: event.currentTarget.value })}
+            />
+            <Group justify="flex-end">
+              <Button variant="light" color="gray" onClick={onCloseChannelModal}>
+                Cancel
+              </Button>
+              <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingChannelId ?? "channel-new")} onClick={onSaveChannel}>
+                {editingChannelId ? "Save channel" : "Create channel"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
+
+        <Modal opened={ruleModalOpen} onClose={onCloseRuleModal} title={editingRuleId ? "Edit notification rule" : "Add notification rule"} size="lg" transitionProps={{ duration: 0 }}>
+          <Stack gap="sm">
+            <ResponsiveGrid minWidth={240} gap="sm">
+              <TextInput
+                label="Rule name"
+                value={ruleDraft.name}
+                onChange={(event) => onRuleDraftChange({ ...ruleDraft, name: event.currentTarget.value })}
+              />
+              <NativeSelect
+                label="Channel"
+                value={ruleDraft.channelId}
+                data={safeChannels.map((channel) => ({ value: channel.id, label: channel.name }))}
+                onChange={(event) => onRuleDraftChange({ ...ruleDraft, channelId: event.currentTarget.value })}
+              />
+              <NumberInput
+                label="Min score"
+                value={ruleDraft.minScore}
+                allowDecimal={false}
+                min={-100}
+                max={100}
+                onChange={(value) => onRuleDraftChange({ ...ruleDraft, minScore: typeof value === "number" ? value : 0 })}
+              />
+              <NumberInput
+                label="Cooldown minutes"
+                value={ruleDraft.cooldownMinutes}
+                allowDecimal={false}
+                min={0}
+                onChange={(value) => onRuleDraftChange({ ...ruleDraft, cooldownMinutes: typeof value === "number" ? value : 60 })}
+              />
+              <Switch
+                label="Enabled"
+                checked={ruleDraft.enabled}
+                onChange={(event) => onRuleDraftChange({ ...ruleDraft, enabled: event.currentTarget.checked })}
+              />
+              <Switch
+                label="Include watch hits"
+                checked={ruleDraft.includeWatchHits}
+                onChange={(event) => onRuleDraftChange({ ...ruleDraft, includeWatchHits: event.currentTarget.checked })}
+              />
+              <Switch
+                label="Include digest"
+                checked={ruleDraft.includeDigest}
+                onChange={(event) => onRuleDraftChange({ ...ruleDraft, includeDigest: event.currentTarget.checked })}
+              />
+            </ResponsiveGrid>
+            <MultiSelect
+              label="Signal types"
+              data={notificationSignalTypeOptions}
+              value={ruleDraft.signalTypes}
+              onChange={(values) => onRuleDraftChange({ ...ruleDraft, signalTypes: values as SignalEventType[] })}
+            />
+            <MultiSelect
+              label="Severities"
+              data={notificationSeverityOptions}
+              value={ruleDraft.severities}
+              onChange={(values) => onRuleDraftChange({ ...ruleDraft, severities: values as SignalSeverity[] })}
+            />
+            <Group justify="flex-end">
+              <Button variant="light" color="gray" onClick={onCloseRuleModal}>
+                Cancel
+              </Button>
+              <Button leftSection={<Save size={16} aria-hidden="true" />} loading={pending === (editingRuleId ?? "rule-new")} onClick={onSaveRule}>
+                {editingRuleId ? "Save rule" : "Create rule"}
+              </Button>
+            </Group>
+          </Stack>
+        </Modal>
       </Stack>
     </Card>
   );
+}
+
+function formatNotificationChannelType(type: NotificationChannelType): string {
+  if (type === "in_app") {
+    return "In-app";
+  }
+  if (type === "webhook") {
+    return "Webhook";
+  }
+  return "Logging";
+}
+
+function formatSignalType(type: SignalEventType): string {
+  return notificationSignalTypeOptions.find((option) => option.value === type)?.label ?? type;
+}
+
+function notificationChannelToDraft(channel: NotificationChannel): NotificationChannelDraft {
+  return {
+    id: channel.id,
+    name: channel.name,
+    type: channel.type,
+    enabled: channel.enabled,
+    webhookUrl: "",
+    secretRef: channel.secretRef ?? "",
+  };
+}
+
+function notificationChannelPayload(
+  draft: NotificationChannelDraft,
+  editing: boolean,
+): NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) {
+  const payload: NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) = {
+    ...(editing && draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    type: draft.type,
+    enabled: draft.enabled,
+    secretRef: draft.secretRef,
+  };
+  if (draft.type === "webhook") {
+    if (draft.webhookUrl.trim()) {
+      payload.config = { url: draft.webhookUrl.trim() };
+    }
+  } else {
+    payload.config = {};
+  }
+  return payload;
+}
+
+function notificationRuleToDraft(rule: NotificationRule): NotificationRuleDraft {
+  return {
+    id: rule.id,
+    name: rule.name,
+    channelId: rule.channelId,
+    enabled: rule.enabled,
+    signalTypes: rule.signalTypes,
+    severities: rule.severities,
+    minScore: rule.minScore,
+    includeWatchHits: rule.includeWatchHits,
+    includeDigest: rule.includeDigest,
+    cooldownMinutes: rule.cooldownMinutes,
+  };
+}
+
+function notificationRulePayload(draft: NotificationRuleDraft): NotificationRuleInput | (Partial<NotificationRuleInput> & { id: string }) {
+  return {
+    ...(draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    channelId: draft.channelId,
+    enabled: draft.enabled,
+    signalTypes: draft.signalTypes,
+    severities: draft.severities,
+    minScore: draft.minScore,
+    includeWatchHits: draft.includeWatchHits,
+    includeDigest: draft.includeDigest,
+    cooldownMinutes: draft.cooldownMinutes,
+  };
 }
 
 function SignalFact({ label, value }: { label: string; value: string }) {
@@ -1128,16 +2262,10 @@ function SettingsGroupCard({ group, draft, saving, onDraftChange, onSave }: {
         <Stack gap={4}>
           <Text fw={700}>{group.label}</Text>
 	        </Stack>
-        <Badge color={groupStateColor(group.state)} variant="light">
+      <Badge color={groupStateColor(group.state)} variant="light">
           {group.state}
         </Badge>
       </Group>
-
-      {group.id === "notifications" && group.settings.length === 0 ? (
-        <Alert mt="md" color="blue" title="Notification settings">
-          Notification channels and rules are managed in the dashboard Notification Center. External webhook sending remains opt-in and secrets stay masked.
-        </Alert>
-      ) : null}
 
       <Stack gap="md" mt="md">
         {visibleSettings.map((setting) => (
@@ -1336,10 +2464,10 @@ function buildOverviewUnits(settings: SettingsResponse): Array<{
       action: settings.security.authBootstrap.status === "ready" ? "Keep at least one admin access path configured." : "Add an initial admin, existing admin, or SSO admin mapping.",
     },
     {
-      label: "Gmail Ingest",
+      label: "Mail Ingest",
       status: unitOverviewStatus(settings.units.mail.status),
       detail: settings.units.mail.detail,
-      action: "Add a runnable Gmail source.",
+      action: "Add a runnable mail source.",
     },
     {
       label: "Juno Live",
