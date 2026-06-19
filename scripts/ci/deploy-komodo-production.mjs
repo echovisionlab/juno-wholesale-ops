@@ -42,7 +42,7 @@ function requiredEnv(name) {
 }
 
 function parseList(value, fallback) {
-  if (value === undefined) {
+  if (value === undefined || value.trim() === "") {
     return fallback;
   }
   return value
@@ -52,7 +52,7 @@ function parseList(value, fallback) {
 }
 
 function parseBoolean(value, fallback) {
-  if (value === undefined) {
+  if (value === undefined || value.trim() === "") {
     return fallback;
   }
   return !["0", "false", "no", "off"].includes(value.trim().toLowerCase());
@@ -60,7 +60,7 @@ function parseBoolean(value, fallback) {
 
 function parsePositiveIntegerEnv(name, fallback) {
   const value = process.env[name];
-  if (value === undefined) {
+  if (value === undefined || value.trim() === "") {
     return fallback;
   }
 
