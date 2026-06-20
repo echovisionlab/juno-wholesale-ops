@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.4.0...v0.5.0) (2026-06-20)
+
+
+### Features
+
+* improve notification provider operations ([7d71cf0](https://github.com/echovisionlab/juno-wholesale-ops/commit/7d71cf0370a906db114a67ca64e4229f0f537a20))
+
 ## [0.4.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.4...v0.4.0) (2026-06-20)
 
 
