@@ -122,8 +122,8 @@ export function LoginForm({
         ) : null}
 
         {loginUnavailable ? (
-          <Alert color="yellow" variant="light" title="No sign-in methods available">
-            Email/password login is disabled and no ready SSO provider is configured.
+          <Alert color="yellow" variant="light" title="No login method configured">
+            Enable email/password login or configure at least one ready SSO provider.
           </Alert>
         ) : null}
 

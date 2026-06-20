@@ -54,6 +54,11 @@ always enabled before the service is exposed beyond trusted local access.
 
 ## Secret Storage, Rotation, and Backup
 
+Warning: Postgres backups are secret-bearing backups. They include saved auth
+settings, SSO client secrets, mail source credentials, Juno passwords, and
+notification secrets unless every credential has already moved to an external
+`secret_ref`. Treat each backup like production credentials.
+
 Current storage policy:
 
 - The internal Better Auth secret is generated during startup when missing and

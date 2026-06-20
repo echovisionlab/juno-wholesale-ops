@@ -99,8 +99,8 @@ describe("LoginForm", () => {
   it("shows login method unavailable when no auth methods are ready", async () => {
     await renderLoginForm(null, [], undefined, false);
 
-    expect(pageText()).toContain("No sign-in methods available");
-    expect(pageText()).toContain("Email/password login is disabled and no ready SSO provider is configured.");
+    expect(pageText()).toContain("No login method configured");
+    expect(pageText()).toContain("Enable email/password login or configure at least one ready SSO provider.");
     expect(labelText()).not.toContain("Email");
     expect(labelText()).not.toContain("Password");
   });

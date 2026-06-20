@@ -18,13 +18,15 @@ Storybook remains on port `6008`.
 ### Dashboard filtering and saved views
 
 Issue: [#5](https://github.com/echovisionlab/juno-wholesale-ops/issues/5)
-Status: implemented.
+Status: partially implemented.
 
 - Dashboard filters cover signal type, severity, watch-hit inclusion, and date
   range.
 - Saved views are stored in the local/self-hosted database.
 - Dashboard controls stay inside the read-only operator surface and avoid raw
   catalog row dumps.
+- Remaining stabilization: browser-level regression coverage, Storybook states,
+  and operational edge-case review before closing the issue.
 
 ### Mail source provider model
 
@@ -52,7 +54,7 @@ Status: partially implemented.
 ### Notification operations UX
 
 Issue: [#45](https://github.com/echovisionlab/juno-wholesale-ops/issues/45)
-Status: partially implemented.
+Status: remaining hardening.
 
 - In-app, logging, generic webhook, Slack-style, Discord-style, and
   Telegram-style notification payloads exist.
@@ -61,6 +63,8 @@ Status: partially implemented.
 - Dry-run remains the default. External sends require an explicit send action.
 - In-app-only operation is normal; missing webhook URLs are a webhook send
   limitation, not a system warning.
+- Remaining stabilization: keep queue/dry-run/send/refresh copy, telemetry, and
+  error states aligned across Settings Center, CLI docs, and API responses.
 
 ## v0.6.x Stabilization
 
@@ -73,15 +77,19 @@ Status: partially implemented.
 - Keep Settings Center admin bootstrap and SSO readiness copy aligned with the
   login page.
 
-### Secret storage, rotation, and backup policy
+### P0 blocker: SSO secret storage hardening
 
 Issue: [#54](https://github.com/echovisionlab/juno-wholesale-ops/issues/54)
+Priority: P0 stabilization blocker.
 
 - Document current storage for internal auth secret, SSO client secrets, mail
   source credentials, Juno passwords, and notification webhook secrets.
 - Document rotation order and session impact for internal auth secret rotation.
 - Treat Postgres backups as secret-bearing artifacts; keep backup/restore
   guidance explicit without publishing secret values.
+- Before v0.6.x stabilization is considered complete, implement `secret_ref` or
+  encrypted-at-rest storage for SSO client secrets, or explicitly accept and
+  document the residual risk for the release.
 
 ### Mail provider UX stabilization
 
@@ -148,15 +156,6 @@ Issue: [#4](https://github.com/echovisionlab/juno-wholesale-ops/issues/4)
   read-only.
 - Preserve dry-run defaults, secret masking, and explicit send opt-in external
   delivery.
-
-### SSO secret reference or encrypted storage
-
-Issue: [#54](https://github.com/echovisionlab/juno-wholesale-ops/issues/54)
-
-- Add `secret_ref` support or encrypted-at-rest storage for SSO client secrets.
-- Define rotation semantics, migration behavior, and backup/restore
-  responsibilities.
-- Keep existing write-only DB values masked during any migration path.
 
 ### Parser fixture expansion
 
