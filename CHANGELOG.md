@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.4...v0.4.0) (2026-06-20)
+
+
+### Features
+
+* add provider-based mail source setup ([a006e76](https://github.com/echovisionlab/juno-wholesale-ops/commit/a006e76490646f708952b1aacb02cad4d175ed59))
+
 ## [0.3.4](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.3...v0.3.4) (2026-06-20)
 
 
