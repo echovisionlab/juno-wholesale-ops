@@ -34,6 +34,7 @@ export async function startMigratedPostgresTestDatabase(): Promise<StartedPostgr
 export async function resetApplicationTables(pool: Pool): Promise<void> {
   await pool.query(`
     TRUNCATE
+      dashboard_saved_view,
       notification_delivery,
       notification_rule,
       notification_channel,

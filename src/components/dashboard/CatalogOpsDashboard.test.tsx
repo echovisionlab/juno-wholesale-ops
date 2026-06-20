@@ -83,6 +83,9 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Watch Overlap");
     expect(pageText()).toContain("Operator Digest");
     expect(pageText()).toContain("Restock observations");
+    expect(pageText()).toContain("Signal Filters");
+    expect(pageText()).toContain("Watch hits");
+    expect(pageText()).toContain("Low stock review");
     expect(pageText()).toContain("Notification Center");
     expect(pageText()).toContain("[Watch hit] Lara Voss - Signal Path");
     expect(pageText()).toContain("Notification Rules");
@@ -132,7 +135,7 @@ describe("CatalogOpsDashboard", () => {
     setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Impulse");
     clickButton("Add rule");
     expect(onCreateWatchRule).toHaveBeenCalledWith({ type: "artist", pattern: "Impulse", weight: null });
-    setSelectValue("select", "exclude_keyword");
+    setSelectValue('select[aria-label="Watch rule type"]', "exclude_keyword");
     setInputValue('input[placeholder="Artist, label, genre, or keyword"]', "Damaged sleeve");
     setInputValue('input[placeholder="-10"]', "-12");
     clickButton("Add rule");
@@ -701,6 +704,58 @@ describe("CatalogOpsDashboard", () => {
 
     expect(pageText()).toContain("Start disabled: Delay min must be less than or equal to delay max.");
   });
+
+  it("filters signals and dispatches saved view actions", () => {
+    const onCreateDashboardSavedView = vi.fn();
+    const onUpdateDashboardSavedView = vi.fn();
+    const onDeleteDashboardSavedView = vi.fn();
+
+    renderDashboard({
+      ...dashboardFixture,
+      onCreateDashboardSavedView,
+      onUpdateDashboardSavedView,
+      onDeleteDashboardSavedView,
+    });
+
+    expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).toContain("Low catalog stock: Lara Voss - Signal Path");
+    selectComboboxOption("Signal type", "Watch hit");
+    expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).not.toContain("Low catalog stock: Lara Voss - Signal Path");
+    clickButton("Reset");
+    selectComboboxOption("Severity", "Warning");
+    expect(pageText()).not.toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).toContain("Low catalog stock: Lara Voss - Signal Path");
+    clickButton("Reset");
+    clickByAriaLabel("Watch hits");
+    expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).not.toContain("Low catalog stock: Lara Voss - Signal Path");
+    clickButton("Reset");
+    clickByAriaLabel("Low stock");
+    expect(pageText()).toContain("Low catalog stock: Lara Voss - Signal Path");
+    clickButton("Reset");
+    clickByAriaLabel("Movement");
+    expect(pageText()).not.toContain("Watch hit: Lara Voss - Signal Path");
+    expect(pageText()).toContain("Observed stock change: Lara Voss - Signal Path");
+
+    setInputValue('input[placeholder="Ops review"]', "Movement review");
+    clickButton("Save");
+    expect(onCreateDashboardSavedView).toHaveBeenCalledWith({
+      name: "Movement review",
+      filters: expect.objectContaining({ movementOnly: true }),
+    });
+
+    setSelectValue('select[aria-label="Signal date range"]', "7d");
+    selectComboboxOption("Saved view", "Watch hits");
+    expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
+    clickButton("Update");
+    expect(onUpdateDashboardSavedView).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "dashboard-view-1" }),
+      expect.objectContaining({ watchHitsOnly: true }),
+    );
+    clickByAriaLabel("Delete saved view");
+    expect(onDeleteDashboardSavedView).toHaveBeenCalledWith(expect.objectContaining({ id: "dashboard-view-1" }));
+  });
 });
 
 function renderDashboard(props: CatalogOpsDashboardProps): void {
@@ -785,7 +840,28 @@ function clickByAriaLabel(label: string): void {
     throw new Error(`Missing control ${label}`);
   }
   act(() => {
+    if (element instanceof HTMLInputElement && element.type === "checkbox") {
+      element.click();
+      return;
+    }
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function selectComboboxOption(label: string, option: string): void {
+  const input = Array.from(document.querySelectorAll("input")).find((entry) => entry.getAttribute("aria-label") === label);
+  if (!(input instanceof HTMLInputElement)) {
+    throw new Error(`Missing combobox ${label}`);
+  }
+  act(() => {
+    input.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+  const optionElement = Array.from(document.querySelectorAll('[role="option"]')).find((entry) => entry.textContent === option);
+  if (!optionElement) {
+    throw new Error(`Missing option ${option}`);
+  }
+  act(() => {
+    optionElement.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
 }
 

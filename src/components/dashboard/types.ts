@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { DashboardSignalFilters } from "@/lib/dashboard/signal-filters";
 
 export type DashboardIcon = ComponentType<{
   size?: number;
@@ -119,6 +120,20 @@ export type TodayInsight = {
 };
 
 export type MovementSignal = TodayInsight;
+
+export type DashboardSavedView = {
+  id: string;
+  name: string;
+  filters: DashboardSignalFilters;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type DashboardSavedViewDraft = {
+  name: string;
+  filters: DashboardSignalFilters;
+};
 
 export type TrendBucket = {
   key: string;

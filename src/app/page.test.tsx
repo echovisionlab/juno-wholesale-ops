@@ -15,6 +15,7 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
     movementSignals: unknown;
     catalogTrends: unknown;
     operatorDigest: unknown;
+    dashboardSavedViews: Array<{ id: string; name: string; filters: unknown }> | null;
     watchRules: Array<{ id: string; enabled: boolean }> | null;
     notificationDeliveries: unknown;
     notificationRules: unknown;
@@ -22,10 +23,14 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
     apiIssues: unknown;
     workerActionPending: boolean;
     watchRuleActionPending: boolean;
+    dashboardSavedViewActionPending: boolean;
     onWorkerAction: (action: "start" | "stop" | "restart") => void;
     onCreateWatchRule: (draft: { type: "artist"; pattern: string }) => void;
     onToggleWatchRule: (rule: { id: string; enabled: boolean }) => void;
     onDeleteWatchRule: (rule: { id: string; enabled: boolean }) => void;
+    onCreateDashboardSavedView: (draft: { name: string; filters: unknown }) => void;
+    onUpdateDashboardSavedView: (view: { id: string; name: string; filters: unknown }, filters: unknown) => void;
+    onDeleteDashboardSavedView: (view: { id: string; name: string; filters: unknown }) => void;
   }) => (
     <div>
       <output data-testid="dashboard-props">{JSON.stringify(props)}</output>
@@ -49,6 +54,33 @@ vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
         onClick={() => props.onDeleteWatchRule(props.watchRules?.[0] ?? { id: "fallback-rule", enabled: true })}
       >
         delete-rule
+      </button>
+      <button
+        type="button"
+        onClick={() => props.onCreateDashboardSavedView({ name: "Watch hits", filters: { watchHitsOnly: true } })}
+      >
+        create-view
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          props.onUpdateDashboardSavedView(
+            props.dashboardSavedViews?.[0] ?? { id: "fallback-view", name: "Fallback", filters: {} },
+            { lowStockOnly: true },
+          )
+        }
+      >
+        update-view
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          props.onDeleteDashboardSavedView(
+            props.dashboardSavedViews?.[0] ?? { id: "fallback-view", name: "Fallback", filters: {} },
+          )
+        }
+      >
+        delete-view
       </button>
     </div>
   ),
@@ -83,6 +115,7 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ signals: [{ signalId: "movement-1" }] }))
       .mockResolvedValueOnce(jsonResponse({ trends: { genres: [] } }))
       .mockResolvedValueOnce(jsonResponse({ digest: { generatedAt: "2026-06-17T00:00:00.000Z" } }))
+      .mockResolvedValueOnce(jsonResponse({ views: [{ id: "view-1", name: "Watch hits", filters: { watchHitsOnly: true } }] }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-1", enabled: true }] }))
       .mockResolvedValueOnce(jsonResponse({ deliveries: [{ id: "delivery-1", status: "queued" }] }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "notification-rule-1", enabled: true }] }))
@@ -95,6 +128,7 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ signals: [{ signalId: "movement-2" }] }))
       .mockResolvedValueOnce(jsonResponse({ trends: { genres: [{ key: "jazz" }] } }))
       .mockResolvedValueOnce(jsonResponse({ digest: { generatedAt: "2026-06-17T00:30:00.000Z" } }))
+      .mockResolvedValueOnce(jsonResponse({ views: [{ id: "view-2", name: "Warnings", filters: { lowStockOnly: true } }] }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "rule-2", enabled: false }] }))
       .mockResolvedValueOnce(jsonResponse({ deliveries: [{ id: "delivery-2", status: "sent" }] }))
       .mockResolvedValueOnce(jsonResponse({ rules: [{ id: "notification-rule-2", enabled: true }] }))
@@ -104,6 +138,14 @@ describe("Home dashboard polling", () => {
       .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-3", enabled: true } }))
       .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-2", enabled: true } }))
       .mockResolvedValueOnce(jsonResponse({ deleted: true }))
+      .mockResolvedValueOnce(jsonResponse({ view: { id: "view-3", name: "Watch hits", filters: { watchHitsOnly: true }, sortOrder: 0 } }))
+      .mockResolvedValueOnce(jsonResponse({ view: { id: "view-2", name: "Warnings", filters: { lowStockOnly: true }, sortOrder: 0 } }))
+      .mockResolvedValueOnce(jsonResponse({ deleted: true }))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
+      .mockResolvedValueOnce(jsonResponse({}))
+      .mockResolvedValueOnce(new Response("nope", { status: 500 }))
       .mockResolvedValueOnce(new Response("nope", { status: 500 }))
       .mockResolvedValueOnce(jsonResponse({}))
       .mockResolvedValueOnce(new Response("nope", { status: 500 }))
@@ -121,6 +163,7 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"signalId":"signal-1"');
     expect(readProps()).toContain('"signalId":"movement-1"');
     expect(readProps()).toContain('"generatedAt":"2026-06-17T00:00:00.000Z"');
+    expect(readProps()).toContain('"id":"view-1"');
     expect(readProps()).toContain('"id":"rule-1"');
     expect(readProps()).toContain('"id":"delivery-1"');
     expect(readProps()).toContain('"id":"notification-rule-1"');
@@ -136,6 +179,7 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"signalId":"signal-2"');
     expect(readProps()).toContain('"signalId":"movement-2"');
     expect(readProps()).toContain('"key":"jazz"');
+    expect(readProps()).toContain('"id":"view-2"');
     expect(readProps()).toContain('"id":"rule-2"');
     expect(readProps()).toContain('"id":"delivery-2"');
     expect(readProps()).toContain('"id":"notification-rule-2"');
@@ -195,6 +239,61 @@ describe("Home dashboard polling", () => {
     });
 
     await act(async () => {
+      clickButton("create-view");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/saved-views", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ name: "Watch hits", filters: { watchHitsOnly: true } }),
+    });
+    expect(readProps()).toContain('"id":"view-3"');
+
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/saved-views", {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "view-2", name: "Warnings", filters: { lowStockOnly: true } }),
+    });
+
+    await act(async () => {
+      clickButton("delete-view");
+    });
+    await act(async () => undefined);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/dashboard/saved-views", {
+      method: "DELETE",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id: "view-2" }),
+    });
+
+    await act(async () => {
+      clickButton("create-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("create-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-view");
+    });
+    await act(async () => undefined);
+
+    await act(async () => {
       clickButton("create-rule");
     });
     await act(async () => undefined);
@@ -232,6 +331,7 @@ describe("Home dashboard polling", () => {
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(jsonResponse({ rule: { id: "fallback-rule", enabled: false } }))
         .mockResolvedValueOnce(jsonResponse({ deleted: true }))
         .mockResolvedValueOnce(jsonResponse({ rule: { id: "rule-from-null", enabled: true } })),
@@ -250,6 +350,7 @@ describe("Home dashboard polling", () => {
     expect(readProps()).toContain('"movementSignals":null');
     expect(readProps()).toContain('"catalogTrends":null');
     expect(readProps()).toContain('"operatorDigest":null');
+    expect(readProps()).toContain('"dashboardSavedViews":null');
     expect(readProps()).toContain('"watchRules":null');
     expect(readProps()).toContain('"notificationDeliveries":null');
     expect(readProps()).toContain('"notificationRules":null');
@@ -278,6 +379,7 @@ describe("Home dashboard polling", () => {
       "fetch",
       vi.fn()
         .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
@@ -320,6 +422,7 @@ describe("Home dashboard polling", () => {
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
         .mockResolvedValueOnce(jsonResponse({ deleted: true })),
     );
 
@@ -333,6 +436,120 @@ describe("Home dashboard polling", () => {
     await act(async () => undefined);
 
     expect(readProps()).toContain('"watchRules":[]');
+  });
+
+  it("handles saved view actions while the current saved view list is still nullable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ view: { id: "created-view-from-null", name: "Watch hits", filters: {}, sortOrder: 0 } }))
+        .mockResolvedValueOnce(jsonResponse({ view: { id: "created-view-from-null", name: "Watch hits", filters: {}, sortOrder: 0 } }))
+        .mockResolvedValueOnce(jsonResponse({ deleted: true })),
+    );
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("create-view");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"id":"created-view-from-null"');
+
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-view");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"dashboardSavedViews":[]');
+  });
+
+  it("keeps saved view update and delete no-op safe while saved views are nullable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ deleted: true }))
+        .mockResolvedValueOnce(jsonResponse({ view: { id: "fallback-view", name: "Fallback", filters: {}, sortOrder: 0 } })),
+    );
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("delete-view");
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"dashboardSavedViews":[]');
+  });
+
+  it("keeps saved view update no-op safe before saved views have loaded", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockRejectedValueOnce(new Error("network down"))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(new Response("nope", { status: 503 }))
+        .mockResolvedValueOnce(jsonResponse({ view: { id: "fallback-view", name: "Fallback", filters: {}, sortOrder: 0 } })),
+    );
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+    await act(async () => {
+      clickButton("update-view");
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).toContain('"dashboardSavedViews":[]');
   });
 
   it("does not update state after unmounting while polling is in flight", async () => {
