@@ -1,12 +1,13 @@
-import { Alert, Badge, Button, Card, Divider, Group, Modal, NativeSelect, NumberInput, PasswordInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { Alert, Badge, Button, Card, Divider, Group, Modal, NumberInput, PasswordInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { Plus, Save } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
-import type { MailAuthType, MailCredentialType, MailProvider, PublicMailboxSource } from "@/lib/ingest/mail-source";
+import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
+import type { MailProvider, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { MailSourceDraft, MailSourceTestState } from "./settings-types";
-import { attachmentStorageBackendOptions, mailAuthTypeOptions, mailCredentialTypeOptions, mailProviderOptions } from "./settings-options";
+import { attachmentStorageBackendOptions, gmailReadonlyScope, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
-import { applyMailProviderPreset, formatMailAuthType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend, unitStatusColor } from "./settings-utils";
+import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend, unitStatusColor } from "./settings-utils";
 
 export function MailSourcesCard({
   settings,
@@ -41,7 +42,8 @@ export function MailSourcesCard({
 }) {
   const sources = settings.mailSources;
   const runnableCount = sources.filter((source) => source.provider === "gmail" && source.isActive && source.credentialConfigured).length;
-  const providerImplemented = draft.provider === "gmail";
+  const provider = getMailProviderDescriptor(draft.provider);
+  const providerImplemented = provider.implemented;
   const testReady = Boolean(testResult?.ok);
   return (
     <Card>
@@ -136,6 +138,7 @@ export function MailSourcesCard({
               <ResponsiveGrid minWidth={240} gap="sm">
                 <Select
                   label="Provider adapter"
+                  description="Only implemented providers can be selected."
                   value={draft.provider}
                   data={mailProviderOptions}
                   allowDeselect={false}
@@ -153,9 +156,17 @@ export function MailSourcesCard({
                   onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
                 />
               </ResponsiveGrid>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">Planned</Text>
+                {plannedMailProviderOptions.map((provider) => (
+                  <Badge key={provider} color="gray" variant="light" size="xs">
+                    {provider}
+                  </Badge>
+                ))}
+              </Group>
               {!providerImplemented ? (
                 <Alert color="yellow" title="Adapter pending">
-                  Save requires a connection test; this adapter is not implemented yet.
+                  This provider is planned and cannot be saved yet.
                 </Alert>
               ) : null}
             </Stack>
@@ -178,19 +189,20 @@ export function MailSourcesCard({
                   value={draft.displayName}
                   onChange={(event) => onDraftChange({ ...draft, displayName: event.currentTarget.value })}
                 />
-                <NativeSelect
+                <TextInput
                   label="Auth type"
-                  value={draft.authType}
-                  data={mailAuthTypeOptions}
-                  disabled={draft.provider === "gmail"}
-                  onChange={(event) => onDraftChange({ ...draft, authType: event.currentTarget.value as MailAuthType })}
+                  value={formatMailAuthType(draft.authType)}
+                  readOnly
                 />
-                <NativeSelect
+                <TextInput
                   label="Credential type"
-                  value={draft.credentialType}
-                  data={mailCredentialTypeOptions}
-                  disabled={draft.provider === "gmail"}
-                  onChange={(event) => onDraftChange({ ...draft, credentialType: event.currentTarget.value as MailCredentialType })}
+                  value={formatMailCredentialType(draft.credentialType)}
+                  readOnly
+                />
+                <TextInput
+                  label="Read-only scope"
+                  value={draft.provider === "gmail" ? gmailReadonlyScope : "Provider default"}
+                  readOnly
                 />
               </ResponsiveGrid>
               <PasswordInput
@@ -322,14 +334,14 @@ export function MailSourcesCard({
             ) : null}
 
             <Group justify="space-between">
-              <Button variant="light" loading={pending === "test"} onClick={onTest}>
+              <Button variant="light" disabled={!providerImplemented} loading={pending === "test"} onClick={onTest}>
                 Test connection
               </Button>
               <Group>
                 <Button variant="light" color="gray" onClick={onCancel}>
                   Cancel
                 </Button>
-                <Button leftSection={<Save size={16} aria-hidden="true" />} disabled={!testReady} loading={pending === (editingId ?? "new")} onClick={onSave}>
+                <Button leftSection={<Save size={16} aria-hidden="true" />} disabled={!providerImplemented || !testReady} loading={pending === (editingId ?? "new")} onClick={onSave}>
                   {editingId ? "Save source" : "Create source"}
                 </Button>
               </Group>

@@ -1,6 +1,7 @@
 import { GOOGLE_GMAIL_READONLY_SCOPE, parseScopes } from "@/lib/env";
 import { GmailClient } from "@/lib/ingest/gmail";
 import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
+import { getMailProviderLabel } from "@/lib/ingest/mail-provider-registry";
 import type { MailProvider, MailboxSourceInput } from "@/lib/ingest/mail-source";
 import {
   testAttachmentStorage,
@@ -39,7 +40,7 @@ export async function testMailboxSourceConnection(input: MailboxSourceInput): Pr
       provider,
       mailboxAddress,
       query,
-      error: `${formatUnsupportedMailProvider(provider)} connection testing is not implemented yet.`,
+      error: `${getMailProviderLabel(provider)} connection testing is not implemented yet.`,
     };
   }
 
@@ -113,16 +114,6 @@ export async function testMailboxSourceConnection(input: MailboxSourceInput): Pr
       error: sanitizeMailSourceConnectionError(error),
     };
   }
-}
-
-const unsupportedMailProviderLabels: Record<Exclude<MailProvider, "gmail">, string> = {
-  imap: "IMAP",
-  microsoft_graph: "Microsoft Graph",
-  generic: "Generic mailbox",
-};
-
-function formatUnsupportedMailProvider(provider: Exclude<MailProvider, "gmail">): string {
-  return unsupportedMailProviderLabels[provider];
 }
 
 function sanitizeMailSourceConnectionError(error: unknown): string {

@@ -1,5 +1,6 @@
 import { Pool, type PoolClient } from "pg";
 import { GOOGLE_GMAIL_READONLY_SCOPE } from "@/lib/env";
+import { assertMailProviderImplemented, getMailProviderDescriptor } from "./mail-provider-registry";
 import type {
   AttachmentStorageBackend,
   AttachmentStorageConfig,
@@ -638,10 +639,10 @@ function normalizeMailboxPatch(
 }
 
 function validateMailboxInput(input: RequiredMailboxSourceInput): void {
-  if (input.provider === "gmail") {
-    if (input.authType !== "google_workspace_delegation" || input.credentialType !== "google_service_account_json") {
-      throw new Error("Gmail mail sources require Google Workspace delegation and a Google service account JSON credential");
-    }
+  assertMailProviderImplemented(input.provider);
+  const provider = getMailProviderDescriptor(input.provider);
+  if (input.authType !== provider.authType || input.credentialType !== provider.credentialType) {
+    throw new Error(`${provider.label} mail sources require ${provider.authType} auth and ${provider.credentialType} credentials`);
   }
   if (input.credentialType !== "none" && !input.credentialSecret && !input.credentialReference) {
     throw new Error("Mail source credential secret or reference is required");

@@ -295,12 +295,17 @@ describe("SettingsCenter", () => {
     await clickButtonAndWait("Add source");
     expect(pageText()).toContain("Add mail source");
     expect(pageText()).toContain("Provider adapter");
+    expect(pageText()).toContain("Only implemented providers can be selected.");
+    expect(pageText()).toContain("IMAP (planned)");
+    expect(pageText()).toContain("Microsoft Graph (planned)");
+    expect(pageText()).toContain("Generic mailbox (planned)");
     expect(pageText()).toContain("Connection");
     expect(pageText()).toContain("Ingest");
     expect(pageText()).toContain("Attachment Storage");
     expect(pageText()).toContain("Delegated inbox that receives supplier catalog emails.");
     expect(pageText()).toContain("Paste the Google service account JSON.");
     expect(pageText()).toContain("Gmail access uses a fixed read-only scope.");
+    expect(pageText()).toContain("Read-only scope");
     expect(pageText()).not.toContain("Gmail Workspace Scopes");
     expect(pageText()).not.toContain("Scopes");
     expect(pageText()).not.toContain("Credential reference");
