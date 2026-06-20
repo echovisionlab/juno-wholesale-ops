@@ -3,18 +3,125 @@
 This roadmap keeps the project focused on read-only catalog intelligence. Items
 may move only when they preserve the documented project boundaries.
 
-## Next Operational Candidates
+Release Please still owns release PRs, tags, and version bumps from Conventional
+Commit titles. The buckets below describe intent: `v0.6.x` is stabilization, and
+`v0.7.0` is the next feature-candidate pool.
 
-The next work queue is intentionally small and operational. Versions are not
-planned manually here. Each merged PR uses a semantic Conventional Commit title,
-and Release Please decides the next release from the manifest and changelog
-configuration.
-
-Each candidate keeps the read-only boundary unchanged and must not add ordering,
+Every item must keep the read-only boundary unchanged and must not add ordering,
 cart, wishlist, checkout, Juno account mutation, or sales-volume inference
 behavior.
 
 Storybook remains on port `6008`.
+
+## Implemented or Partially Implemented
+
+### Dashboard filtering and saved views
+
+Issue: [#5](https://github.com/echovisionlab/juno-wholesale-ops/issues/5)
+Status: partially implemented.
+
+- Dashboard filters cover signal type, severity, watch-hit inclusion, and date
+  range.
+- Saved views are stored in the local/self-hosted database.
+- Dashboard controls stay inside the read-only operator surface and avoid raw
+  catalog row dumps.
+- Remaining stabilization: browser-level regression coverage, Storybook states,
+  and operational edge-case review before closing the issue.
+
+### Mail source provider model
+
+Issue: [#44](https://github.com/echovisionlab/juno-wholesale-ops/issues/44)
+Status: partially implemented.
+
+- Mail Sources now use a provider registry and provider-shaped source records.
+- Gmail Workspace is the only implemented ingest adapter.
+- IMAP, Microsoft Graph, and Generic mailbox are represented as planned/disabled
+  providers, not runnable adapters.
+- Runnable sources require a successful read-only connection and attachment
+  storage test before saving.
+
+### SSO multi-provider base
+
+Status: partially implemented.
+
+- Settings Center supports multiple DB-managed OAuth/OIDC providers with
+  callback URLs, button labels, logo URLs, enabled state, and provider-scoped
+  admin mapping.
+- The login page can render multiple ready SSO providers.
+- Remaining hardening is secret storage: move SSO client secrets toward
+  `secret_ref` or encrypted-at-rest storage instead of raw write-only DB values.
+
+### Notification operations UX
+
+Issue: [#45](https://github.com/echovisionlab/juno-wholesale-ops/issues/45)
+Status: remaining hardening.
+
+- In-app, logging, generic webhook, Slack-style, Discord-style, and
+  Telegram-style notification payloads exist.
+- Settings Center separates queue, dry-run dispatch, send queued, and refresh
+  actions.
+- Dry-run remains the default. External sends require an explicit send action.
+- In-app-only operation is normal; missing webhook URLs are a webhook send
+  limitation, not a system warning.
+- Remaining stabilization: keep queue/dry-run/send/refresh copy, telemetry, and
+  error states aligned across Settings Center, CLI docs, and API responses.
+
+## v0.6.x Stabilization
+
+### Auth and login policy alignment
+
+- Keep `emailPasswordLoginEnabled=false` synchronized between Better Auth
+  runtime options, `/login`, and Settings Center.
+- Show login-method-unavailable state when local email/password login is off and
+  no ready SSO provider exists.
+- Keep Settings Center admin bootstrap and SSO readiness copy aligned with the
+  login page.
+
+### P0 blocker: SSO secret storage hardening
+
+Issue: [#54](https://github.com/echovisionlab/juno-wholesale-ops/issues/54)
+Priority: P0 stabilization blocker.
+
+- Document current storage for internal auth secret, SSO client secrets, mail
+  source credentials, Juno passwords, and notification webhook secrets.
+- Document rotation order and session impact for internal auth secret rotation.
+- Treat Postgres backups as secret-bearing artifacts; keep backup/restore
+  guidance explicit without publishing secret values.
+- Before v0.6.x stabilization is considered complete, implement `secret_ref` or
+  encrypted-at-rest storage for SSO client secrets, or explicitly accept and
+  document the residual risk for the release.
+
+### Mail provider UX stabilization
+
+- Keep Gmail Workspace visibly implemented.
+- Keep IMAP, Microsoft Graph, and Generic mailbox visibly planned/disabled.
+- Do not allow planned providers to be saved as runnable ingest sources.
+
+### Notification operations stabilization
+
+- Keep dry-run and send flows visibly separate in the UI and CLI docs.
+- Keep webhook URLs, tokens, auth headers, and secrets masked.
+- Keep missing webhook destinations out of warning state unless an explicit send
+  attempt fails for that webhook delivery.
+
+### Backup/restore guide
+
+Issue: [#3](https://github.com/echovisionlab/juno-wholesale-ops/issues/3)
+
+- Document Postgres backup and restore.
+- Cover raw attachment storage and browser profile caveats.
+- Explain how `secret_ref` values and external secret managers must be restored
+  before app startup.
+
+### Storybook coverage
+
+Issue: [#43](https://github.com/echovisionlab/juno-wholesale-ops/issues/43)
+
+- Add stories for Settings Center sections, dialogs, login method states, and
+  dashboard setup states.
+- Keep Storybook on port `6008`.
+
+## v0.7.0 Feature Candidates
 
 ### Supplier adapter docs/examples
 
@@ -24,6 +131,12 @@ Issue: [#1](https://github.com/echovisionlab/juno-wholesale-ops/issues/1)
   default pipeline.
 - Use synthetic fixture examples only.
 - Explain parser contracts, fixture rules, and public safety expectations.
+
+### Additional mail adapters
+
+- Implement IMAP, Microsoft Graph, or Generic mailbox adapters only after the
+  provider UX and secret storage policy are stable.
+- Preserve read-only mailbox access and connection-test gating.
 
 ### Watch rule import/export
 
@@ -35,33 +148,14 @@ Issue: [#2](https://github.com/echovisionlab/juno-wholesale-ops/issues/2)
 - Exclude raw catalog rows, Gmail payloads, credentials, webhook URLs, cookies,
   and auth headers.
 
-### Backup/restore guide
-
-Issue: [#3](https://github.com/echovisionlab/juno-wholesale-ops/issues/3)
-
-- Document Postgres backup and restore.
-- Cover raw attachment storage and browser profile caveats.
-- Keep secret and environment backup guidance explicit without publishing secret
-  values.
-
 ### Notification provider adapters
 
 Issue: [#4](https://github.com/echovisionlab/juno-wholesale-ops/issues/4)
 
-- Design provider-specific notification formatting for services such as Slack,
-  Discord, or Telegram.
-- Preserve dry-run defaults, secret masking, and `--send` opt-in external
+- Extend provider-specific formatting only where it remains informational and
+  read-only.
+- Preserve dry-run defaults, secret masking, and explicit send opt-in external
   delivery.
-
-### Dashboard filtering/saved views
-
-Issue: [#5](https://github.com/echovisionlab/juno-wholesale-ops/issues/5)
-
-- Add filters for signal type, severity, watch hits, and date ranges.
-- Store saved views in the local/self-hosted database.
-- Avoid user tracking and multi-tenant SaaS behavior.
-- Keep Settings Center controls concise and do not reintroduce raw JSON dumps
-  into the main dashboard.
 
 ### Parser fixture expansion
 
@@ -72,31 +166,6 @@ Issue: [#6](https://github.com/echovisionlab/juno-wholesale-ops/issues/6)
   formats, and missing Juno ID fallback identity cases.
 - Never publish real Juno wholesale XLSX, artists, labels, barcodes, catalog
   numbers, pricesheets, credentials, or email payloads.
-
-### Mail source provider setup
-
-Issue: [#44](https://github.com/echovisionlab/juno-wholesale-ops/issues/44)
-
-- Move Mail Sources to provider-based setup while keeping Gmail Workspace as the
-  only implemented provider.
-- Require a successful read-only connection test before saving a runnable source.
-- Keep Gmail Workspace scopes fixed and non-editable.
-
-### Notification operations UX
-
-Issue: [#45](https://github.com/echovisionlab/juno-wholesale-ops/issues/45)
-
-- Make channel, rule, queue, and dispatch flows clear for operators.
-- Add provider-specific notification formatting while keeping dry-run defaults.
-- Keep webhook URLs, tokens, auth headers, and secrets masked.
-
-### Storybook coverage
-
-Issue: [#43](https://github.com/echovisionlab/juno-wholesale-ops/issues/43)
-
-- Add stories for Settings Center sections, dialogs, and important dashboard
-  states.
-- Keep Storybook on port `6008`.
 
 ## Later
 

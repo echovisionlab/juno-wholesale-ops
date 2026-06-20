@@ -248,9 +248,10 @@ export function useNotificationSettingsController({
   }
 
   async function runNotificationAction(
-    action: "queue" | "dispatch" | "refresh",
+    action: "queue" | "dispatch" | "send" | "refresh",
     endpoint: string,
     title: string,
+    mode: "dry-run" | "send" = "dry-run",
   ) {
     const pendingKey = `notifications-${action}`;
     setPending(pendingKey);
@@ -259,13 +260,16 @@ export function useNotificationSettingsController({
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ mode: "dry-run", limit: 100 }),
+        body: JSON.stringify({ mode, limit: 100 }),
       });
       const result = (await response.json().catch(() => ({}))) as {
         error?: string;
-        queued?: { queued?: number; skipped?: number };
-        dispatched?: { skipped?: number; dryRun?: boolean };
+        queued?: number | { queued?: number; skipped?: number };
+        dispatched?: { sent?: number; failed?: number; skipped?: number; dryRun?: boolean };
+        sent?: number;
+        failed?: number;
         skipped?: number;
+        dryRun?: boolean;
       };
       if (!response.ok) {
         const message = formatSettingsActionError(result.error, `${title} failed`);
@@ -286,6 +290,10 @@ export function useNotificationSettingsController({
 
   function dryRunDispatch() {
     return runNotificationAction("dispatch", "/api/notifications/dispatch", "Dry-run complete");
+  }
+
+  function sendDispatch() {
+    return runNotificationAction("send", "/api/notifications/dispatch", "Send complete", "send");
   }
 
   function refreshNotifications() {
@@ -320,23 +328,36 @@ export function useNotificationSettingsController({
     toggleRule,
     queueNotifications,
     dryRunDispatch,
+    sendDispatch,
     refreshNotifications,
   };
 }
 
 function notificationActionSummary(
-  action: "queue" | "dispatch" | "refresh",
+  action: "queue" | "dispatch" | "send" | "refresh",
   result: {
-    queued?: { queued?: number; skipped?: number };
-    dispatched?: { skipped?: number; dryRun?: boolean };
+    queued?: number | { queued?: number; skipped?: number };
+    dispatched?: { sent?: number; failed?: number; skipped?: number; dryRun?: boolean };
+    sent?: number;
+    failed?: number;
     skipped?: number;
+    dryRun?: boolean;
   },
 ): string {
   if (action === "queue") {
-    return "Queue updated";
+    const queued = typeof result.queued === "number" ? result.queued : 0;
+    return `Queue updated: ${queued} queued, ${result.skipped ?? 0} skipped.`;
   }
   if (action === "dispatch") {
-    return "No external sends";
+    return `Dry-run checked ${result.skipped ?? 0} queued deliver${result.skipped === 1 ? "y" : "ies"}; no external sends.`;
   }
-  return result.dispatched?.dryRun === false ? "Refreshed" : "Refreshed without external sends";
+  if (result.dispatched?.dryRun === false || result.dryRun === false) {
+    const sent = result.sent ?? result.dispatched?.sent ?? 0;
+    const failed = result.failed ?? result.dispatched?.failed ?? 0;
+    const skipped = result.skipped ?? result.dispatched?.skipped ?? 0;
+    return `Sent ${sent}, failed ${failed}, skipped ${skipped}.`;
+  }
+  const queued = typeof result.queued === "object" ? result.queued.queued ?? 0 : result.queued ?? 0;
+  const skipped = typeof result.queued === "object" ? result.queued.skipped ?? 0 : result.skipped ?? 0;
+  return `Queued ${queued}, skipped ${skipped}; dry-run dispatch only.`;
 }

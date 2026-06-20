@@ -23,6 +23,7 @@ export default async function LoginPage({
         <LoginForm
           redirectTo={redirectTo}
           loginLogoUrl={loginSettings.loginLogoUrl}
+          emailPasswordLoginEnabled={loginSettings.emailPasswordLoginEnabled}
           externalProviders={loginSettings.externalProviders}
         />
       </Center>
@@ -45,6 +46,7 @@ function normalizeRedirect(value: string | undefined): string {
 
 async function loadLoginSettings(): Promise<{
   loginLogoUrl: string | null;
+  emailPasswordLoginEnabled: boolean;
   externalProviders: LoginExternalProvider[];
 }> {
   try {
@@ -56,6 +58,7 @@ async function loadLoginSettings(): Promise<{
     const baseUrl = settings.baseUrl ?? null;
     return {
       loginLogoUrl: normalizeLoginLogoUrl(row?.auth_login_logo_url),
+      emailPasswordLoginEnabled: settings.emailPasswordLoginEnabled,
       externalProviders: providers
         .map((provider) => redactSsoProvider(provider, baseUrl))
         .filter((provider) => provider.status === "ready")
@@ -66,6 +69,6 @@ async function loadLoginSettings(): Promise<{
         })),
     };
   } catch {
-    return { loginLogoUrl: null, externalProviders: [] };
+    return { loginLogoUrl: null, emailPasswordLoginEnabled: true, externalProviders: [] };
   }
 }

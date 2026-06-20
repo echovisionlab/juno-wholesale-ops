@@ -182,10 +182,12 @@ such as `pnpm db:migrate`, `pnpm demo:seed`, and `pnpm demo:reset`.
 The public app URL is the saved `Site address` setting. External SSO setup shows
 the provider callback URL that must be registered in the provider console. Auth
 is always enabled. Startup creates an internal random Better Auth secret in the
-database when one is missing; it is not an operator-facing setting. At least one
-admin bootstrap path is still required.
+database when one is missing; it is not an editable operator-facing value. At
+least one admin bootstrap path is still required.
 Secret fields such as mail source credentials, Juno passwords, OIDC client
 secrets, and webhook configuration are write-only and masked in API responses.
+The Settings Center displays the auth secret policy, but never displays or
+edits the internal auth secret value.
 
 ## Mail ingestion
 
@@ -195,7 +197,7 @@ delegation and a JSON service account credential stored as a secret DB value.
 Pre-v1.0 releases do not keep compatibility shims for the older singleton Gmail
 settings model; configure each mailbox source explicitly in the Settings Center.
 Other provider rows can be represented for planning, but non-Gmail ingest
-adapters are not implemented in v0.1.x.
+adapters are not implemented in v0.6.x.
 
 Commands:
 

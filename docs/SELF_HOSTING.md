@@ -48,8 +48,57 @@ console on `http://localhost:29101`.
 
 `DATABASE_URL` remains runtime-only and required at process start. The app does
 not fall back to database settings when it is missing. The internal Better Auth
-secret is never editable or displayed in the Settings Center. Auth is always
-enabled before the service is exposed beyond trusted local access.
+secret value is never editable or displayed in the Settings Center. The Settings
+Center shows the policy for how it is stored, rotated, and backed up. Auth is
+always enabled before the service is exposed beyond trusted local access.
+
+## Secret Storage, Rotation, and Backup
+
+Warning: Postgres backups are secret-bearing backups. They include saved auth
+settings, SSO client secrets, mail source credentials, Juno passwords, and
+notification secrets unless every credential has already moved to an external
+`secret_ref`. Treat each backup like production credentials.
+
+Current storage policy:
+
+- The internal Better Auth secret is generated during startup when missing and
+  stored in Postgres as a masked, non-editable service setting.
+- SSO client secrets are currently stored as write-only Postgres values on
+  `auth_sso_provider` rows. They are redacted from Settings Center and API
+  responses; updating a provider with a blank client secret keeps the existing
+  value.
+- Mail source credentials, Juno passwords, and local webhook URLs are also
+  write-only saved secret values unless a provider-specific `secret_ref` path is
+  available.
+- Webhook channels should use `secret_ref` in production so the URL lives in the
+  private runtime environment instead of inline JSON config.
+
+Rotation policy:
+
+- Rotate SSO client secrets in the upstream identity provider first, then paste
+  the new value into the Settings Center and save the provider.
+- Rotate mail source credentials, Juno passwords, and webhook URLs by updating
+  the upstream credential and then replacing the saved secret value or referenced
+  runtime secret.
+- Rotate the internal Better Auth secret only during a planned maintenance
+  window. Rotation invalidates existing sessions and requires the new secret to
+  be present before the app is exposed again.
+- Restart long-running workers after rotating credentials they may have loaded.
+
+Backup policy:
+
+- Treat Postgres backups as secret-bearing artifacts because they include saved
+  auth, SSO, mail source, Juno, and notification secret values.
+- Encrypt backups at rest, restrict restore access, and keep them out of git,
+  public issue text, CI logs, and screenshots.
+- Back up attachment storage and browser profile storage separately from
+  Postgres; neither belongs in the application image.
+- If `secret_ref` values point to an external secret manager or deployment
+  platform, back up that secret inventory and restore it before starting the app.
+
+Planned hardening: migrate SSO client secrets and other saved credentials toward
+`secret_ref` or encrypted-at-rest storage so Postgres can hold references or
+ciphertext instead of raw secret values.
 
 ## Docker
 

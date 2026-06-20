@@ -64,7 +64,6 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Auth bootstrap");
     expect(pageText()).not.toContain("Gmail Ingest");
     expect(pageText()).not.toContain("AUTH_SECRET");
-    expect(pageText()).not.toContain("Auth secret");
     expect(pageText()).not.toContain("Clear saved setting");
     expect(pageText()).not.toContain("Diagnostics");
     expect(pageText()).not.toContain("No diagnostics captured");
@@ -78,6 +77,10 @@ describe("SettingsCenter", () => {
 
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
+    expect(pageText()).toContain("Auth Secret Policy");
+    expect(pageText()).toContain("database-managed");
+    expect(pageText()).toContain("target secret_ref or encrypted storage");
+    expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).toContain("Workspace");
     expect(pageText()).toContain("OpenID Connect");
     expect(pageText()).toContain("https://inventory-dev.example.test/api/auth/oauth2/callback/workspace");
@@ -295,10 +298,11 @@ describe("SettingsCenter", () => {
     await clickButtonAndWait("Add source");
     expect(pageText()).toContain("Add mail source");
     expect(pageText()).toContain("Provider adapter");
-    expect(pageText()).toContain("Only implemented providers can be selected.");
-    expect(pageText()).toContain("IMAP (planned)");
-    expect(pageText()).toContain("Microsoft Graph (planned)");
-    expect(pageText()).toContain("Generic mailbox (planned)");
+    expect(pageText()).toContain("Gmail Workspace is implemented; planned providers are visible but disabled.");
+    expect(pageText()).toContain("Gmail Workspace (implemented)");
+    expect(pageText()).toContain("IMAP (planned/disabled)");
+    expect(pageText()).toContain("Microsoft Graph (planned/disabled)");
+    expect(pageText()).toContain("Generic mailbox (planned/disabled)");
     expect(pageText()).toContain("Connection");
     expect(pageText()).toContain("Ingest");
     expect(pageText()).toContain("Attachment Storage");
@@ -370,6 +374,9 @@ describe("SettingsCenter", () => {
       .mockResolvedValueOnce(jsonResponse({ queued: 1, skipped: 0 }))
       .mockResolvedValueOnce(jsonResponse({ channels }))
       .mockResolvedValueOnce(jsonResponse({ rules }))
+      .mockResolvedValueOnce(jsonResponse({ sent: 1, failed: 0, skipped: 0, dryRun: false }))
+      .mockResolvedValueOnce(jsonResponse({ channels }))
+      .mockResolvedValueOnce(jsonResponse({ rules }))
       .mockResolvedValueOnce(jsonResponse({ channel: { ...channels[0], id: "channel-2", name: "Ops log", type: "logging" } }))
       .mockResolvedValueOnce(jsonResponse({ channels }))
       .mockResolvedValueOnce(jsonResponse({ rules }))
@@ -387,7 +394,11 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Notification Rules");
     expect(pageText()).toContain("Queue");
     expect(pageText()).toContain("Dry-run dispatch");
+    expect(pageText()).toContain("Send queued");
+    expect(pageText()).toContain("Local delivery");
+    expect(pageText()).toContain("External webhooks");
     expect(pageText()).toContain("External send");
+    expect(pageText()).toContain("In-app and logging channels are normal local delivery.");
     expect(pageText()).toContain("Add channel");
     expect(pageText()).toContain("Add rule");
     expect(pageText()).not.toContain("dashboard Notification Center");
@@ -400,6 +411,14 @@ describe("SettingsCenter", () => {
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/notifications/queue");
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({ mode: "dry-run", limit: 100 });
 
+    clickButton("Send queued");
+    await act(async () => undefined);
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/dispatch");
+    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toMatchObject({ mode: "send", limit: 100 });
+
     await clickButtonAndWait("Add channel");
     expect(findInput("Channel name").getAttribute("placeholder")).toBe("Ops in-app");
     expect(pageText()).toContain("Slack-style webhook");
@@ -409,8 +428,8 @@ describe("SettingsCenter", () => {
     changeInput("Provider", "logging");
     clickButton("Create channel");
     await act(async () => undefined);
-    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/channels");
-    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toMatchObject({
+    expect(fetchMock.mock.calls[8]?.[0]).toBe("/api/notifications/channels");
+    expect(JSON.parse(String(fetchMock.mock.calls[8]?.[1]?.body))).toMatchObject({
       name: "Ops log",
       type: "logging",
       enabled: true,
@@ -424,8 +443,8 @@ describe("SettingsCenter", () => {
     await act(async () => {
       toggle.click();
     });
-    expect(fetchMock.mock.calls[8]?.[0]).toBe("/api/notifications/rules");
-    expect(JSON.parse(String(fetchMock.mock.calls[8]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
+    expect(fetchMock.mock.calls[11]?.[0]).toBe("/api/notifications/rules");
+    expect(JSON.parse(String(fetchMock.mock.calls[11]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
   });
 
   it("renders injected notification resources without loading from the API", async () => {
@@ -441,6 +460,36 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Notification Channels");
     expect(pageText()).toContain("Notification Rules");
     expect(pageText()).toContain("Watch hits");
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps in-app-only and missing webhook destinations out of warning state", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderSettingsPage(settingsFixture(), null, {
+      initialTab: "notifications",
+      initialNotificationChannels: [
+        notificationChannelFixture(),
+        {
+          ...notificationChannelFixture(),
+          id: "channel-webhook",
+          name: "Optional webhook",
+          type: "webhook",
+          config: { format: "generic" },
+          secretRef: null,
+          configSummary: "Generic webhook not configured",
+        },
+      ],
+      initialNotificationRules: [notificationRuleFixture()],
+    });
+
+    expect(pageText()).toContain("ready");
+    expect(pageText()).toContain("1 in-app/logging normal");
+    expect(pageText()).toContain("0 ready / 1 configured");
+    expect(pageText()).toContain("Generic webhook not configured");
+    expect(pageText()).toContain("Missing webhook URLs only block webhook send attempts");
+    expect(pageText()).not.toContain("webhook warning");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

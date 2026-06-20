@@ -17,6 +17,10 @@ source records, not env fallbacks.
 
 Notes:
 
+- Warning: Postgres backups are secret-bearing backups. They may contain saved
+  auth settings, SSO client secrets, mail source credentials, Juno passwords,
+  and notification secrets. Encrypt them, restrict restore access, and never put
+  them in git, public issue text, screenshots, CI logs, or support bundles.
 - `gmail:ingest:write` runs active Gmail mailbox sources, writes new catalog
   snapshots, and runs snapshot insights.
 - Mail Source connection tests check mailbox access and attachment storage
@@ -38,6 +42,11 @@ Notes:
 - Secret settings are write-only and masked; never expect the UI or API to echo
   mail source credentials, Juno passwords, OIDC client secrets, webhook URLs,
   cookies, or auth headers.
+- Rotate SSO client secrets by changing the upstream identity provider secret,
+  then saving the new value in Settings Center. Blank edit fields keep the
+  existing saved secret.
+- Restore any runtime `secret_ref` values before starting notification dispatch
+  or SSO flows.
 
 Never put credentials, cookies, auth headers, webhook URLs, or raw XLSX contents
 in logs or public issue text.
