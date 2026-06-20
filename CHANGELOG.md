@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.3...v0.3.4) (2026-06-20)
+
+
+### Documentation
+
+* align roadmap with semantic release flow ([5afbfbb](https://github.com/echovisionlab/juno-wholesale-ops/commit/5afbfbb637df2262069b501a9d101ee3fc543ada))
+
 ## [0.3.3](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.3.2...v0.3.3) (2026-06-19)
 
 
