@@ -1,6 +1,11 @@
 import type { SignalEventType, SignalSeverity, TodayInsight } from "@/lib/insights/repository";
+import type { NotificationWebhookFormat } from "./provider-formatters";
 
 export type NotificationChannelType = "in_app" | "webhook" | "logging";
+export type NotificationProviderKey =
+  | "in_app"
+  | "logging"
+  | `webhook_${NotificationWebhookFormat}`;
 export type NotificationDeliveryStatus = "queued" | "sent" | "failed" | "skipped";
 export type NotificationDispatchMode = "dry-run" | "send";
 

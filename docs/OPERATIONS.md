@@ -25,6 +25,9 @@ Notes:
 - `insights:refresh` refreshes movement and trend signals.
 - `notifications:refresh` queues read-only notifications and performs dry-run
   dispatch by default.
+- Notification channels support in-app, logging, generic webhook,
+  Slack-style webhook, Discord-style webhook, and Telegram-style webhook
+  payloads.
 - External webhook delivery requires `pnpm notifications:dispatch -- --send`
   or `pnpm notifications:refresh -- --send`.
 - `DATABASE_URL` is required at process start.

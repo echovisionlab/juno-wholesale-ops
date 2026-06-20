@@ -367,6 +367,9 @@ describe("SettingsCenter", () => {
     const fetchMock = vi.fn()
       .mockResolvedValueOnce(jsonResponse({ channels }))
       .mockResolvedValueOnce(jsonResponse({ rules }))
+      .mockResolvedValueOnce(jsonResponse({ queued: 1, skipped: 0 }))
+      .mockResolvedValueOnce(jsonResponse({ channels }))
+      .mockResolvedValueOnce(jsonResponse({ rules }))
       .mockResolvedValueOnce(jsonResponse({ channel: { ...channels[0], id: "channel-2", name: "Ops log", type: "logging" } }))
       .mockResolvedValueOnce(jsonResponse({ channels }))
       .mockResolvedValueOnce(jsonResponse({ rules }))
@@ -382,20 +385,32 @@ describe("SettingsCenter", () => {
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/notifications/rules");
     expect(pageText()).toContain("Notification Channels");
     expect(pageText()).toContain("Notification Rules");
-    expect(pageText()).toContain("Flow");
-    expect(pageText()).toContain("Add a channel, then add a rule that filters observed signals.");
+    expect(pageText()).toContain("Queue");
+    expect(pageText()).toContain("Dry-run dispatch");
+    expect(pageText()).toContain("External send");
     expect(pageText()).toContain("Add channel");
     expect(pageText()).toContain("Add rule");
     expect(pageText()).not.toContain("dashboard Notification Center");
 
+    clickButton("Queue");
+    await act(async () => undefined);
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/notifications/queue");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({ mode: "dry-run", limit: 100 });
+
     await clickButtonAndWait("Add channel");
     expect(findInput("Channel name").getAttribute("placeholder")).toBe("Ops in-app");
+    expect(pageText()).toContain("Slack-style webhook");
+    expect(pageText()).toContain("Discord-style webhook");
+    expect(pageText()).toContain("Telegram-style webhook");
     changeInput("Channel name", "Ops log");
-    changeInput("Channel type", "logging");
+    changeInput("Provider", "logging");
     clickButton("Create channel");
     await act(async () => undefined);
-    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/notifications/channels");
-    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({
+    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/channels");
+    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toMatchObject({
       name: "Ops log",
       type: "logging",
       enabled: true,
@@ -409,8 +424,8 @@ describe("SettingsCenter", () => {
     await act(async () => {
       toggle.click();
     });
-    expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/rules");
-    expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
+    expect(fetchMock.mock.calls[8]?.[0]).toBe("/api/notifications/rules");
+    expect(JSON.parse(String(fetchMock.mock.calls[8]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
   });
 
   it("renders injected notification resources without loading from the API", async () => {

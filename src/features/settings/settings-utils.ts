@@ -4,7 +4,19 @@ import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType } from "@/lib/insights/repository";
-import type { NotificationChannel, NotificationChannelInput, NotificationChannelType, NotificationRule, NotificationRuleInput } from "@/lib/notifications/types";
+import type {
+  NotificationChannel,
+  NotificationChannelInput,
+  NotificationChannelType,
+  NotificationProviderKey,
+  NotificationRule,
+  NotificationRuleInput,
+} from "@/lib/notifications/types";
+import {
+  normalizeNotificationWebhookFormat,
+  notificationWebhookFormatLabel,
+  type NotificationWebhookFormat,
+} from "@/lib/notifications/provider-formatters";
 import type { MailSourceDraft, NotificationChannelDraft, NotificationRuleDraft, SsoProviderDraft, SsoProviderPreset } from "./settings-types";
 import {
   attachmentStorageBackendOptions,
@@ -171,6 +183,13 @@ export function formatNotificationChannelType(type: NotificationChannelType): st
   return "Logging";
 }
 
+export function formatNotificationChannelProvider(channel: NotificationChannel): string {
+  if (channel.type !== "webhook") {
+    return formatNotificationChannelType(channel.type);
+  }
+  return notificationWebhookFormatLabel(normalizeNotificationWebhookFormat(channel.config.format));
+}
+
 export function formatSignalType(type: SignalEventType): string {
   return notificationSignalTypeOptions.find((option) => option.value === type)?.label ?? type;
 }
@@ -228,12 +247,20 @@ export function formatSettingsActionError(error: unknown, fallback: string): str
 }
 
 export function notificationChannelToDraft(channel: NotificationChannel): NotificationChannelDraft {
+  const webhookFormat = channel.type === "webhook"
+    ? normalizeNotificationWebhookFormat(channel.config.format)
+    : "generic";
   return {
     id: channel.id,
     name: channel.name,
     type: channel.type,
+    provider: notificationProviderKey(channel.type, webhookFormat),
     enabled: channel.enabled,
+    webhookFormat,
     webhookUrl: "",
+    telegramChatId: typeof channel.config.chatId === "string" && !channel.config.chatId.includes("[")
+      ? channel.config.chatId
+      : "",
     secretRef: channel.secretRef ?? "",
   };
 }
@@ -242,21 +269,53 @@ export function notificationChannelPayload(
   draft: NotificationChannelDraft,
   editing: boolean,
 ): NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) {
+  const provider = notificationProviderFromKey(draft.provider);
   const payload: NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) = {
     ...(editing && draft.id ? { id: draft.id } : {}),
     name: draft.name,
-    type: draft.type,
+    type: provider.type,
     enabled: draft.enabled,
     secretRef: draft.secretRef,
   };
-  if (draft.type === "webhook") {
+  if (provider.type === "webhook") {
+    const config: Record<string, unknown> = {
+      format: provider.format,
+      ...(provider.format === "telegram" && draft.telegramChatId.trim() ? { chatId: draft.telegramChatId.trim() } : {}),
+    };
     if (draft.webhookUrl.trim()) {
-      payload.config = { url: draft.webhookUrl.trim() };
+      config.url = draft.webhookUrl.trim();
     }
+    payload.config = config;
   } else {
     payload.config = {};
   }
   return payload;
+}
+
+export function notificationProviderFromKey(provider: NotificationProviderKey): {
+  type: NotificationChannelType;
+  format: NotificationWebhookFormat;
+} {
+  if (provider === "logging") {
+    return { type: "logging", format: "generic" };
+  }
+  if (provider === "in_app") {
+    return { type: "in_app", format: "generic" };
+  }
+  return {
+    type: "webhook",
+    format: provider.replace(/^webhook_/, "") as NotificationWebhookFormat,
+  };
+}
+
+function notificationProviderKey(
+  type: NotificationChannelType,
+  format: NotificationWebhookFormat,
+): NotificationProviderKey {
+  if (type === "logging" || type === "in_app") {
+    return type;
+  }
+  return `webhook_${format}`;
 }
 
 export function notificationRuleToDraft(rule: NotificationRule): NotificationRuleDraft {

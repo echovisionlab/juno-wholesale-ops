@@ -3,6 +3,7 @@ import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-te
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type { NotificationChannelType } from "@/lib/notifications/types";
+import type { NotificationWebhookFormat } from "@/lib/notifications/provider-formatters";
 import type { SettingsGroupId } from "@/lib/settings/descriptors";
 
 export type PatchValue = string | number | boolean | null;
@@ -63,8 +64,11 @@ export type NotificationChannelDraft = {
   id?: string;
   name: string;
   type: NotificationChannelType;
+  provider: "in_app" | "logging" | `webhook_${NotificationWebhookFormat}`;
   enabled: boolean;
+  webhookFormat: NotificationWebhookFormat;
   webhookUrl: string;
+  telegramChatId: string;
   secretRef: string;
 };
 export type NotificationRuleDraft = {

@@ -4,6 +4,10 @@ import type {
   NotificationConfig,
   NotificationSignal,
 } from "./types";
+import {
+  normalizeNotificationWebhookFormat,
+  notificationWebhookFormatLabel,
+} from "./provider-formatters";
 
 export const readOnlyNotificationFooter =
   "This is an informational read-only observation for operator review only.";
@@ -130,11 +134,11 @@ export function summarizeNotificationChannelConfig(input: {
     return "Console JSON read-only alert log";
   }
   if (input.secretRef) {
-    return `Webhook URL from ${input.secretRef}`;
+    return `${notificationWebhookFormatLabel(normalizeNotificationWebhookFormat(input.config.format))} from ${input.secretRef}`;
   }
   return typeof input.config.url === "string" && input.config.url.trim()
-    ? "Webhook URL configured for local development"
-    : "Webhook URL not configured";
+    ? `${notificationWebhookFormatLabel(normalizeNotificationWebhookFormat(input.config.format))} configured for local development`
+    : `${notificationWebhookFormatLabel(normalizeNotificationWebhookFormat(input.config.format))} not configured`;
 }
 
 function signalTypeLabel(type: NotificationSignal["type"]): string {

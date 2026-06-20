@@ -61,18 +61,23 @@ describe("notification dispatcher", () => {
     const webhook = await createNotificationChannel(databaseUrl, {
       name: "Ops webhook",
       type: "webhook",
-      config: { url: "https://hooks.example.test/secret", headers: { Authorization: "Bearer secret", "X-Retry": 1 } },
+      config: {
+        url: "https://hooks.example.test/secret",
+        format: "slack",
+        headers: { Authorization: "Bearer secret", "X-Retry": 1 },
+      },
     });
     const envWebhook = await createNotificationChannel(databaseUrl, {
       name: "Env webhook",
       type: "webhook",
       secretRef: "TEST_WEBHOOK_URL",
+      config: { format: "discord" },
     });
     const envFallbackWebhook = await createNotificationChannel(databaseUrl, {
       name: "Env fallback webhook",
       type: "webhook",
       secretRef: "MISSING_WEBHOOK_URL",
-      config: { url: "https://hooks.example.test/fallback-secret" },
+      config: { url: "https://hooks.example.test/fallback-secret", format: "telegram", chatId: "-1001" },
     });
     const failingWebhook = await createNotificationChannel(databaseUrl, {
       name: "Failing webhook",
@@ -138,6 +143,19 @@ describe("notification dispatcher", () => {
         Authorization: "Bearer secret",
         "content-type": "application/json",
       }),
+    });
+    expect(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body))).toMatchObject({
+      text: "Read-only alert webhook-success",
+      blocks: [expect.objectContaining({ type: "section" })],
+    });
+    expect(JSON.parse(String(fetchImpl.mock.calls[1][1]?.body))).toMatchObject({
+      content: "Read-only alert webhook-env",
+      embeds: [expect.objectContaining({ title: "Read-only alert webhook-env" })],
+      allowed_mentions: { parse: [] },
+    });
+    expect(JSON.parse(String(fetchImpl.mock.calls[2][1]?.body))).toMatchObject({
+      chat_id: "-1001",
+      text: expect.stringContaining("Read-only alert webhook-env-fallback"),
     });
 
     const deliveries = await listNotificationDeliveries(databaseUrl, 20);

@@ -8,6 +8,7 @@ import {
   shouldSkipForCooldown,
   type CooldownDelivery,
 } from "./matcher";
+import { normalizeNotificationWebhookFormat } from "./provider-formatters";
 import {
   maskNotificationChannelConfig,
   renderDigestNotification,
@@ -98,7 +99,7 @@ export async function updateNotificationChannel(
       name: patch.name ?? current.rows[0].name,
       type: patch.type ?? current.rows[0].type,
       enabled: patch.enabled ?? current.rows[0].enabled,
-      config: patch.config ?? current.rows[0].config,
+      config: "config" in patch ? mergeNotificationConfig(current.rows[0].config, patch.config) : current.rows[0].config,
       secretRef: "secretRef" in patch ? patch.secretRef ?? null : current.rows[0].secret_ref,
     });
     const updated = await pool.query<NotificationChannelRow>(
@@ -657,7 +658,7 @@ function normalizeNotificationChannelInput(input: NotificationChannelInput): {
     name,
     type: input.type,
     enabled: input.enabled ?? true,
-    config: normalizeConfig(input.config ?? {}),
+    config: normalizeNotificationChannelConfig(input.type, input.config ?? {}),
     secretRef: normalizeOptionalString(input.secretRef ?? null),
   };
 }
@@ -728,9 +729,25 @@ function normalizeConfig(value: unknown): NotificationConfig {
   return value as NotificationConfig;
 }
 
+function normalizeNotificationChannelConfig(type: NotificationChannelType, value: unknown): NotificationConfig {
+  const config = normalizeConfig(value);
+  if (type !== "webhook") {
+    return {};
+  }
+  return {
+    ...config,
+    format: normalizeNotificationWebhookFormat(config.format),
+  };
+}
+
 function normalizeOptionalString(value: string | null): string | null {
   const normalized = value?.trim();
   return normalized ? normalized : null;
+}
+
+function mergeNotificationConfig(current: NotificationConfig, patch: unknown): NotificationConfig {
+  const normalizedPatch = normalizeConfig(patch ?? {});
+  return { ...current, ...normalizedPatch };
 }
 
 function ruleParams(rule: ReturnType<typeof normalizeNotificationRuleInput>): unknown[] {
