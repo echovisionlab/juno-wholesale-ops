@@ -97,6 +97,26 @@ describe("SettingsCenter", () => {
     expect(pageText()).not.toContain("Read-only boundary");
   });
 
+  it("selects the Auth tab through DOM click and keyboard navigation", async () => {
+    await renderSettingsPage(settingsFixture());
+
+    expect(selectedTab()).toBe("Overview");
+
+    await clickTabDom("Auth");
+
+    expect(selectedTab()).toBe("Auth");
+    expect(pageText()).toContain("Auth Secret Policy");
+    expect(pageText()).toContain("External SSO Providers");
+
+    await clickTabDom("Overview");
+    expect(selectedTab()).toBe("Overview");
+
+    await keyDownTab("Overview", "ArrowRight");
+
+    expect(selectedTab()).toBe("Auth");
+    expect(pageText()).toContain("Auth Secret Policy");
+  });
+
   it("formats preflight and connection statuses without raw enum values", () => {
     expect(formatJunoSessionCheckStatus("read_only_preflight_passed")).toBe("Session settings are ready.");
     expect(formatJunoSessionCheckStatus("missing_credentials")).toBe("Login credentials are missing.");
@@ -547,6 +567,39 @@ function findButton(name: string): HTMLElement {
     throw new Error(`Missing button ${name}. Page text: ${pageText()}`);
   }
   return button as HTMLElement;
+}
+
+function findTab(name: string): HTMLElement {
+  const tab = [...document.body.querySelectorAll<HTMLElement>("[role='tab']")]
+    .find((element) => element.textContent?.trim() === name);
+  if (!tab) {
+    throw new Error(`Missing tab ${name}. Page text: ${pageText()}`);
+  }
+  return tab;
+}
+
+function selectedTab(): string | null {
+  return [...document.body.querySelectorAll<HTMLElement>("[role='tab']")]
+    .find((element) => element.getAttribute("aria-selected") === "true")
+    ?.textContent
+    ?.trim() ?? null;
+}
+
+async function clickTabDom(name: string): Promise<void> {
+  const tab = findTab(name);
+  await act(async () => {
+    tab.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, composed: true }));
+  });
+  await act(async () => undefined);
+}
+
+async function keyDownTab(name: string, key: string): Promise<void> {
+  const tab = findTab(name);
+  await act(async () => {
+    tab.focus();
+    tab.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true, composed: true }));
+  });
+  await act(async () => undefined);
 }
 
 function clickElement(element: HTMLElement): void {

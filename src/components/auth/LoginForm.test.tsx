@@ -76,6 +76,37 @@ describe("LoginForm", () => {
     expect(navigateTo).toHaveBeenCalledWith("https://login.example.test/authorize");
   });
 
+  it("keeps external provider loading state scoped to the selected provider", async () => {
+    let resolveFetch: (response: Response) => void = () => undefined;
+    const fetchMock = vi.fn().mockImplementation(() => new Promise<Response>((resolve) => {
+      resolveFetch = resolve;
+    }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await renderLoginForm(null, [
+      {
+        providerId: "workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: null,
+      },
+      {
+        providerId: "entra",
+        buttonLabel: "Sign in with Entra ID",
+        logoUrl: null,
+      },
+    ]);
+
+    await clickButton("Sign in with Workspace");
+
+    expect(findButton("Sign in with Workspace").getAttribute("data-loading")).toBe("true");
+    expect(findButton("Sign in with Entra ID").getAttribute("data-loading")).toBeNull();
+    expect(findButton("Sign in with Entra ID").disabled).toBe(true);
+
+    await act(async () => {
+      resolveFetch(jsonResponse({ url: "https://login.example.test/authorize", redirect: true }));
+    });
+  });
+
   it("hides the email/password form when local login is disabled", async () => {
     await renderLoginForm(null, [
       {
@@ -128,13 +159,18 @@ async function renderLoginForm(
 }
 
 async function clickButton(name: string): Promise<void> {
+  const button = findButton(name);
+  await act(async () => {
+    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  });
+}
+
+function findButton(name: string): HTMLButtonElement {
   const button = Array.from(document.querySelectorAll("button")).find((entry) => entry.textContent === name);
   if (!button) {
     throw new Error(`Missing button ${name}`);
   }
-  await act(async () => {
-    button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-  });
+  return button;
 }
 
 function jsonResponse(value: unknown): Response {

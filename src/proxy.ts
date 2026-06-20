@@ -17,6 +17,7 @@ type AdminSessionResponse = {
 function shouldBypassAuth(pathname: string): boolean {
   return (
     pathname === "/api/health" ||
+    pathname === "/api/version" ||
     pathname === "/api/session/admin" ||
     pathname === "/favicon.ico" ||
     pathname === "/robots.txt" ||
