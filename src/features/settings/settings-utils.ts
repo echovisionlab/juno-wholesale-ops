@@ -1,0 +1,418 @@
+import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
+import type { MailAuthType, MailProvider, MailboxSourceInput, MailboxSourcePatch, PublicMailboxSource } from "@/lib/ingest/mail-source";
+import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
+import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
+import type { SignalEventType } from "@/lib/insights/repository";
+import type { NotificationChannel, NotificationChannelInput, NotificationChannelType, NotificationRule, NotificationRuleInput } from "@/lib/notifications/types";
+import type { MailSourceDraft, NotificationChannelDraft, NotificationRuleDraft, SsoProviderDraft, SsoProviderPreset } from "./settings-types";
+import {
+  attachmentStorageBackendOptions,
+  gmailReadonlyScope,
+  mailAuthTypeOptions,
+  mailProviderOptions,
+  notificationSignalTypeOptions,
+  ssoProviderPresetOptions,
+} from "./settings-options";
+
+export function providerToDraft(provider: SettingsResponse["units"]["authProvider"]["providers"][number]): SsoProviderDraft {
+  return {
+    id: provider.id,
+    providerId: provider.providerId,
+    displayName: provider.displayName,
+    protocol: provider.protocol,
+    preset: provider.preset as SsoProviderPreset,
+    buttonLabel: provider.buttonLabel,
+    logoUrl: provider.logoUrl ?? "",
+    discoveryUrl: provider.discoveryUrl ?? "",
+    authorizationUrl: provider.authorizationUrl ?? "",
+    tokenUrl: provider.tokenUrl ?? "",
+    userInfoUrl: provider.userInfoUrl ?? "",
+    clientId: provider.clientId ?? "",
+    clientSecret: "",
+    scopes: provider.scopes.join(" "),
+    enabled: provider.enabled,
+    sortOrder: provider.sortOrder,
+    adminEmailAllowlist: provider.adminEmailAllowlist.join("\n"),
+    adminClaim: provider.adminClaim ?? "",
+    adminClaimValue: provider.adminClaimValue ?? "",
+  };
+}
+
+export function applyProviderPreset(draft: SsoProviderDraft, presetValue: SsoProviderPreset): SsoProviderDraft {
+  const preset = ssoProviderPresetOptions.find((entry) => entry.value === presetValue);
+  if (!preset) {
+    return draft;
+  }
+  return {
+    ...draft,
+    preset: preset.value,
+    protocol: preset.protocol,
+    scopes: draft.scopes || preset.scopes,
+    discoveryUrl: preset.discoveryUrl ?? draft.discoveryUrl,
+  };
+}
+
+export function presetLabel(value: string): string {
+  return ssoProviderPresetOptions.find((preset) => preset.value === value)?.label ?? value;
+}
+
+export function formatMailProvider(provider: MailProvider): string {
+  return mailProviderOptions.find((option) => option.value === provider)?.label.replace(" (adapter pending)", "") ?? provider;
+}
+
+export function formatMailAuthType(authType: MailAuthType): string {
+  return mailAuthTypeOptions.find((option) => option.value === authType)?.label ?? authType;
+}
+
+export function formatStorageBackend(backend: AttachmentStorageBackend): string {
+  return attachmentStorageBackendOptions.find((option) => option.value === backend)?.label ?? backend;
+}
+
+export function formatMailSourceStorageTarget(source: PublicMailboxSource): string {
+  if (source.storageBackend === "local_drive") {
+    return source.storageDir;
+  }
+  const prefix = source.storagePrefix.replace(/^\/+|\/+$/g, "");
+  return `s3://${source.storageBucket}${prefix ? `/${prefix}` : ""}`;
+}
+
+export function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft {
+  return {
+    id: source.id,
+    name: source.name,
+    provider: source.provider,
+    authType: source.authType,
+    credentialType: source.credentialType,
+    credentialSecret: "",
+    scopes: source.scopes,
+    mailboxAddress: source.mailboxAddress,
+    displayName: source.displayName ?? "",
+    providerMailboxId: "",
+    query: source.query,
+    maxResults: source.maxResults,
+    lookbackMs: source.lookbackMs,
+    processedLabel: source.processedLabel,
+    storageBackend: source.storageBackend,
+    storageDir: source.storageDir,
+    storageEndpoint: source.storageEndpoint,
+    storageBucket: source.storageBucket,
+    storagePrefix: source.storagePrefix,
+    storageRegion: source.storageRegion,
+    storageAccessKeyId: source.storageAccessKeyId,
+    storageSecret: "",
+    storageForcePathStyle: source.storageForcePathStyle,
+    attachmentPattern: source.attachmentPattern,
+    supplierCode: source.supplierCode,
+    isActive: source.isActive,
+  };
+}
+
+export function applyMailProviderPreset(draft: MailSourceDraft, provider: MailProvider): MailSourceDraft {
+  if (provider === "gmail") {
+    return {
+      ...draft,
+      provider,
+      authType: "google_workspace_delegation",
+      credentialType: "google_service_account_json",
+      scopes: gmailReadonlyScope,
+    };
+  }
+  if (provider === "imap") {
+    return {
+      ...draft,
+      provider,
+      authType: "basic",
+      credentialType: "password",
+    };
+  }
+  if (provider === "microsoft_graph") {
+    return {
+      ...draft,
+      provider,
+      authType: "oauth2",
+      credentialType: "oauth_client_secret",
+    };
+  }
+  return {
+    ...draft,
+    provider,
+    authType: "api_token",
+    credentialType: "api_token",
+  };
+}
+
+export function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSourceInput | MailboxSourcePatch {
+  const payload: MailboxSourceInput | MailboxSourcePatch = {
+    ...(editing && draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    provider: draft.provider,
+    authType: draft.authType,
+    credentialType: draft.credentialType,
+    credentialSecret: draft.credentialSecret,
+    scopes: draft.provider === "gmail" ? gmailReadonlyScope : draft.scopes,
+    mailboxAddress: draft.mailboxAddress,
+    displayName: draft.displayName,
+    providerMailboxId: draft.providerMailboxId,
+    query: draft.query,
+    maxResults: draft.maxResults,
+    lookbackMs: draft.lookbackMs,
+    processedLabel: draft.processedLabel,
+    storageBackend: draft.storageBackend,
+    storageDir: draft.storageDir,
+    storageEndpoint: draft.storageEndpoint,
+    storageBucket: draft.storageBucket,
+    storagePrefix: draft.storagePrefix,
+    storageRegion: draft.storageRegion,
+    storageAccessKeyId: draft.storageAccessKeyId,
+    storageSecret: draft.storageSecret,
+    storageForcePathStyle: draft.storageForcePathStyle,
+    attachmentPattern: draft.attachmentPattern,
+    supplierCode: draft.supplierCode,
+    isActive: draft.isActive,
+  };
+  if (editing && "credentialSecret" in payload && !draft.credentialSecret.trim()) {
+    delete payload.credentialSecret;
+  }
+  if (editing && "storageSecret" in payload && !draft.storageSecret.trim()) {
+    delete payload.storageSecret;
+  }
+  return payload;
+}
+
+export function formatNotificationChannelType(type: NotificationChannelType): string {
+  if (type === "in_app") {
+    return "In-app";
+  }
+  if (type === "webhook") {
+    return "Webhook";
+  }
+  return "Logging";
+}
+
+export function formatSignalType(type: SignalEventType): string {
+  return notificationSignalTypeOptions.find((option) => option.value === type)?.label ?? type;
+}
+
+const junoSessionStatusMessages: Record<string, string> = {
+  missing_credentials: "Login credentials are missing.",
+  read_only_preflight_passed: "Session settings are ready.",
+};
+
+export function formatJunoSessionCheckStatus(status: unknown): string | undefined {
+  if (typeof status !== "string" || !status.trim()) {
+    return undefined;
+  }
+  return junoSessionStatusMessages[status] ?? "Session settings need attention.";
+}
+
+const mailSourceTestStatusMessages: Partial<Record<MailSourceConnectionTestResult["status"], string>> = {
+  credential_missing: "Credential JSON is required.",
+  invalid_configuration: "Complete the required connection fields.",
+  provider_not_implemented: "This adapter cannot be tested yet.",
+  storage_failed: "Attachment storage check failed.",
+};
+
+export function formatMailSourceTestStatus(result: MailSourceConnectionTestResult): string {
+  if (result.ok) {
+    const count = result.messageCount ?? 0;
+    return `${count} message${count === 1 ? "" : "s"} matched; storage checked.`;
+  }
+  if (result.error) {
+    return result.error;
+  }
+  return mailSourceTestStatusMessages[result.status] ?? "Connection failed.";
+}
+
+const settingsActionErrorMessages: Record<string, string> = {
+  invalid_settings: "Review the highlighted settings.",
+  mail_source_connection_test_required: "Run a successful connection test before saving.",
+  mail_source_connection_test_failed: "Connection test failed. Check the source settings.",
+  mail_source_not_found: "Mail source was not found.",
+  notification_channel_not_found: "Notification channel was not found.",
+  notification_rule_not_found: "Notification rule was not found.",
+  provider_not_found: "Provider was not found.",
+  sso_provider_not_found: "Provider was not found.",
+};
+
+export function formatSettingsActionError(error: unknown, fallback: string): string {
+  if (typeof error !== "string" || !error.trim()) {
+    return fallback;
+  }
+  const trimmed = error.trim();
+  if (settingsActionErrorMessages[trimmed]) {
+    return settingsActionErrorMessages[trimmed];
+  }
+  return /^[a-z]+(?:_[a-z0-9]+)+$/.test(trimmed) ? fallback : trimmed;
+}
+
+export function notificationChannelToDraft(channel: NotificationChannel): NotificationChannelDraft {
+  return {
+    id: channel.id,
+    name: channel.name,
+    type: channel.type,
+    enabled: channel.enabled,
+    webhookUrl: "",
+    secretRef: channel.secretRef ?? "",
+  };
+}
+
+export function notificationChannelPayload(
+  draft: NotificationChannelDraft,
+  editing: boolean,
+): NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) {
+  const payload: NotificationChannelInput | (Partial<NotificationChannelInput> & { id: string }) = {
+    ...(editing && draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    type: draft.type,
+    enabled: draft.enabled,
+    secretRef: draft.secretRef,
+  };
+  if (draft.type === "webhook") {
+    if (draft.webhookUrl.trim()) {
+      payload.config = { url: draft.webhookUrl.trim() };
+    }
+  } else {
+    payload.config = {};
+  }
+  return payload;
+}
+
+export function notificationRuleToDraft(rule: NotificationRule): NotificationRuleDraft {
+  return {
+    id: rule.id,
+    name: rule.name,
+    channelId: rule.channelId,
+    enabled: rule.enabled,
+    signalTypes: rule.signalTypes,
+    severities: rule.severities,
+    minScore: rule.minScore,
+    includeWatchHits: rule.includeWatchHits,
+    includeDigest: rule.includeDigest,
+    cooldownMinutes: rule.cooldownMinutes,
+  };
+}
+
+export function notificationRulePayload(draft: NotificationRuleDraft): NotificationRuleInput | (Partial<NotificationRuleInput> & { id: string }) {
+  return {
+    ...(draft.id ? { id: draft.id } : {}),
+    name: draft.name,
+    channelId: draft.channelId,
+    enabled: draft.enabled,
+    signalTypes: draft.signalTypes,
+    severities: draft.severities,
+    minScore: draft.minScore,
+    includeWatchHits: draft.includeWatchHits,
+    includeDigest: draft.includeDigest,
+    cooldownMinutes: draft.cooldownMinutes,
+  };
+}
+
+export function groupStateColor(state: SettingsGroup["state"]): string {
+  if (state === "complete") {
+    return "green";
+  }
+  if (state === "warning") {
+    return "yellow";
+  }
+  if (state === "missing") {
+    return "red";
+  }
+  return "gray";
+}
+
+export function unitStatusColor(status: SettingsResponse["units"]["authProvider"]["status"]): string {
+  if (status === "ready") {
+    return "green";
+  }
+  if (status === "missing" || status === "blocked" || status === "invalid") {
+    return "red";
+  }
+  if (status === "warning") {
+    return "yellow";
+  }
+  return "gray";
+}
+
+export function severityColor(severity: SettingsWarning["severity"]): string {
+  if (severity === "critical") {
+    return "red";
+  }
+  if (severity === "warning") {
+    return "yellow";
+  }
+  return "blue";
+}
+
+export function buildOverviewUnits(settings: SettingsResponse): Array<{
+  label: string;
+  status: "Ready" | "Needs attention" | "Disabled";
+  detail: string;
+}> {
+  const authGroup = settings.groups.find((group) => group.id === "auth");
+  const authNeedsAttention = settings.security.authBootstrap.status !== "ready" || authGroup?.state === "missing" || authGroup?.state === "warning";
+  return [
+    {
+      label: "Auth & Admin Access",
+      status: authNeedsAttention ? "Needs attention" : "Ready",
+      detail: authNeedsAttention ? "Review Auth tab." : "Ready.",
+    },
+    {
+      label: "Mail Ingest",
+      status: unitOverviewStatus(settings.units.mail.status),
+      detail: settings.units.mail.status === "ready" ? "Ready." : "Add a mail source.",
+    },
+    {
+      label: "Juno Live",
+      status: unitOverviewStatus(settings.units.junoLive.status),
+      detail: settings.units.junoLive.status === "disabled" ? "Disabled." : settings.units.junoLive.status === "ready" ? "Ready." : "Review Juno Live tab.",
+    },
+    {
+      label: "Notifications",
+      status: unitOverviewStatus(settings.units.notifications.status),
+      detail: settings.units.notifications.status === "ready" ? "Ready." : "Review Notifications tab.",
+    },
+  ];
+}
+
+function unitOverviewStatus(status: SettingsResponse["units"]["mail"]["status"]): "Ready" | "Needs attention" | "Disabled" {
+  if (status === "ready") {
+    return "Ready";
+  }
+  if (status === "disabled") {
+    return "Disabled";
+  }
+  return "Needs attention";
+}
+
+export function overviewStatusColor(status: "Ready" | "Needs attention" | "Disabled"): string {
+  if (status === "Ready") {
+    return "green";
+  }
+  if (status === "Needs attention") {
+    return "yellow";
+  }
+  return "gray";
+}
+
+export function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {
+  return settings.groups.flatMap((group) => group.settings).find((setting) => setting.key === key);
+}
+
+export function findGroupSetting(group: SettingsGroup, key: string): SettingDescriptor | undefined {
+  return group.settings.find((setting) => setting.key === key);
+}
+
+export function formatAdminCount(count: number | null): string {
+  if (count === null) {
+    return "count unavailable";
+  }
+  return `${count} existing admin${count === 1 ? "" : "s"}`;
+}
+
+export function normalizeOrigin(value: string): string {
+  try {
+    return new URL(value).origin;
+  } catch {
+    return value.replace(/\/+$/, "");
+  }
+}
