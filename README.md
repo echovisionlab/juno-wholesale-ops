@@ -33,8 +33,8 @@ or infer actual sales volume. Observed stock/status changes are treated only as
 observed signals.
 
 It is not a SaaS platform, not a multi-tenant service, and not an official Juno
-integration. External adapters beyond the generic webhook notification channel
-are intentionally out of scope for this release.
+integration. External notification adapters are formatting-only and read-only;
+external delivery is still explicit opt-in.
 
 ## Features
 
@@ -45,8 +45,8 @@ are intentionally out of scope for this release.
 - Catalog item identity normalization and watch rule matching.
 - Today Signals, Movement Signals, Catalog Trends, and Operator Digest APIs.
 - Read-only live stock observation through Playwright browser workers.
-- Read-only notification delivery with in-app, logging, and generic webhook
-  channels.
+- Read-only notification delivery with in-app, logging, generic webhook,
+  Slack-style, Discord-style, and Telegram-style webhook payloads.
 - Synthetic fixture seed for local validation without real Juno wholesale email
   or XLSX data.
 - Public safety checks for release readiness.
@@ -268,10 +268,12 @@ pnpm notifications:refresh -- --send
 ```
 
 `notifications:dispatch` and `notifications:refresh` default to dry-run mode.
-Actual generic webhook sending requires `--send`. Prefer `secret_ref` for
-production webhook URLs. `config.url` is supported for local development only.
-Dashboard/API responses mask webhook config, and logs must not include webhook
-URLs, auth headers, cookies, or secret values.
+Actual webhook sending requires `--send`. Channels support in-app, logging,
+generic webhook, Slack-style webhook, Discord-style webhook, and Telegram-style
+webhook payloads. Prefer `secret_ref` for production webhook URLs. `config.url`
+is supported for local development only. Dashboard/API responses mask webhook
+config, and logs must not include webhook URLs, auth headers, cookies, or
+secret values.
 
 Admin-protected APIs:
 

@@ -48,6 +48,11 @@ describe("notification repository", () => {
       },
       secretRef: "JUNO_OPS_WEBHOOK_URL",
     });
+    const keptWebhook = await updateNotificationChannel(databaseUrl, {
+      id: webhook.id,
+      type: "webhook",
+      config: undefined,
+    });
     const updatedWebhook = await updateNotificationChannel(databaseUrl, {
       id: webhook.id,
       enabled: false,
@@ -90,9 +95,16 @@ describe("notification repository", () => {
     expect(webhook).toMatchObject({
       config: expect.objectContaining({
         url: "[configured]",
+        format: "generic",
         secretRef: "JUNO_OPS_WEBHOOK_URL",
       }),
-      configSummary: "Webhook URL from JUNO_OPS_WEBHOOK_URL",
+      configSummary: "Generic webhook from JUNO_OPS_WEBHOOK_URL",
+    });
+    expect(keptWebhook).toMatchObject({
+      config: expect.objectContaining({
+        format: "generic",
+        url: "[configured]",
+      }),
     });
     expect(updatedWebhook).toMatchObject({
       type: "logging",
@@ -132,6 +144,11 @@ describe("notification repository", () => {
     await expect(createNotificationChannel(databaseUrl, { name: "Bad", type: "webhook", config: [] })).rejects.toThrow(
       "Notification channel config must be an object",
     );
+    await expect(createNotificationChannel(databaseUrl, {
+      name: "Bad format",
+      type: "webhook",
+      config: { format: "email" },
+    })).rejects.toThrow("Notification webhook format is invalid");
     await expect(updateNotificationChannel(databaseUrl, { id: "" })).rejects.toThrow(
       "Notification channel id is required",
     );

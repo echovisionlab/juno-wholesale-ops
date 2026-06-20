@@ -186,6 +186,9 @@ export function SettingsCenter({
                             onSaveRule={() => void notificationsState.saveRule()}
                             onDeleteRule={(id) => void notificationsState.deleteRule(id)}
                             onToggleRule={(id, enabled) => void notificationsState.toggleRule(id, enabled)}
+                            onQueueNotifications={() => void notificationsState.queueNotifications()}
+                            onDryRunDispatch={() => void notificationsState.dryRunDispatch()}
+                            onRefreshNotifications={() => void notificationsState.refreshNotifications()}
                           />
                         ) : null}
                         {groupsById[groupId].settings.length > 0 ? (

@@ -3,11 +3,17 @@ import { Alert, Badge, Button, Card, Group, Modal, MultiSelect, NativeSelect, Nu
 import { Plus, Save, Trash2 } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
-import type { NotificationChannel, NotificationChannelType, NotificationRule } from "@/lib/notifications/types";
+import type { NotificationChannel, NotificationRule } from "@/lib/notifications/types";
 import type { NotificationChannelDraft, NotificationRuleDraft } from "./settings-types";
-import { notificationChannelTypeOptions, notificationSeverityOptions, notificationSignalTypeOptions } from "./settings-options";
+import { notificationProviderOptions, notificationSeverityOptions, notificationSignalTypeOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
-import { formatNotificationChannelType, formatSignalType, unitStatusColor } from "./settings-utils";
+import {
+  formatNotificationChannelProvider,
+  formatNotificationChannelType,
+  notificationProviderFromKey,
+  formatSignalType,
+  unitStatusColor,
+} from "./settings-utils";
 
 export function NotificationsSettingsCard({
   settings,
@@ -36,6 +42,9 @@ export function NotificationsSettingsCard({
   onSaveRule,
   onDeleteRule,
   onToggleRule,
+  onQueueNotifications,
+  onDryRunDispatch,
+  onRefreshNotifications,
 }: {
   settings: SettingsResponse;
   channels: NotificationChannel[] | null;
@@ -63,6 +72,9 @@ export function NotificationsSettingsCard({
   onSaveRule: () => void;
   onDeleteRule: (id: string) => void;
   onToggleRule: (id: string, enabled: boolean) => void;
+  onQueueNotifications: () => void;
+  onDryRunDispatch: () => void;
+  onRefreshNotifications: () => void;
 }) {
   useEffect(() => {
     if (!channels && !rules && !loading) {
@@ -85,7 +97,7 @@ export function NotificationsSettingsCard({
           </Group>
           <Group gap="xs">
             <Button size="xs" variant="light" loading={loading} onClick={onRefresh}>
-              Refresh
+              Reload
             </Button>
             <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAddChannel}>
               Add channel
@@ -99,17 +111,26 @@ export function NotificationsSettingsCard({
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Channels" value={loading && !channels ? "loading" : String(safeChannels.length)} />
           <SignalFact label="Enabled rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
-          <SignalFact label="Dispatch" value="dry-run default" />
+          <SignalFact label="External send" value="opt-in only" />
         </ResponsiveGrid>
 
-        <Stack gap={4}>
-          <Text size="sm" fw={700}>Flow</Text>
-          <Text size="sm" c="dimmed">
-            Add a channel, then add a rule that filters observed signals. Dispatch stays dry-run unless explicitly sent.
-          </Text>
-        </Stack>
-
-        <Text size="sm" c="dimmed">{settings.units.notifications.detail}</Text>
+        <Group gap="xs">
+          <Tooltip label="Queue deliveries for matching observed signals">
+            <Button size="xs" variant="light" loading={pending === "notifications-queue"} onClick={onQueueNotifications}>
+              Queue
+            </Button>
+          </Tooltip>
+          <Tooltip label="Check queued deliveries without external sends">
+            <Button size="xs" variant="light" loading={pending === "notifications-dispatch"} onClick={onDryRunDispatch}>
+              Dry-run dispatch
+            </Button>
+          </Tooltip>
+          <Tooltip label="Queue and dry-run dispatch">
+            <Button size="xs" variant="light" loading={pending === "notifications-refresh"} onClick={onRefreshNotifications}>
+              Refresh
+            </Button>
+          </Tooltip>
+        </Group>
 
         <Stack gap="sm">
           <Group justify="space-between">
@@ -125,7 +146,7 @@ export function NotificationsSettingsCard({
                 <Table.Thead>
                   <Table.Tr>
                     <Table.Th>Channel</Table.Th>
-                    <Table.Th>Type</Table.Th>
+                    <Table.Th>Provider</Table.Th>
                     <Table.Th>Config</Table.Th>
                     <Table.Th>Status</Table.Th>
                     <Table.Th>Actions</Table.Th>
@@ -138,7 +159,7 @@ export function NotificationsSettingsCard({
                         <Text fw={700}>{channel.name}</Text>
                         <Text size="xs" c="dimmed">{channel.secretRef ? "secret ref configured" : "no secret ref"}</Text>
                       </Table.Td>
-                      <Table.Td>{formatNotificationChannelType(channel.type)}</Table.Td>
+                      <Table.Td>{formatNotificationChannelProvider(channel)}</Table.Td>
                       <Table.Td>{channel.configSummary}</Table.Td>
                       <Table.Td>
                         <Badge color={channel.enabled ? "green" : "gray"} variant="light" size="xs">
@@ -260,10 +281,19 @@ export function NotificationsSettingsCard({
                 onChange={(event) => onChannelDraftChange({ ...channelDraft, name: event.currentTarget.value })}
               />
               <NativeSelect
-                label="Channel type"
-                value={channelDraft.type}
-                data={notificationChannelTypeOptions}
-                onChange={(event) => onChannelDraftChange({ ...channelDraft, type: event.currentTarget.value as NotificationChannelType })}
+                label="Provider"
+                value={channelDraft.provider}
+                data={notificationProviderOptions}
+                onChange={(event) => {
+                  const provider = event.currentTarget.value as NotificationChannelDraft["provider"];
+                  const providerConfig = notificationProviderFromKey(provider);
+                  onChannelDraftChange({
+                    ...channelDraft,
+                    provider,
+                    type: providerConfig.type,
+                    webhookFormat: providerConfig.format,
+                  });
+                }}
               />
               <Switch
                 label="Enabled"
@@ -272,12 +302,22 @@ export function NotificationsSettingsCard({
               />
             </ResponsiveGrid>
             {channelDraft.type === "webhook" ? (
-              <PasswordInput
-                label={editingChannelId ? "New webhook URL" : "Webhook URL"}
-                placeholder={editingChannelId ? "Leave blank to keep configured" : "https://example.test/ops-webhook"}
-                value={channelDraft.webhookUrl}
-                onChange={(event) => onChannelDraftChange({ ...channelDraft, webhookUrl: event.currentTarget.value })}
-              />
+              <>
+                <PasswordInput
+                  label={editingChannelId ? "New webhook URL" : "Webhook URL"}
+                  placeholder={editingChannelId ? "Leave blank to keep configured" : "https://hooks.example.com/services/..."}
+                  value={channelDraft.webhookUrl}
+                  onChange={(event) => onChannelDraftChange({ ...channelDraft, webhookUrl: event.currentTarget.value })}
+                />
+                {channelDraft.webhookFormat === "telegram" ? (
+                  <TextInput
+                    label="Telegram chat ID"
+                    placeholder="-1001234567890"
+                    value={channelDraft.telegramChatId}
+                    onChange={(event) => onChannelDraftChange({ ...channelDraft, telegramChatId: event.currentTarget.value })}
+                  />
+                ) : null}
+              </>
             ) : null}
             <TextInput
               label="Secret ref"

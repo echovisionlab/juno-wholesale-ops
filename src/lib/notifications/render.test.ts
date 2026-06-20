@@ -100,9 +100,14 @@ describe("notification rendering", () => {
     expect(summarizeNotificationChannelConfig({ type: "logging", config: {}, secretRef: null })).toContain("Console JSON");
     expect(summarizeNotificationChannelConfig({
       type: "webhook",
-      config: { url: "https://hooks.example.test/dev" },
+      config: { url: "https://hooks.example.test/dev", format: "slack" },
       secretRef: null,
-    })).toContain("local development");
+    })).toContain("Slack-style webhook configured");
+    expect(summarizeNotificationChannelConfig({
+      type: "webhook",
+      config: { format: "discord" },
+      secretRef: "DISCORD_WEBHOOK_URL",
+    })).toContain("Discord-style webhook from DISCORD_WEBHOOK_URL");
     expect(summarizeNotificationChannelConfig({ type: "webhook", config: {}, secretRef: null })).toContain("not configured");
   });
 });

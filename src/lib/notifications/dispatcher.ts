@@ -6,6 +6,10 @@ import type {
   NotificationDispatchMode,
   NotificationDispatchResult,
 } from "./types";
+import {
+  formatNotificationWebhookPayload,
+  normalizeNotificationWebhookFormat,
+} from "./provider-formatters";
 
 type FetchLike = (input: string, init?: RequestInit) => Promise<Response>;
 
@@ -167,13 +171,15 @@ async function postWebhook(options: {
     return await options.fetchImpl(options.url, {
       method: "POST",
       headers: buildWebhookHeaders(options.delivery.channel_config),
-      body: JSON.stringify({
-        source: "juno-wholesale-ops",
-        readOnly: true,
-        subject: options.delivery.subject,
-        body: options.delivery.body,
-        ...options.delivery.payload,
-      }),
+      body: JSON.stringify(formatNotificationWebhookPayload(
+        normalizeNotificationWebhookFormat(options.delivery.channel_config.format),
+        {
+          subject: options.delivery.subject,
+          body: options.delivery.body,
+          payload: options.delivery.payload,
+          config: options.delivery.channel_config,
+        },
+      )),
       signal: controller.signal,
     });
   } finally {

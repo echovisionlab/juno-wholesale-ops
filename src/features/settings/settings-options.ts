@@ -2,7 +2,8 @@ import type { MailAuthType, MailCredentialType, MailProvider } from "@/lib/inges
 import { mailProviderRegistry } from "@/lib/ingest/mail-provider-registry";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
-import type { NotificationChannelType } from "@/lib/notifications/types";
+import type { NotificationProviderKey } from "@/lib/notifications/types";
+import type { NotificationWebhookFormat } from "@/lib/notifications/provider-formatters";
 import type {
   MailSourceDraft,
   NotificationChannelDraft,
@@ -73,10 +74,13 @@ export const attachmentStorageBackendOptions: Array<{ value: AttachmentStorageBa
   { value: "s3_compatible", label: "S3 compatible / MinIO" },
 ];
 
-export const notificationChannelTypeOptions: Array<{ value: NotificationChannelType; label: string }> = [
+export const notificationProviderOptions: Array<{ value: NotificationProviderKey; label: string }> = [
   { value: "in_app", label: "In-app" },
   { value: "logging", label: "Logging" },
-  { value: "webhook", label: "Webhook" },
+  { value: "webhook_generic", label: "Generic webhook" },
+  { value: "webhook_slack", label: "Slack-style webhook" },
+  { value: "webhook_discord", label: "Discord-style webhook" },
+  { value: "webhook_telegram", label: "Telegram-style webhook" },
 ];
 
 export const notificationSignalTypeOptions: Array<{ value: SignalEventType; label: string }> = [
@@ -103,8 +107,11 @@ export const notificationSeverityOptions: Array<{ value: SignalSeverity; label: 
 export const emptyNotificationChannelDraft: NotificationChannelDraft = {
   name: "",
   type: "in_app",
+  provider: "in_app",
   enabled: true,
+  webhookFormat: "generic" satisfies NotificationWebhookFormat,
   webhookUrl: "",
+  telegramChatId: "",
   secretRef: "",
 };
 
