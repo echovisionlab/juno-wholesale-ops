@@ -1,4 +1,4 @@
--- migration-manifest-sha256: fe56e49ec1e43519b91d88a5821b28535f17a80f477b263c18570b810ed91540
+-- migration-manifest-sha256: 8fd4374bc7ea44fa400c33fa648a603996d16643af366050cfd6163f72b3e9e5
 --
 -- PostgreSQL database dump
 --
@@ -205,6 +205,22 @@ CREATE TABLE public.catalog_snapshot (
     row_count integer NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT catalog_snapshot_catalog_kind_check CHECK ((catalog_kind = ANY (ARRAY['preorder'::text, 'in_stock'::text, 'unknown'::text])))
+);
+
+
+--
+-- Name: dashboard_saved_view; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.dashboard_saved_view (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    name text NOT NULL,
+    filters jsonb DEFAULT '{}'::jsonb NOT NULL,
+    sort_order integer DEFAULT 0 NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT dashboard_saved_view_filters_object CHECK ((jsonb_typeof(filters) = 'object'::text)),
+    CONSTRAINT dashboard_saved_view_name_not_blank CHECK ((btrim(name) <> ''::text))
 );
 
 
@@ -767,6 +783,22 @@ ALTER TABLE ONLY public.catalog_snapshot
 
 
 --
+-- Name: dashboard_saved_view dashboard_saved_view_name_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dashboard_saved_view
+    ADD CONSTRAINT dashboard_saved_view_name_key UNIQUE (name);
+
+
+--
+-- Name: dashboard_saved_view dashboard_saved_view_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.dashboard_saved_view
+    ADD CONSTRAINT dashboard_saved_view_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: email_adapter email_adapter_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -996,6 +1028,13 @@ ALTER TABLE ONLY public.watch_rule
 
 ALTER TABLE ONLY public.watch_rule
     ADD CONSTRAINT watch_rule_type_pattern_norm_key UNIQUE (type, pattern_norm);
+
+
+--
+-- Name: dashboard_saved_view_sort_order_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX dashboard_saved_view_sort_order_idx ON public.dashboard_saved_view USING btree (sort_order, name);
 
 
 --

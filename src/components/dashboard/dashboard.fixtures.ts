@@ -234,6 +234,38 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
       },
     ],
   },
+  dashboardSavedViews: [
+    {
+      id: "dashboard-view-1",
+      name: "Watch hits",
+      filters: {
+        signalTypes: ["watch_hit"],
+        severities: [],
+        watchHitsOnly: true,
+        lowStockOnly: false,
+        movementOnly: false,
+        dateRange: "all",
+      },
+      sortOrder: 0,
+      createdAt: "2026-06-17 02:10:00+00",
+      updatedAt: "2026-06-17 02:10:00+00",
+    },
+    {
+      id: "dashboard-view-2",
+      name: "Low stock review",
+      filters: {
+        signalTypes: [],
+        severities: ["warning", "critical"],
+        watchHitsOnly: false,
+        lowStockOnly: true,
+        movementOnly: false,
+        dateRange: "7d",
+      },
+      sortOrder: 1,
+      createdAt: "2026-06-17 02:11:00+00",
+      updatedAt: "2026-06-17 02:11:00+00",
+    },
+  ],
   watchRules: [
     {
       id: "watch-rule-1",

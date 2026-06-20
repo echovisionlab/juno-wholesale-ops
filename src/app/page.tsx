@@ -6,6 +6,8 @@ import { dashboardFixture } from "@/components/dashboard/dashboard.fixtures";
 import type {
   AppSetupStatus,
   CatalogTrendSummary,
+  DashboardSavedView,
+  DashboardSavedViewDraft,
   DashboardResourceIssue,
   GmailIngestState,
   InsightDigest,
@@ -31,6 +33,7 @@ export default function Home() {
   const [movementSignals, setMovementSignals] = useState<MovementSignal[] | null>(null);
   const [catalogTrends, setCatalogTrends] = useState<CatalogTrendSummary | null>(null);
   const [operatorDigest, setOperatorDigest] = useState<InsightDigest | null>(null);
+  const [dashboardSavedViews, setDashboardSavedViews] = useState<DashboardSavedView[] | null>(null);
   const [watchRules, setWatchRules] = useState<WatchRule[] | null>(null);
   const [notificationDeliveries, setNotificationDeliveries] = useState<NotificationDelivery[] | null>(null);
   const [notificationRules, setNotificationRules] = useState<NotificationRule[] | null>(null);
@@ -38,6 +41,7 @@ export default function Home() {
   const [apiIssues, setApiIssues] = useState<DashboardResourceIssue[]>([]);
   const [workerActionPending, setWorkerActionPending] = useState(false);
   const [watchRuleActionPending, setWatchRuleActionPending] = useState(false);
+  const [dashboardSavedViewActionPending, setDashboardSavedViewActionPending] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -51,6 +55,7 @@ export default function Home() {
       setMovementSignals,
       setCatalogTrends,
       setOperatorDigest,
+      setDashboardSavedViews,
       setWatchRules,
       setNotificationDeliveries,
       setNotificationRules,
@@ -68,6 +73,7 @@ export default function Home() {
         setMovementSignals,
         setCatalogTrends,
         setOperatorDigest,
+        setDashboardSavedViews,
         setWatchRules,
         setNotificationDeliveries,
         setNotificationRules,
@@ -148,6 +154,60 @@ export default function Home() {
     }
   }
 
+  async function handleCreateDashboardSavedView(draft: DashboardSavedViewDraft) {
+    setDashboardSavedViewActionPending(true);
+    try {
+      const response = await fetch("/api/dashboard/saved-views", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(draft),
+      });
+      const payload = response.ok ? ((await response.json()) as { view?: DashboardSavedView }) : null;
+      const createdView = payload?.view;
+      if (createdView) {
+        setDashboardSavedViews((views) => [...(views ?? []), createdView].sort(sortDashboardSavedViews));
+      }
+    } finally {
+      setDashboardSavedViewActionPending(false);
+    }
+  }
+
+  async function handleUpdateDashboardSavedView(view: DashboardSavedView, filters: DashboardSavedView["filters"]) {
+    setDashboardSavedViewActionPending(true);
+    try {
+      const response = await fetch("/api/dashboard/saved-views", {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: view.id, name: view.name, filters }),
+      });
+      const payload = response.ok ? ((await response.json()) as { view?: DashboardSavedView }) : null;
+      const updatedView = payload?.view;
+      if (updatedView) {
+        setDashboardSavedViews((views) =>
+          (views ?? []).map((entry) => (entry.id === updatedView.id ? updatedView : entry)).sort(sortDashboardSavedViews),
+        );
+      }
+    } finally {
+      setDashboardSavedViewActionPending(false);
+    }
+  }
+
+  async function handleDeleteDashboardSavedView(view: DashboardSavedView) {
+    setDashboardSavedViewActionPending(true);
+    try {
+      const response = await fetch("/api/dashboard/saved-views", {
+        method: "DELETE",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: view.id }),
+      });
+      if (response.ok) {
+        setDashboardSavedViews((views) => (views ?? []).filter((entry) => entry.id !== view.id));
+      }
+    } finally {
+      setDashboardSavedViewActionPending(false);
+    }
+  }
+
   return (
     <CatalogOpsDashboard
       {...dashboardFixture}
@@ -159,6 +219,7 @@ export default function Home() {
       movementSignals={movementSignals}
       catalogTrends={catalogTrends}
       operatorDigest={operatorDigest}
+      dashboardSavedViews={dashboardSavedViews}
       watchRules={watchRules}
       notificationDeliveries={notificationDeliveries}
       notificationRules={notificationRules}
@@ -166,10 +227,14 @@ export default function Home() {
       apiIssues={apiIssues}
       workerActionPending={workerActionPending}
       watchRuleActionPending={watchRuleActionPending}
+      dashboardSavedViewActionPending={dashboardSavedViewActionPending}
       onWorkerAction={handleWorkerAction}
       onCreateWatchRule={handleCreateWatchRule}
       onToggleWatchRule={handleToggleWatchRule}
       onDeleteWatchRule={handleDeleteWatchRule}
+      onCreateDashboardSavedView={handleCreateDashboardSavedView}
+      onUpdateDashboardSavedView={handleUpdateDashboardSavedView}
+      onDeleteDashboardSavedView={handleDeleteDashboardSavedView}
     />
   );
 }
@@ -184,6 +249,7 @@ async function refreshDashboardState(
   setMovementSignals: (signals: MovementSignal[] | null) => void,
   setCatalogTrends: (trends: CatalogTrendSummary | null) => void,
   setOperatorDigest: (digest: InsightDigest | null) => void,
+  setDashboardSavedViews: (views: DashboardSavedView[] | null) => void,
   setWatchRules: (rules: WatchRule[] | null) => void,
   setNotificationDeliveries: (deliveries: NotificationDelivery[] | null) => void,
   setNotificationRules: (rules: NotificationRule[] | null) => void,
@@ -199,6 +265,7 @@ async function refreshDashboardState(
     movementPayload,
     trendsPayload,
     digestPayload,
+    dashboardSavedViewsPayload,
     watchRulesPayload,
     notificationDeliveriesPayload,
     notificationRulesPayload,
@@ -212,6 +279,7 @@ async function refreshDashboardState(
     fetchDashboardJson<{ signals?: MovementSignal[] }>("/api/insights/movement?limit=100", "Movement signals"),
     fetchDashboardJson<{ trends?: CatalogTrendSummary }>("/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20", "Catalog trends"),
     fetchDashboardJson<{ digest?: InsightDigest }>("/api/insights/digest", "Operator digest"),
+    fetchDashboardJson<{ views?: DashboardSavedView[] }>("/api/dashboard/saved-views", "Dashboard saved views"),
     fetchDashboardJson<{ rules?: WatchRule[] }>("/api/watch-rules", "Watch rules"),
     fetchDashboardJson<{ deliveries?: NotificationDelivery[] }>("/api/notifications/deliveries?limit=100", "Notification deliveries"),
     fetchDashboardJson<{ rules?: NotificationRule[] }>("/api/notifications/rules", "Notification rules"),
@@ -227,6 +295,7 @@ async function refreshDashboardState(
     setMovementSignals(okData(movementPayload)?.signals ?? null);
     setCatalogTrends(okData(trendsPayload)?.trends ?? null);
     setOperatorDigest(okData(digestPayload)?.digest ?? null);
+    setDashboardSavedViews(okData(dashboardSavedViewsPayload)?.views ?? null);
     setWatchRules(okData(watchRulesPayload)?.rules ?? null);
     setNotificationDeliveries(okData(notificationDeliveriesPayload)?.deliveries ?? null);
     setNotificationRules(okData(notificationRulesPayload)?.rules ?? null);
@@ -240,6 +309,7 @@ async function refreshDashboardState(
       movementPayload,
       trendsPayload,
       digestPayload,
+      dashboardSavedViewsPayload,
       watchRulesPayload,
       notificationDeliveriesPayload,
       notificationRulesPayload,
@@ -289,4 +359,11 @@ function isResourceIssue<T>(state: ResourceState<T>): state is DashboardResource
     state.status === "server_error" ||
     state.status === "unavailable"
   );
+}
+
+function sortDashboardSavedViews(left: DashboardSavedView, right: DashboardSavedView): number {
+  if (left.sortOrder !== right.sortOrder) {
+    return left.sortOrder - right.sortOrder;
+  }
+  return left.name.localeCompare(right.name);
 }

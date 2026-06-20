@@ -19,6 +19,12 @@ import { GmailClient } from "@/lib/ingest/gmail";
 import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/ingest/google-auth";
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
+  createDashboardSavedView,
+  deleteDashboardSavedView,
+  listDashboardSavedViews,
+  updateDashboardSavedView,
+} from "@/lib/dashboard/saved-views-repository";
+import {
   createWatchRule,
   deleteWatchRule,
   getTodaySignals,
@@ -95,6 +101,12 @@ import {
   POST as postMailSources,
 } from "./mail-sources/route";
 import { POST as postMailSourcesTest } from "./mail-sources/test/route";
+import {
+  DELETE as deleteDashboardSavedViews,
+  GET as getDashboardSavedViews,
+  PATCH as patchDashboardSavedViews,
+  POST as postDashboardSavedViews,
+} from "./dashboard/saved-views/route";
 
 vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: vi.fn(),
@@ -111,6 +123,13 @@ vi.mock("@/lib/auth/sso-provider-repository", () => ({
 
 vi.mock("@/lib/ingest/repository", () => ({
   getGmailIngestState: vi.fn(),
+}));
+
+vi.mock("@/lib/dashboard/saved-views-repository", () => ({
+  createDashboardSavedView: vi.fn(),
+  deleteDashboardSavedView: vi.fn(),
+  listDashboardSavedViews: vi.fn(),
+  updateDashboardSavedView: vi.fn(),
 }));
 
 vi.mock("@/lib/ingest/mail-source", () => ({
@@ -209,6 +228,10 @@ const gmailClientMock = vi.mocked(GmailClient);
 const getDelegatedAccessTokenMock = vi.mocked(getDelegatedAccessToken);
 const parseServiceAccountKeyJsonMock = vi.mocked(parseServiceAccountKeyJson);
 const getGmailIngestStateMock = vi.mocked(getGmailIngestState);
+const listDashboardSavedViewsMock = vi.mocked(listDashboardSavedViews);
+const createDashboardSavedViewMock = vi.mocked(createDashboardSavedView);
+const updateDashboardSavedViewMock = vi.mocked(updateDashboardSavedView);
+const deleteDashboardSavedViewMock = vi.mocked(deleteDashboardSavedView);
 const getTodaySignalsMock = vi.mocked(getTodaySignals);
 const getMovementSignalsMock = vi.mocked(getMovementSignals);
 const getCatalogTrendsMock = vi.mocked(getCatalogTrends);
@@ -260,6 +283,10 @@ describe("admin guarded API routes", () => {
     createMailboxSourceMock.mockResolvedValue(mailSource());
     updateMailboxSourceMock.mockResolvedValue(mailSource());
     deleteMailboxSourceMock.mockResolvedValue(true);
+    listDashboardSavedViewsMock.mockResolvedValue([]);
+    createDashboardSavedViewMock.mockResolvedValue(dashboardSavedView());
+    updateDashboardSavedViewMock.mockResolvedValue(dashboardSavedView());
+    deleteDashboardSavedViewMock.mockResolvedValue(true);
     testMailboxSourceConnectionMock.mockResolvedValue({
       ok: true,
       status: "connection_ready",
@@ -317,6 +344,10 @@ describe("admin guarded API routes", () => {
     await expectStatus(getMovementInsights(request()), 403);
     await expectStatus(getTrendInsights(request()), 403);
     await expectStatus(getDigestInsights(request()), 403);
+    await expectStatus(getDashboardSavedViews(request()), 403);
+    await expectStatus(postDashboardSavedViews(jsonRequest({ name: "Watch hits" })), 403);
+    await expectStatus(patchDashboardSavedViews(jsonRequest({ id: "view-1", name: "Warnings" })), 403);
+    await expectStatus(deleteDashboardSavedViews(jsonRequest({ id: "view-1" })), 403);
     await expectStatus(getWatchRules(request()), 403);
     await expectStatus(postWatchRules(jsonRequest({ type: "artist", pattern: "Lara Voss" })), 403);
     await expectStatus(patchWatchRules(jsonRequest({ id: "rule-1", enabled: false })), 403);
@@ -345,6 +376,10 @@ describe("admin guarded API routes", () => {
     expect(getMovementSignalsMock).not.toHaveBeenCalled();
     expect(getCatalogTrendsMock).not.toHaveBeenCalled();
     expect(getInsightDigestMock).not.toHaveBeenCalled();
+    expect(listDashboardSavedViewsMock).not.toHaveBeenCalled();
+    expect(createDashboardSavedViewMock).not.toHaveBeenCalled();
+    expect(updateDashboardSavedViewMock).not.toHaveBeenCalled();
+    expect(deleteDashboardSavedViewMock).not.toHaveBeenCalled();
     expect(listWatchRulesMock).not.toHaveBeenCalled();
     expect(createWatchRuleMock).not.toHaveBeenCalled();
     expect(updateWatchRuleMock).not.toHaveBeenCalled();
@@ -794,6 +829,67 @@ describe("admin guarded API routes", () => {
       body: { digest: { generatedAt: "2026-06-17T00:00:00.000Z" } },
     });
     expect(getInsightDigestMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app");
+  });
+
+  it("guards dashboard saved view CRUD and translates validation outcomes", async () => {
+    listDashboardSavedViewsMock.mockResolvedValue([{ id: "view-1", name: "Watch hits" }] as never);
+    createDashboardSavedViewMock.mockResolvedValue({ id: "view-2", name: "Warnings" } as never);
+    updateDashboardSavedViewMock.mockResolvedValueOnce({ id: "view-2", name: "Low stock" } as never).mockResolvedValueOnce(null);
+    deleteDashboardSavedViewMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+
+    await expect(expectJson(getDashboardSavedViews(request()))).resolves.toEqual({
+      status: 200,
+      body: { views: [{ id: "view-1", name: "Watch hits" }] },
+    });
+    expect(listDashboardSavedViewsMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app");
+
+    await expect(expectJson(postDashboardSavedViews(jsonRequest({
+      name: "Warnings",
+      filters: { severities: ["warning"], rawCatalogRow: { ignored: true } },
+    })))).resolves.toEqual({
+      status: 201,
+      body: { view: { id: "view-2", name: "Warnings" } },
+    });
+    expect(createDashboardSavedViewMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", {
+      name: "Warnings",
+      filters: { severities: ["warning"], rawCatalogRow: { ignored: true } },
+    });
+
+    await expect(expectJson(patchDashboardSavedViews(jsonRequest({ id: "view-2", name: "Low stock" })))).resolves.toEqual({
+      status: 200,
+      body: { view: { id: "view-2", name: "Low stock" } },
+    });
+    await expect(expectJson(patchDashboardSavedViews(jsonRequest({ id: "missing", name: "Missing" })))).resolves.toEqual({
+      status: 404,
+      body: { error: "dashboard_saved_view_not_found" },
+    });
+    await expect(expectJson(patchDashboardSavedViews(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+
+    await expect(expectJson(deleteDashboardSavedViews(jsonRequest({ id: "view-2" })))).resolves.toEqual({
+      status: 200,
+      body: { deleted: true },
+    });
+    await expect(expectJson(deleteDashboardSavedViews(jsonRequest({ id: "missing" })))).resolves.toEqual({
+      status: 404,
+      body: { error: "dashboard_saved_view_not_found" },
+    });
+    await expect(expectJson(deleteDashboardSavedViews(jsonRequest({ id: "" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Dashboard saved view id is required" },
+    });
+    await expect(expectJson(postDashboardSavedViews(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+
+    createDashboardSavedViewMock.mockRejectedValueOnce("bad view");
+    await expect(expectJson(postDashboardSavedViews(jsonRequest({ name: "Bad" })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid dashboard saved view request" },
+    });
   });
 
   it("guards watch rule CRUD and translates validation outcomes", async () => {
@@ -1358,5 +1454,23 @@ function mailSource() {
     attachmentPattern: "xlsx",
     supplierCode: "juno",
     isActive: true,
+  };
+}
+
+function dashboardSavedView() {
+  return {
+    id: "view-1",
+    name: "Watch hits",
+    filters: {
+      signalTypes: ["watch_hit" as const],
+      severities: [],
+      watchHitsOnly: true,
+      lowStockOnly: false,
+      movementOnly: false,
+      dateRange: "all" as const,
+    },
+    sortOrder: 0,
+    createdAt: "2026-06-20T00:00:00.000Z",
+    updatedAt: "2026-06-20T00:00:00.000Z",
   };
 }
