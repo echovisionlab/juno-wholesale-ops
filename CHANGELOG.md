@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.5.0...v0.6.0) (2026-06-20)
+
+
+### Features
+
+* add dashboard filtering and saved views ([0dd33ce](https://github.com/echovisionlab/juno-wholesale-ops/commit/0dd33ce80869287915fabfcb543569837dd83df1))
+
 ## [0.5.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.4.0...v0.5.0) (2026-06-20)
 
 
