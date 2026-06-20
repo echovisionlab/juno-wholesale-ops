@@ -58,6 +58,30 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   );
 }
 
+export function AuthSecretPolicyCard() {
+  return (
+    <Card>
+      <Stack gap="xs">
+        <Group justify="space-between" align="flex-start">
+          <Text fw={700}>Auth Secret Policy</Text>
+          <Badge color="blue" variant="light">
+            database-managed
+          </Badge>
+        </Group>
+        <ResponsiveGrid minWidth={220} gap="xs">
+          <SignalFact label="Internal auth secret" value="Generated at startup and stored as a masked, non-editable database value" />
+          <SignalFact label="Rotation" value="Maintenance action; rotate alongside a planned session invalidation window" />
+          <SignalFact label="Backup" value="Included only in private Postgres backups, never public exports or issue text" />
+          <SignalFact label="SSO client secrets" value="Currently write-only database values; target secret_ref or encrypted storage" />
+        </ResponsiveGrid>
+        <Text size="sm" c="dimmed">
+          Re-enter an SSO client secret only when rotating it. Existing values are intentionally not echoed back into the form.
+        </Text>
+      </Stack>
+    </Card>
+  );
+}
+
 export function AuthProviderCard({
   settings,
   draft,

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Alert, Badge, Button, Card, Group, Modal, MultiSelect, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { ListPlus, Plus, RefreshCw, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type { NotificationChannel, NotificationRule } from "@/lib/notifications/types";
@@ -44,6 +44,7 @@ export function NotificationsSettingsCard({
   onToggleRule,
   onQueueNotifications,
   onDryRunDispatch,
+  onSendDispatch,
   onRefreshNotifications,
 }: {
   settings: SettingsResponse;
@@ -74,6 +75,7 @@ export function NotificationsSettingsCard({
   onToggleRule: (id: string, enabled: boolean) => void;
   onQueueNotifications: () => void;
   onDryRunDispatch: () => void;
+  onSendDispatch: () => void;
   onRefreshNotifications: () => void;
 }) {
   useEffect(() => {
@@ -84,6 +86,9 @@ export function NotificationsSettingsCard({
 
   const safeChannels = channels ?? [];
   const safeRules = rules ?? [];
+  const localChannelCount = safeChannels.filter((channel) => channel.type === "in_app" || channel.type === "logging").length;
+  const webhookChannels = safeChannels.filter((channel) => channel.type === "webhook");
+  const readyWebhookCount = webhookChannels.filter(hasWebhookDestination).length;
 
   return (
     <Card>
@@ -111,26 +116,37 @@ export function NotificationsSettingsCard({
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Channels" value={loading && !channels ? "loading" : String(safeChannels.length)} />
           <SignalFact label="Enabled rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
-          <SignalFact label="External send" value="opt-in only" />
+          <SignalFact label="Local delivery" value={`${localChannelCount} in-app/logging normal`} />
+          <SignalFact label="External webhooks" value={`${readyWebhookCount} ready / ${webhookChannels.length} configured`} />
+          <SignalFact label="External send" value="send button only" />
         </ResponsiveGrid>
 
         <Group gap="xs">
           <Tooltip label="Queue deliveries for matching observed signals">
-            <Button size="xs" variant="light" loading={pending === "notifications-queue"} onClick={onQueueNotifications}>
+            <Button size="xs" variant="light" loading={pending === "notifications-queue"} leftSection={<ListPlus size={14} aria-hidden="true" />} onClick={onQueueNotifications}>
               Queue
             </Button>
           </Tooltip>
           <Tooltip label="Check queued deliveries without external sends">
-            <Button size="xs" variant="light" loading={pending === "notifications-dispatch"} onClick={onDryRunDispatch}>
+            <Button size="xs" variant="light" loading={pending === "notifications-dispatch"} leftSection={<ShieldCheck size={14} aria-hidden="true" />} onClick={onDryRunDispatch}>
               Dry-run dispatch
             </Button>
           </Tooltip>
+          <Tooltip label="Send queued deliveries to enabled in-app, logging, and configured webhook channels">
+            <Button size="xs" color="orange" variant="light" loading={pending === "notifications-send"} leftSection={<Send size={14} aria-hidden="true" />} onClick={onSendDispatch}>
+              Send queued
+            </Button>
+          </Tooltip>
           <Tooltip label="Queue and dry-run dispatch">
-            <Button size="xs" variant="light" loading={pending === "notifications-refresh"} onClick={onRefreshNotifications}>
+            <Button size="xs" variant="light" loading={pending === "notifications-refresh"} leftSection={<RefreshCw size={14} aria-hidden="true" />} onClick={onRefreshNotifications}>
               Refresh
             </Button>
           </Tooltip>
         </Group>
+
+        <Text size="sm" c="dimmed">
+          In-app and logging channels are normal local delivery. Missing webhook URLs only block webhook send attempts; dry-run remains the default.
+        </Text>
 
         <Stack gap="sm">
           <Group justify="space-between">
@@ -411,4 +427,15 @@ export function NotificationsSettingsCard({
       </Stack>
     </Card>
   );
+}
+
+function hasWebhookDestination(channel: NotificationChannel): boolean {
+  if (channel.type !== "webhook") {
+    return false;
+  }
+  if (channel.secretRef) {
+    return true;
+  }
+  const url = channel.config.url;
+  return typeof url === "string" && url.trim() !== "" && url !== "[not configured]";
 }

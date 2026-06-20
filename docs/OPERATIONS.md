@@ -38,6 +38,12 @@ Notes:
 - Secret settings are write-only and masked; never expect the UI or API to echo
   mail source credentials, Juno passwords, OIDC client secrets, webhook URLs,
   cookies, or auth headers.
+- Rotate SSO client secrets by changing the upstream identity provider secret,
+  then saving the new value in Settings Center. Blank edit fields keep the
+  existing saved secret.
+- Treat Postgres backups as secret-bearing backups. Encrypt them, restrict
+  restore access, and restore any runtime `secret_ref` values before starting
+  notification dispatch or SSO flows.
 
 Never put credentials, cookies, auth headers, webhook URLs, or raw XLSX contents
 in logs or public issue text.

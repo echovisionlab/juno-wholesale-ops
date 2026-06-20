@@ -5,7 +5,7 @@ import { Alert, Box, Button, Card, Container, Group, Stack, Tabs, Text, Title } 
 import { AlertTriangle } from "lucide-react";
 import type { SettingsGroup, SettingsGroupId, SettingsResponse } from "@/lib/settings/descriptors";
 import type { NotificationChannel, NotificationRule } from "@/lib/notifications/types";
-import { AuthAccessCards, AuthProviderCard } from "./auth-section";
+import { AuthAccessCards, AuthProviderCard, AuthSecretPolicyCard } from "./auth-section";
 import { JunoLiveSessionCard } from "./juno-live-section";
 import { MailSourcesCard } from "./mail-sources-section";
 import { NotificationsSettingsCard } from "./notifications-section";
@@ -115,6 +115,7 @@ export function SettingsCenter({
                         {groupId === "auth" ? (
                           <>
                             <AuthAccessCards settings={settings} />
+                            <AuthSecretPolicyCard />
                             <AuthProviderCard
                               settings={settings}
                               draft={ssoProviders.draft}
@@ -188,6 +189,7 @@ export function SettingsCenter({
                             onToggleRule={(id, enabled) => void notificationsState.toggleRule(id, enabled)}
                             onQueueNotifications={() => void notificationsState.queueNotifications()}
                             onDryRunDispatch={() => void notificationsState.dryRunDispatch()}
+                            onSendDispatch={() => void notificationsState.sendDispatch()}
                             onRefreshNotifications={() => void notificationsState.refreshNotifications()}
                           />
                         ) : null}

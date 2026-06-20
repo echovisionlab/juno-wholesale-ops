@@ -5,7 +5,7 @@ import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailProvider, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { MailSourceDraft, MailSourceTestState } from "./settings-types";
-import { attachmentStorageBackendOptions, gmailReadonlyScope, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
+import { attachmentStorageBackendOptions, gmailReadonlyScope, implementedMailProviderOptions, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
 import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend, unitStatusColor } from "./settings-utils";
 
@@ -89,7 +89,14 @@ export function MailSourcesCard({
                       <Text fw={600}>{source.displayName ?? source.mailboxAddress}</Text>
                       <Text size="xs" c="dimmed">{source.mailboxAddress}</Text>
                     </Table.Td>
-                    <Table.Td>{formatMailProvider(source.provider)}</Table.Td>
+                    <Table.Td>
+                      <Stack gap={4}>
+                        <Text size="sm">{formatMailProvider(source.provider)}</Text>
+                        <Badge color={getMailProviderDescriptor(source.provider).implemented ? "green" : "gray"} variant="light" size="xs">
+                          {getMailProviderDescriptor(source.provider).implemented ? "implemented" : "planned"}
+                        </Badge>
+                      </Stack>
+                    </Table.Td>
                     <Table.Td>{formatMailAuthType(source.authType)}</Table.Td>
                     <Table.Td>
                       <Badge color={source.credentialConfigured ? "green" : "red"} variant="light" size="xs">
@@ -138,7 +145,7 @@ export function MailSourcesCard({
               <ResponsiveGrid minWidth={240} gap="sm">
                 <Select
                   label="Provider adapter"
-                  description="Only implemented providers can be selected."
+                  description="Gmail Workspace is implemented; planned providers are visible but disabled."
                   value={draft.provider}
                   data={mailProviderOptions}
                   allowDeselect={false}
@@ -156,6 +163,14 @@ export function MailSourcesCard({
                   onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
                 />
               </ResponsiveGrid>
+              <Group gap="xs">
+                <Text size="xs" c="dimmed">Implemented</Text>
+                {implementedMailProviderOptions.map((provider) => (
+                  <Badge key={provider} color="green" variant="light" size="xs">
+                    {provider}
+                  </Badge>
+                ))}
+              </Group>
               <Group gap="xs">
                 <Text size="xs" c="dimmed">Planned</Text>
                 {plannedMailProviderOptions.map((provider) => (

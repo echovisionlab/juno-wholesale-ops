@@ -75,17 +75,53 @@ describe("LoginForm", () => {
     });
     expect(navigateTo).toHaveBeenCalledWith("https://login.example.test/authorize");
   });
+
+  it("hides the email/password form when local login is disabled", async () => {
+    await renderLoginForm(null, [
+      {
+        providerId: "workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: null,
+      },
+      {
+        providerId: "entra",
+        buttonLabel: "Sign in with Entra ID",
+        logoUrl: null,
+      },
+    ], undefined, false);
+
+    expect(pageText()).toContain("Sign in with Workspace");
+    expect(pageText()).toContain("Sign in with Entra ID");
+    expect(labelText()).not.toContain("Email");
+    expect(labelText()).not.toContain("Password");
+  });
+
+  it("shows login method unavailable when no auth methods are ready", async () => {
+    await renderLoginForm(null, [], undefined, false);
+
+    expect(pageText()).toContain("No sign-in methods available");
+    expect(pageText()).toContain("Email/password login is disabled and no ready SSO provider is configured.");
+    expect(labelText()).not.toContain("Email");
+    expect(labelText()).not.toContain("Password");
+  });
 });
 
 async function renderLoginForm(
   loginLogoUrl: string | null = null,
   externalProviders: ComponentProps<typeof LoginForm>["externalProviders"] = [],
   navigateTo?: ComponentProps<typeof LoginForm>["navigateTo"],
+  emailPasswordLoginEnabled = true,
 ): Promise<void> {
   await act(async () => {
     root.render(
       <MantineProvider defaultColorScheme="light" theme={theme}>
-        <LoginForm redirectTo="/" loginLogoUrl={loginLogoUrl} externalProviders={externalProviders} navigateTo={navigateTo} />
+        <LoginForm
+          redirectTo="/"
+          loginLogoUrl={loginLogoUrl}
+          emailPasswordLoginEnabled={emailPasswordLoginEnabled}
+          externalProviders={externalProviders}
+          navigateTo={navigateTo}
+        />
       </MantineProvider>,
     );
   });
@@ -110,6 +146,12 @@ function jsonResponse(value: unknown): Response {
 
 function pageText(): string {
   return document.body.textContent ?? "";
+}
+
+function labelText(): string {
+  return Array.from(document.querySelectorAll("label"))
+    .map((label) => label.textContent ?? "")
+    .join("\n");
 }
 
 function setReactActEnvironment(): void {

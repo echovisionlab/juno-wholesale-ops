@@ -24,11 +24,13 @@ export type LoginExternalProvider = {
 export function LoginForm({
   redirectTo,
   loginLogoUrl = null,
+  emailPasswordLoginEnabled = true,
   externalProviders = [],
   navigateTo = (url) => window.location.assign(url),
 }: {
   redirectTo: string;
   loginLogoUrl?: string | null;
+  emailPasswordLoginEnabled?: boolean;
   externalProviders?: LoginExternalProvider[];
   navigateTo?: (url: string) => void;
 }) {
@@ -37,6 +39,8 @@ export function LoginForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   const [externalPending, setExternalPending] = useState(false);
+  const hasExternalProviders = externalProviders.length > 0;
+  const loginUnavailable = !emailPasswordLoginEnabled && !hasExternalProviders;
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -97,65 +101,75 @@ export function LoginForm({
 
   return (
     <Card maw={420} w="100%" shadow="sm">
-      <form onSubmit={submit}>
-        <Stack>
-          <Stack gap={4} align={loginLogoUrl ? "center" : undefined}>
-            {loginLogoUrl ? (
-              <Image src={loginLogoUrl} alt="Sign in" fit="contain" h={64} maw={240} />
-            ) : (
-              <Title order={1} size="h2">
-                Sign in
-              </Title>
-            )}
-            <Text size="sm" c="dimmed" ta={loginLogoUrl ? "center" : undefined}>
-              Use an administrator account to access the catalog dashboard.
-            </Text>
-          </Stack>
-
-          {error ? (
-            <Alert color="red" variant="light">
-              {error}
-            </Alert>
-          ) : null}
-
-          {externalProviders.length > 0 ? (
-            <>
-              {externalProviders.map((externalProvider) => (
-                <Button
-                  key={externalProvider.providerId}
-                  type="button"
-                  variant="light"
-                  loading={externalPending}
-                  leftSection={externalProvider.logoUrl ? <Image src={externalProvider.logoUrl} alt="" fit="contain" w={18} h={18} /> : <LogIn size={16} aria-hidden="true" />}
-                  onClick={() => void startExternalSignIn(externalProvider)}
-                >
-                  {externalProvider.buttonLabel}
-                </Button>
-              ))}
-              <Divider label="or" labelPosition="center" />
-            </>
-          ) : null}
-
-          <TextInput
-            label="Email"
-            type="email"
-            autoComplete="email"
-            value={email}
-            required
-            onChange={(event) => setEmail(event.currentTarget.value)}
-          />
-          <PasswordInput
-            label="Password"
-            autoComplete="current-password"
-            value={password}
-            required
-            onChange={(event) => setPassword(event.currentTarget.value)}
-          />
-          <Button type="submit" loading={pending} leftSection={<LogIn size={16} aria-hidden="true" />}>
-            Sign in
-          </Button>
+      <Stack>
+        <Stack gap={4} align={loginLogoUrl ? "center" : undefined}>
+          {loginLogoUrl ? (
+            <Image src={loginLogoUrl} alt="Sign in" fit="contain" h={64} maw={240} />
+          ) : (
+            <Title order={1} size="h2">
+              Sign in
+            </Title>
+          )}
+          <Text size="sm" c="dimmed" ta={loginLogoUrl ? "center" : undefined}>
+            Use an administrator account to access the catalog dashboard.
+          </Text>
         </Stack>
-      </form>
+
+        {error ? (
+          <Alert color="red" variant="light">
+            {error}
+          </Alert>
+        ) : null}
+
+        {loginUnavailable ? (
+          <Alert color="yellow" variant="light" title="No sign-in methods available">
+            Email/password login is disabled and no ready SSO provider is configured.
+          </Alert>
+        ) : null}
+
+        {hasExternalProviders ? (
+          <>
+            {externalProviders.map((externalProvider) => (
+              <Button
+                key={externalProvider.providerId}
+                type="button"
+                variant="light"
+                loading={externalPending}
+                leftSection={externalProvider.logoUrl ? <Image src={externalProvider.logoUrl} alt="" fit="contain" w={18} h={18} /> : <LogIn size={16} aria-hidden="true" />}
+                onClick={() => void startExternalSignIn(externalProvider)}
+              >
+                {externalProvider.buttonLabel}
+              </Button>
+            ))}
+            {emailPasswordLoginEnabled ? <Divider label="or" labelPosition="center" /> : null}
+          </>
+        ) : null}
+
+        {emailPasswordLoginEnabled ? (
+          <form onSubmit={submit}>
+            <Stack>
+              <TextInput
+                label="Email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                required
+                onChange={(event) => setEmail(event.currentTarget.value)}
+              />
+              <PasswordInput
+                label="Password"
+                autoComplete="current-password"
+                value={password}
+                required
+                onChange={(event) => setPassword(event.currentTarget.value)}
+              />
+              <Button type="submit" loading={pending} leftSection={<LogIn size={16} aria-hidden="true" />}>
+                Sign in
+              </Button>
+            </Stack>
+          </form>
+        ) : null}
+      </Stack>
     </Card>
   );
 }

@@ -7,6 +7,7 @@ const meta = {
   args: {
     redirectTo: "/",
     loginLogoUrl: null,
+    emailPasswordLoginEnabled: true,
     externalProviders: [],
   },
 } satisfies Meta<typeof LoginForm>;
@@ -26,5 +27,30 @@ export const WithExternalProvider: Story = {
         logoUrl: null,
       },
     ],
+  },
+};
+
+export const SsoOnly: Story = {
+  args: {
+    emailPasswordLoginEnabled: false,
+    externalProviders: [
+      {
+        providerId: "workspace",
+        buttonLabel: "Sign in with Workspace",
+        logoUrl: null,
+      },
+      {
+        providerId: "entra",
+        buttonLabel: "Sign in with Entra ID",
+        logoUrl: null,
+      },
+    ],
+  },
+};
+
+export const MethodsUnavailable: Story = {
+  args: {
+    emailPasswordLoginEnabled: false,
+    externalProviders: [],
   },
 };
