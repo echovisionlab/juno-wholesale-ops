@@ -3,11 +3,18 @@
 This roadmap keeps the project focused on read-only catalog intelligence. Items
 may move only when they preserve the documented project boundaries.
 
-## v0.2.0 Candidates
+## Next Operational Candidates
 
-The next milestone is intentionally small and operational. Each candidate keeps
-the read-only boundary unchanged and must not add ordering, cart, wishlist,
-checkout, Juno account mutation, or sales-volume inference behavior.
+The next work queue is intentionally small and operational. Versions are not
+planned manually here. Each merged PR uses a semantic Conventional Commit title,
+and Release Please decides the next release from the manifest and changelog
+configuration.
+
+Each candidate keeps the read-only boundary unchanged and must not add ordering,
+cart, wishlist, checkout, Juno account mutation, or sales-volume inference
+behavior.
+
+Storybook remains on port `6008`.
 
 ### Supplier adapter docs/examples
 
@@ -65,6 +72,31 @@ Issue: [#6](https://github.com/echovisionlab/juno-wholesale-ops/issues/6)
   formats, and missing Juno ID fallback identity cases.
 - Never publish real Juno wholesale XLSX, artists, labels, barcodes, catalog
   numbers, pricesheets, credentials, or email payloads.
+
+### Mail source provider setup
+
+Issue: [#44](https://github.com/echovisionlab/juno-wholesale-ops/issues/44)
+
+- Move Mail Sources to provider-based setup while keeping Gmail Workspace as the
+  only implemented provider.
+- Require a successful read-only connection test before saving a runnable source.
+- Keep Gmail Workspace scopes fixed and non-editable.
+
+### Notification operations UX
+
+Issue: [#45](https://github.com/echovisionlab/juno-wholesale-ops/issues/45)
+
+- Make channel, rule, queue, and dispatch flows clear for operators.
+- Add provider-specific notification formatting while keeping dry-run defaults.
+- Keep webhook URLs, tokens, auth headers, and secrets masked.
+
+### Storybook coverage
+
+Issue: [#43](https://github.com/echovisionlab/juno-wholesale-ops/issues/43)
+
+- Add stories for Settings Center sections, dialogs, and important dashboard
+  states.
+- Keep Storybook on port `6008`.
 
 ## Later
 
