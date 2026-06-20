@@ -158,14 +158,29 @@ describe("mail source repository", () => {
         attachmentPattern: "xlsx",
         supplierCode: "juno",
       }),
-    ).rejects.toThrow("Gmail mail sources require Google Workspace delegation");
+    ).rejects.toThrow("Gmail Workspace mail sources require google_workspace_delegation auth and google_service_account_json credentials");
+
+    await expect(
+      createMailboxSource(databaseUrl, {
+        name: "Unsupported IMAP",
+        provider: "imap",
+        authType: "basic",
+        credentialType: "password",
+        credentialSecret: "password",
+        mailboxAddress: "ops@example.com",
+        query: "filename:xlsx",
+        storageDir: ".data/mail",
+        attachmentPattern: "xlsx",
+        supplierCode: "juno",
+      }),
+    ).rejects.toThrow("IMAP mail source adapter is not implemented");
 
     await expect(
       createMailboxSource(databaseUrl, {
         name: "Missing credential",
-        provider: "imap",
-        authType: "basic",
-        credentialType: "password",
+        provider: "gmail",
+        authType: "google_workspace_delegation",
+        credentialType: "google_service_account_json",
         mailboxAddress: "ops@example.com",
         query: "filename:xlsx",
         storageDir: ".data/mail",

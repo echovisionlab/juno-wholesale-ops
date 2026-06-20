@@ -1,5 +1,6 @@
 import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
-import type { MailAuthType, MailProvider, MailboxSourceInput, MailboxSourcePatch, PublicMailboxSource } from "@/lib/ingest/mail-source";
+import type { MailAuthType, MailCredentialType, MailProvider, MailboxSourceInput, MailboxSourcePatch, PublicMailboxSource } from "@/lib/ingest/mail-source";
+import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType } from "@/lib/insights/repository";
@@ -7,9 +8,8 @@ import type { NotificationChannel, NotificationChannelInput, NotificationChannel
 import type { MailSourceDraft, NotificationChannelDraft, NotificationRuleDraft, SsoProviderDraft, SsoProviderPreset } from "./settings-types";
 import {
   attachmentStorageBackendOptions,
-  gmailReadonlyScope,
   mailAuthTypeOptions,
-  mailProviderOptions,
+  mailCredentialTypeOptions,
   notificationSignalTypeOptions,
   ssoProviderPresetOptions,
 } from "./settings-options";
@@ -57,11 +57,15 @@ export function presetLabel(value: string): string {
 }
 
 export function formatMailProvider(provider: MailProvider): string {
-  return mailProviderOptions.find((option) => option.value === provider)?.label.replace(" (adapter pending)", "") ?? provider;
+  return getMailProviderDescriptor(provider).label;
 }
 
 export function formatMailAuthType(authType: MailAuthType): string {
   return mailAuthTypeOptions.find((option) => option.value === authType)?.label ?? authType;
+}
+
+export function formatMailCredentialType(credentialType: MailCredentialType): string {
+  return mailCredentialTypeOptions.find((option) => option.value === credentialType)?.label ?? credentialType;
 }
 
 export function formatStorageBackend(backend: AttachmentStorageBackend): string {
@@ -108,48 +112,26 @@ export function mailSourceToDraft(source: PublicMailboxSource): MailSourceDraft 
 }
 
 export function applyMailProviderPreset(draft: MailSourceDraft, provider: MailProvider): MailSourceDraft {
-  if (provider === "gmail") {
-    return {
-      ...draft,
-      provider,
-      authType: "google_workspace_delegation",
-      credentialType: "google_service_account_json",
-      scopes: gmailReadonlyScope,
-    };
-  }
-  if (provider === "imap") {
-    return {
-      ...draft,
-      provider,
-      authType: "basic",
-      credentialType: "password",
-    };
-  }
-  if (provider === "microsoft_graph") {
-    return {
-      ...draft,
-      provider,
-      authType: "oauth2",
-      credentialType: "oauth_client_secret",
-    };
-  }
+  const descriptor = getMailProviderDescriptor(provider);
   return {
     ...draft,
     provider,
-    authType: "api_token",
-    credentialType: "api_token",
+    authType: descriptor.authType,
+    credentialType: descriptor.credentialType,
+    scopes: descriptor.fixedScopes ?? draft.scopes,
   };
 }
 
 export function mailSourcePayload(draft: MailSourceDraft, editing: boolean): MailboxSourceInput | MailboxSourcePatch {
+  const provider = getMailProviderDescriptor(draft.provider);
   const payload: MailboxSourceInput | MailboxSourcePatch = {
     ...(editing && draft.id ? { id: draft.id } : {}),
     name: draft.name,
     provider: draft.provider,
-    authType: draft.authType,
-    credentialType: draft.credentialType,
+    authType: provider.authType,
+    credentialType: provider.credentialType,
     credentialSecret: draft.credentialSecret,
-    scopes: draft.provider === "gmail" ? gmailReadonlyScope : draft.scopes,
+    scopes: provider.fixedScopes ?? draft.scopes,
     mailboxAddress: draft.mailboxAddress,
     displayName: draft.displayName,
     providerMailboxId: draft.providerMailboxId,

@@ -1,4 +1,5 @@
 import type { MailAuthType, MailCredentialType, MailProvider } from "@/lib/ingest/mail-source";
+import { mailProviderRegistry } from "@/lib/ingest/mail-provider-registry";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type { NotificationChannelType } from "@/lib/notifications/types";
@@ -41,12 +42,15 @@ export const emptyMailSourceDraft: MailSourceDraft = {
   isActive: true,
 };
 
-export const mailProviderOptions: Array<{ value: MailProvider; label: string }> = [
-  { value: "gmail", label: "Gmail Workspace" },
-  { value: "imap", label: "IMAP (adapter pending)" },
-  { value: "microsoft_graph", label: "Microsoft Graph (adapter pending)" },
-  { value: "generic", label: "Generic mailbox (adapter pending)" },
-];
+export const mailProviderOptions: Array<{ value: MailProvider; label: string; disabled?: boolean }> = mailProviderRegistry.map((provider) => ({
+  value: provider.provider,
+  label: provider.label,
+  disabled: !provider.implemented,
+})).filter((provider) => !provider.disabled);
+
+export const plannedMailProviderOptions = mailProviderRegistry
+  .filter((provider) => !provider.implemented)
+  .map((provider) => `${provider.label} (planned)`);
 
 export const mailAuthTypeOptions: Array<{ value: MailAuthType; label: string }> = [
   { value: "google_workspace_delegation", label: "Google Workspace delegation" },
