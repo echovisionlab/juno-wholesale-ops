@@ -104,7 +104,6 @@ export function useNotificationSettingsController({
       }
       await loadResources();
       closeChannelModal();
-      notifications.show({ color: "green", title: editing ? "Channel updated" : "Channel created", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -127,7 +126,6 @@ export function useNotificationSettingsController({
         return;
       }
       await loadResources();
-      notifications.show({ color: "green", title: enabled ? "Channel enabled" : "Channel disabled", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -150,7 +148,6 @@ export function useNotificationSettingsController({
         return;
       }
       await loadResources();
-      notifications.show({ color: "green", title: "Channel deleted", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -195,7 +192,6 @@ export function useNotificationSettingsController({
       }
       await loadResources();
       closeRuleModal();
-      notifications.show({ color: "green", title: editing ? "Rule updated" : "Rule created", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -218,7 +214,6 @@ export function useNotificationSettingsController({
         return;
       }
       await loadResources();
-      notifications.show({ color: "green", title: enabled ? "Rule enabled" : "Rule disabled", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -241,7 +236,6 @@ export function useNotificationSettingsController({
         return;
       }
       await loadResources();
-      notifications.show({ color: "green", title: "Rule deleted", message: "Saved" });
     } finally {
       setPending(null);
     }

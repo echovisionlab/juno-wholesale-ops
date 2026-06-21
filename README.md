@@ -119,13 +119,20 @@ mkdir -p .data/cloudflared
 cp infra/cloudflared/dev.template.yml .data/cloudflared/config.yml
 # Fill .data/cloudflared/config.yml with your local tunnel id and hostname.
 # Keep .data/cloudflared/credentials.json private.
-pnpm tunnel:dev:up
+# terminal 1
 pnpm dev
+
+# terminal 2
+pnpm tunnel:dev:check
+pnpm tunnel:dev:up
+pnpm tunnel:dev:smoke
 ```
 
 The tunnel compose service is local-only and forwards the configured hostname
-to the host Next.js dev server on port `3006`. It is not used by production
-deployment files.
+to the host Next.js dev server on port `3006`; `compose/dev.yml` does not start
+the web app. If the public hostname returns `502`, first confirm `pnpm dev` is
+still serving `http://127.0.0.1:3006/api/health`. This tunnel is not used by
+production deployment files.
 
 ## Synthetic fixture seed
 

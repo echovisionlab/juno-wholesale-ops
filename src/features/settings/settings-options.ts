@@ -50,10 +50,18 @@ export const emptyMailSourceDraft: MailSourceDraft = {
   isActive: true,
 };
 
-export const mailProviderOptions: Array<{ value: MailProvider; label: string; disabled?: boolean }> = mailProviderRegistry.map((provider) => ({
+export const mailProviderOptions: Array<{ value: MailProvider; label: string }> = mailProviderRegistry
+  .filter((provider) => provider.implemented)
+  .map((provider) => ({
+    value: provider.provider,
+    label: provider.label,
+  }));
+
+export const plannedMailProviderOptions: Array<{ value: MailProvider; label: string }> = mailProviderRegistry
+  .filter((provider) => !provider.implemented)
+  .map((provider) => ({
   value: provider.provider,
-  label: provider.implemented ? provider.label : `${provider.label} (planned)`,
-  disabled: !provider.implemented,
+  label: `${provider.label} (planned)`,
 }));
 
 export const mailAuthTypeOptions: Array<{ value: MailAuthType; label: string }> = [

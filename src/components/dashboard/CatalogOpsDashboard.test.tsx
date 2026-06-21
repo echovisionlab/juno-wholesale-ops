@@ -5,7 +5,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { theme } from "@/theme";
-import { dashboardPanelLayoutStorageKey, optionalDashboardPanelDefinitions } from "@/lib/dashboard/panel-layout";
+import {
+  dashboardPanelLayoutStorageKey,
+  getDashboardPanelDefinition,
+  optionalDashboardPanelDefinitions,
+} from "@/lib/dashboard/panel-layout";
 import {
   CatalogOpsDashboard,
   dashboardOptionalPanelRenderRegistry,
@@ -52,6 +56,13 @@ describe("CatalogOpsDashboard", () => {
     expect(dashboardOptionalPanelRenderRegistry.map((panel) => panel.id)).toEqual(
       optionalDashboardPanelDefinitions.map((definition) => definition.id),
     );
+    for (const panelId of ["todaySignals", "movementSignals", "operatorDigest", "catalogTrends"] as const) {
+      expect(getDashboardPanelDefinition(panelId).explanation).toEqual({
+        dataSource: expect.any(String),
+        calculation: expect.any(String),
+        expectation: expect.any(String),
+      });
+    }
   });
 
   it("renders unavailable setup, ingest, live stock, and worker states", () => {
@@ -90,6 +101,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
     expect(pageText()).toContain("Low observed stock");
     expect(pageText()).toContain("Movement Signals");
+    expect(pageText()).toContain("Data: Today signal events joined to catalog rows and watch-match reasons.");
     expect(pageText()).toContain("Observed stock change");
     expect(pageText()).toContain("Fast mover candidate");
     expect(pageText()).toContain("Catalog Trends");
@@ -384,12 +396,12 @@ describe("CatalogOpsDashboard", () => {
             ],
             guardrails: [
               {
-                label: "Review guardrail",
+                label: "Delay guardrail",
                 state: "warning",
                 detail: "needs review",
               },
               {
-                label: "Blocked guardrail",
+                label: "Safety guardrail",
                 state: "blocked",
                 detail: "blocked detail",
               },
@@ -419,9 +431,15 @@ describe("CatalogOpsDashboard", () => {
       },
     });
 
-    expect(pageText()).toContain("Configuration is usable");
-    expect(pageText()).toContain("Review");
-    expect(pageText()).toContain("Blocked");
+    expect(pageText()).not.toContain("Configuration is usable");
+    expect(pageText()).not.toContain("Review guardrail");
+    expect(pageText()).not.toContain("Blocked guardrail");
+    expect(pageText()).not.toContain("Delay guardrailneeds reviewReview");
+    expect(pageText()).not.toContain("Safety guardrailblocked detailBlocked");
+    expect(pageText()).toContain("Delay guardrail");
+    expect(pageText()).toContain("Check: needs review");
+    expect(pageText()).toContain("Safety guardrail");
+    expect(pageText()).toContain("Cannot proceed: blocked detail");
     expect(pageText()).toContain("Configure a runnable mailbox source in Settings.");
     expect(pageText()).toContain("last observed");
 
@@ -584,7 +602,11 @@ describe("CatalogOpsDashboard", () => {
       onWorkerAction,
     });
 
-    expect(pageText()).toContain("API status issue");
+    expect(pageText()).toContain("Dashboard data unavailable");
+    expect(pageText()).not.toContain("API status issue");
+    expect(pageText()).toContain("Access required (403) · /api/settings/status");
+    expect(pageText()).toContain("Server error (500) · /api/live-lookups/worker");
+    expect(pageText()).toContain("Route unavailable · /api/insights/digest");
     expect(pageText()).toContain("admin required");
     expect(pageText()).toContain("worker route failed");
     expect(pageText()).toContain("digest unavailable");

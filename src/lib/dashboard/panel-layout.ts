@@ -20,6 +20,11 @@ export type DashboardPanelDefinition = {
   id: DashboardPanelId;
   label: string;
   pinned?: boolean;
+  explanation?: {
+    dataSource: string;
+    calculation: string;
+    expectation: string;
+  };
 };
 
 export type DashboardPanelLayout = {
@@ -36,11 +41,43 @@ export const dashboardPanelDefinitions: DashboardPanelDefinition[] = [
   { id: "ingestionPipeline", label: "Ingestion pipeline" },
   { id: "commands", label: "Commands" },
   { id: "mailIngest", label: "Mail ingest state" },
-  { id: "todaySignals", label: "Today signals" },
+  {
+    id: "todaySignals",
+    label: "Today signals",
+    explanation: {
+      dataSource: "Today signal events joined to catalog rows and watch-match reasons.",
+      calculation: "Groups arrival, watch, low-stock, and exclude signals after the selected filters are applied.",
+      expectation: "Use this panel for same-day review queues, not historical demand claims.",
+    },
+  },
   { id: "watchRules", label: "Watch rules" },
-  { id: "movementSignals", label: "Movement signals" },
-  { id: "operatorDigest", label: "Operator digest" },
-  { id: "catalogTrends", label: "Catalog trends" },
+  {
+    id: "movementSignals",
+    label: "Movement signals",
+    explanation: {
+      dataSource: "Live observation comparisons from read-only catalog checks.",
+      calculation: "Highlights restocks, stock drops, low-stock states, price changes, and fast-mover proxy candidates.",
+      expectation: "Treat movement as an operational hint; confirm details before acting outside this app.",
+    },
+  },
+  {
+    id: "operatorDigest",
+    label: "Operator digest",
+    explanation: {
+      dataSource: "Today's signal counts combined with movement and trend summaries.",
+      calculation: "Rolls review-worthy signals into a compact operator handoff.",
+      expectation: "Use it to decide what to inspect next, not as an automated ordering recommendation.",
+    },
+  },
+  {
+    id: "catalogTrends",
+    label: "Catalog trends",
+    explanation: {
+      dataSource: "Current and previous catalog snapshot windows.",
+      calculation: "Compares genre, label, and watch-overlap buckets between snapshots.",
+      expectation: "Use trend direction as context for catalog review, not sales-volume evidence.",
+    },
+  },
   { id: "notificationCenter", label: "Notification center" },
   { id: "notificationRules", label: "Notification rules" },
   { id: "notificationChannels", label: "Notification channels" },

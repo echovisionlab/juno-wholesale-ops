@@ -112,7 +112,6 @@ export function useMailSourcesController({
       }
       await loadSettings();
       closeModal();
-      notifications.show({ color: "green", title: editing ? "Mail source updated" : "Mail source created", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -137,7 +136,6 @@ export function useMailSourcesController({
         return;
       }
       await loadSettings();
-      notifications.show({ color: "green", title: isActive ? "Mail source enabled" : "Mail source disabled", message: "Saved" });
     } finally {
       setPending(null);
     }

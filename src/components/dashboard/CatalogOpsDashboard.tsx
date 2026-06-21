@@ -67,10 +67,12 @@ import {
 import {
   dashboardPanelLayoutStorageKey,
   defaultDashboardPanelLayout,
+  getDashboardPanelDefinition,
   isDashboardPanelVisible,
   readDashboardPanelLayout,
   setVisibleOptionalDashboardPanels,
   type DashboardPanelId,
+  type DashboardPanelDefinition,
   type DashboardPanelLayout,
 } from "@/lib/dashboard/panel-layout";
 import type {
@@ -225,9 +227,11 @@ export function CatalogOpsDashboard({
     if (!panelVisible(panel.id)) {
       return null;
     }
+    const definition = getDashboardPanelDefinition(panel.id);
     return (
       <Grid.Col key={panel.id} span={panel.span}>
         {panel.title && panel.icon ? <SectionHeader icon={panel.icon}>{panel.title}</SectionHeader> : null}
+        {definition.explanation ? <PanelExplanation explanation={definition.explanation} /> : null}
         {renderOptionalPanelBody(panel.id)}
       </Grid.Col>
     );
@@ -1165,15 +1169,11 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
 
   return (
     <Stack gap="sm">
-      <Alert
-        color={setupStatus?.ready ? "green" : "red"}
-        icon={setupStatus?.ready ? <CheckCircle2 size={18} aria-hidden="true" /> : <AlertTriangle size={18} aria-hidden="true" />}
-        title={setupStatus?.ready ? "Configuration is usable" : "Configuration action required"}
-      >
-        {setupStatus?.ready
-          ? "Required settings are present. Review warnings before enabling unattended automation."
-          : "One or more required settings are missing or unsafe. The affected feature should remain disabled until fixed."}
-      </Alert>
+      {setupStatus?.ready === false ? (
+        <Alert color="red" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Configuration action required">
+          One or more required settings are missing or unsafe. The affected feature should remain disabled until fixed.
+        </Alert>
+      ) : null}
       <SimpleGrid cols={{ base: 1, lg: 2 }} spacing="sm">
         {steps.map((step) => (
           <SetupStepCard key={step.id} step={step} />
@@ -1185,22 +1185,24 @@ function SetupChecklist({ setupStatus }: { setupStatus?: AppSetupStatus | null }
 
 function ApiIssuePanel({ issues }: { issues: DashboardResourceIssue[] }) {
   return (
-    <Alert color="yellow" icon={<AlertTriangle size={18} aria-hidden="true" />} title="API status issue">
+    <Alert color="yellow" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Dashboard data unavailable">
       <Stack gap="xs">
         {issues.map((issue) => (
-          <Group key={`${issue.endpoint}-${issue.status}`} justify="space-between" align="flex-start" gap="sm">
+          <Box key={`${issue.endpoint}-${issue.status}`}>
             <Stack gap={2}>
-              <Text size="sm" fw={700}>
-                {issue.label}
-              </Text>
+              <Group gap="xs" align="baseline">
+                <Text size="sm" fw={700}>
+                  {issue.label}
+                </Text>
+                <Text size="xs" c={apiIssueTriageColor(issue.status)}>
+                  {apiIssueTriage(issue)}
+                </Text>
+              </Group>
               <Text size="sm" c="dimmed">
                 {issue.message}
               </Text>
             </Stack>
-            <Text size="sm" c={apiIssueColor(issue.status)}>
-              {issue.httpStatus ?? issue.status}
-            </Text>
-          </Group>
+          </Box>
         ))}
         <Button component="a" href="/settings" size="xs" variant="light">
           Review Settings Center
@@ -1210,14 +1212,29 @@ function ApiIssuePanel({ issues }: { issues: DashboardResourceIssue[] }) {
   );
 }
 
-function apiIssueColor(status: DashboardResourceIssue["status"]): string {
+function apiIssueTriage(issue: DashboardResourceIssue): string {
+  const status = issue.httpStatus ? ` (${issue.httpStatus})` : "";
+  return `${apiIssueTriageLabel(issue.status)}${status} · ${issue.endpoint}`;
+}
+
+function apiIssueTriageLabel(status: DashboardResourceIssue["status"]): string {
   if (status === "unauthorized" || status === "forbidden") {
-    return "red";
+    return "Access required";
   }
   if (status === "server_error") {
-    return "orange";
+    return "Server error";
   }
-  return "yellow";
+  return "Route unavailable";
+}
+
+function apiIssueTriageColor(status: DashboardResourceIssue["status"]): string {
+  if (status === "unauthorized" || status === "forbidden") {
+    return "red.7";
+  }
+  if (status === "server_error") {
+    return "orange.8";
+  }
+  return "yellow.8";
 }
 
 function SetupStepCard({ step }: { step: SetupStep }) {
@@ -1264,34 +1281,47 @@ function SetupStepCard({ step }: { step: SetupStep }) {
 }
 
 function SetupGuardrailRow({ guardrail }: { guardrail: SetupGuardrail }) {
-  const presentation = setupGuardrailPresentation(guardrail);
+  const detailColor = setupGuardrailDetailColor(guardrail);
   return (
     <Box>
-      <Group justify="space-between" gap="xs" align="flex-start">
-        <Stack gap={2}>
-          <Text size="sm" fw={600}>
-            {guardrail.label}
-          </Text>
-          <Text size="sm" c="dimmed">
-            {guardrail.detail}
-          </Text>
-        </Stack>
-        <Text size="sm" c={presentation.color}>
-          {presentation.label}
+      <Stack gap={2}>
+        <Text size="sm" fw={600}>
+          {guardrail.label}
         </Text>
-      </Group>
+        <Text size="sm" c={detailColor}>
+          {setupGuardrailDetail(guardrail)}
+        </Text>
+      </Stack>
     </Box>
   );
 }
 
-function setupGuardrailPresentation(guardrail: SetupGuardrail): { label: string; color: string } {
-  if (guardrail.state === "ok") {
-    return { label: "OK", color: "green" };
-  }
+function setupGuardrailDetail(guardrail: SetupGuardrail): string {
   if (guardrail.state === "warning") {
-    return { label: "Review", color: "yellow" };
+    return `Check: ${guardrail.detail}`;
   }
-  return { label: "Blocked", color: "red" };
+  if (guardrail.state === "blocked") {
+    return `Cannot proceed: ${guardrail.detail}`;
+  }
+  return guardrail.detail;
+}
+
+function setupGuardrailDetailColor(guardrail: SetupGuardrail): string {
+  if (guardrail.state === "warning") {
+    return "yellow.8";
+  }
+  if (guardrail.state === "blocked") {
+    return "red.7";
+  }
+  return "dimmed";
+}
+
+function PanelExplanation({ explanation }: { explanation: NonNullable<DashboardPanelDefinition["explanation"]> }) {
+  return (
+    <Text size="sm" c="dimmed" mb="sm">
+      Data: {explanation.dataSource} Calculation: {explanation.calculation} Expectation: {explanation.expectation}
+    </Text>
+  );
 }
 
 function formatObservedAt(value: string | null | undefined): string {
