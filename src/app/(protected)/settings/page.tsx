@@ -1,5 +1,4 @@
 import { SettingsCenter } from "@/features/settings/SettingsCenter";
-import { requireAdmin } from "@/lib/auth/admin";
 import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { listMailboxSources, redactMailboxSource } from "@/lib/ingest/mail-source";
@@ -7,7 +6,6 @@ import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/reposi
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import { getRequestOrigin } from "@/lib/http/request-origin";
 
 export const dynamic = "force-dynamic";
@@ -70,13 +68,6 @@ function settingsCenterKey(initial: { settings: SettingsResponse | null; error: 
 
 async function loadInitialSettings(): Promise<{ settings: SettingsResponse | null; error: string | null }> {
   const requestHeaders = await headers();
-  const authorization = await requireAdmin(new Request("http://localhost/settings", { headers: requestHeaders }));
-  if (!authorization.authorized) {
-    if (authorization.response.status === 401) {
-      redirect(buildLoginRedirectPath(new Request("http://localhost/settings", { headers: requestHeaders })));
-    }
-    return { settings: null, error: await describeAuthorizationFailure(authorization.response) };
-  }
 
   try {
     const databaseUrl = getDatabaseUrl();
@@ -102,27 +93,6 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
   } catch (error: unknown) {
     return { settings: null, error: safeInitialSettingsError(error) };
   }
-}
-
-function buildLoginRedirectPath(request: Request): string {
-  const targetUrl = new URL("/settings", getRequestOrigin(request));
-  const loginUrl = new URL("/login", targetUrl);
-  loginUrl.searchParams.set("redirect", targetUrl.toString());
-  return `${loginUrl.pathname}${loginUrl.search}`;
-}
-
-async function describeAuthorizationFailure(response: Response): Promise<string> {
-  const payload = (await response.clone().json().catch(() => ({}))) as { error?: string; missing?: string[] };
-  if (response.status === 401) {
-    return "Authentication is required before Settings Center can load operator configuration.";
-  }
-  if (response.status === 403) {
-    return "Admin access is required before Settings Center can load operator configuration.";
-  }
-  if (payload.error === "auth_unavailable") {
-    return `Auth is enabled but unavailable. Missing: ${payload.missing?.join(", ") || "required auth settings"}.`;
-  }
-  return payload.error ?? `Settings authorization failed with HTTP ${response.status}.`;
 }
 
 function safeInitialSettingsError(error: unknown): string {

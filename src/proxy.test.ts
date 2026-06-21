@@ -32,6 +32,9 @@ describe("proxy optimistic auth redirect", () => {
     );
 
     expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-middleware-request-x-juno-wholesale-ops-request-url")).toBe(
+      "https://inventory.dsub.io/",
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 
@@ -43,6 +46,9 @@ describe("proxy optimistic auth redirect", () => {
     );
 
     expect(response.headers.get("x-middleware-next")).toBe("1");
+    expect(response.headers.get("x-middleware-request-x-juno-wholesale-ops-request-url")).toBe(
+      "https://inventory.dsub.io/settings",
+    );
     expect(fetch).not.toHaveBeenCalled();
   });
 
