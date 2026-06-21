@@ -89,7 +89,6 @@ export function useSettingsResource({
         }
         return next;
       });
-      notifications.show({ color: "green", title: "Settings saved", message: group.label });
     } finally {
       setSavingGroup(null);
     }

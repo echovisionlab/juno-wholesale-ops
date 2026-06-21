@@ -68,7 +68,6 @@ export function useSsoProviderController({
       }
       setSettings(result.settings);
       closeModal();
-      notifications.show({ color: "green", title: editing ? "Provider updated" : "Provider created", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -98,7 +97,6 @@ export function useSsoProviderController({
         return;
       }
       setSettings(result.settings);
-      notifications.show({ color: "green", title: enabled ? "Provider enabled" : "Provider disabled", message: "Saved" });
     } finally {
       setPending(null);
     }
@@ -127,7 +125,6 @@ export function useSsoProviderController({
       if (editingId === id) {
         resetDraft();
       }
-      notifications.show({ color: "green", title: "Provider deleted", message: "Saved" });
     } finally {
       setPending(null);
     }

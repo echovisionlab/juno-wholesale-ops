@@ -49,6 +49,11 @@ type InsightPanel = {
 Dashboard saved views currently persist signal filters only. Do not store panel layout inside `DashboardSignalFilters`.
 
 Panel show/hide behavior is controlled by the dashboard panel registry in `src/lib/dashboard/panel-layout.ts`.
+Insight panel explanation copy also belongs in that registry, next to the panel id and label. Keep each explanation limited to:
+
+- data source
+- calculation
+- expectation or limitation
 
 - Pinned panels stay visible: Configuration, API issues, Signal filters.
 - Optional panels can be hidden locally without changing saved-view DB records.

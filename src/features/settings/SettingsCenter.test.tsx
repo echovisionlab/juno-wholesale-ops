@@ -232,7 +232,7 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Settings changed after refresh.");
   });
 
-  it("saves settings and reports the result with Mantine notifications", async () => {
+  it("saves settings without routine success notifications", async () => {
     const fetchMock = vi.fn().mockResolvedValueOnce(jsonResponse({ settings: settingsFixture(), changed: ["juno_login_email"], warnings: [] }));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -247,7 +247,7 @@ describe("SettingsCenter", () => {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ juno: { juno_login_email: "buyer@example.test" } }),
     });
-    expect(pageText()).toContain("Settings saved");
+    expect(pageText()).not.toContain("Settings saved");
   });
 
   it("transfers watch rules from the Operations tab with a current preview", async () => {
@@ -354,7 +354,7 @@ describe("SettingsCenter", () => {
       clientSecretRef: "env:DEV_OIDC_CLIENT_SECRET",
     });
     expect(createProviderPayload).not.toHaveProperty("clientSecret");
-    expect(pageText()).toContain("Provider created");
+    expect(pageText()).not.toContain("Provider created");
 
     const toggle = document.body.querySelector('input[aria-label="Workspace enabled"]') as HTMLInputElement;
     await act(async () => {
@@ -362,11 +362,13 @@ describe("SettingsCenter", () => {
     });
     expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/settings/auth/sso-providers");
     expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({ id: "provider-1", enabled: false });
+    expect(pageText()).not.toContain("Provider disabled");
 
     clickButton("Delete");
     await act(async () => undefined);
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/settings/auth/sso-providers");
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({ id: "provider-1" });
+    expect(pageText()).not.toContain("Provider deleted");
   });
 
   it("manages mail sources from the Mail Sources tab", async () => {
@@ -396,7 +398,8 @@ describe("SettingsCenter", () => {
     await clickButtonAndWait("Add source");
     expect(pageText()).toContain("Add mail source");
     expect(pageText()).toContain("Provider adapter");
-    expect(pageText()).toContain("Only Gmail Workspace can be saved now. Planned adapters are disabled.");
+    expect(pageText()).toContain("Only Gmail Workspace can be saved now.");
+    expect(pageText()).toContain("Planned adapters, not selectable yet");
     expect(pageText()).toContain("Gmail Workspace");
     expect(pageText()).toContain("IMAP (planned)");
     expect(pageText()).toContain("Microsoft Graph (planned)");
@@ -504,6 +507,8 @@ describe("SettingsCenter", () => {
     });
     expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/notifications/queue");
     expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toMatchObject({ mode: "dry-run", limit: 100 });
+    expect(pageText()).toContain("Notifications queued");
+    expect(pageText()).toContain("Queue updated: 1 queued, 0 skipped.");
 
     clickButton("Send queued");
     await act(async () => undefined);
@@ -512,6 +517,8 @@ describe("SettingsCenter", () => {
     });
     expect(fetchMock.mock.calls[5]?.[0]).toBe("/api/notifications/dispatch");
     expect(JSON.parse(String(fetchMock.mock.calls[5]?.[1]?.body))).toMatchObject({ mode: "send", limit: 100 });
+    expect(pageText()).toContain("Send complete");
+    expect(pageText()).toContain("Sent 1, failed 0, skipped 0.");
 
     await clickButtonAndWait("Add channel");
     expect(findInput("Channel name").getAttribute("placeholder")).toBe("Ops in-app");
@@ -529,6 +536,7 @@ describe("SettingsCenter", () => {
       enabled: true,
       config: {},
     });
+    expect(pageText()).not.toContain("Channel created");
 
     const toggle = document.body.querySelector('input[aria-label="Watch hits rule enabled"]') as HTMLInputElement | null;
     if (!toggle) {
@@ -539,6 +547,7 @@ describe("SettingsCenter", () => {
     });
     expect(fetchMock.mock.calls[11]?.[0]).toBe("/api/notifications/rules");
     expect(JSON.parse(String(fetchMock.mock.calls[11]?.[1]?.body))).toEqual({ id: "rule-1", enabled: false });
+    expect(pageText()).not.toContain("Rule disabled");
   });
 
   it("renders injected notification resources without loading from the API", async () => {

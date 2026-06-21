@@ -5,7 +5,7 @@ import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailProvider, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { MailSourceDraft, MailSourceTestState } from "./settings-types";
-import { attachmentStorageBackendOptions, gmailReadonlyScope, mailProviderOptions } from "./settings-options";
+import { attachmentStorageBackendOptions, gmailReadonlyScope, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
 import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend } from "./settings-utils";
 
@@ -131,14 +131,23 @@ export function MailSourcesCard({
             <Stack gap="xs">
               <Text fw={700}>Provider</Text>
               <ResponsiveGrid minWidth={240} gap="sm">
-                <Select
-                  label="Provider adapter"
-                  description="Only Gmail Workspace can be saved now. Planned adapters are disabled."
-                  value={draft.provider}
-                  data={mailProviderOptions}
-                  allowDeselect={false}
-                  onChange={(value) => value && onDraftChange(applyMailProviderPreset(draft, value as MailProvider))}
-                />
+                {providerImplemented ? (
+                  <Select
+                    label="Provider adapter"
+                    description="Only Gmail Workspace can be saved now."
+                    value={draft.provider}
+                    data={mailProviderOptions}
+                    allowDeselect={false}
+                    onChange={(value) => value && onDraftChange(applyMailProviderPreset(draft, value as MailProvider))}
+                  />
+                ) : (
+                  <TextInput
+                    label="Provider adapter"
+                    description="This planned provider cannot be used for runnable ingest yet."
+                    value={`${provider.label} (planned)`}
+                    readOnly
+                  />
+                )}
                 <TextInput
                   label="Source name"
                   placeholder="Primary supplier inbox"
@@ -151,6 +160,11 @@ export function MailSourcesCard({
                   onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
                 />
               </ResponsiveGrid>
+              {plannedMailProviderOptions.length > 0 ? (
+                <Text size="sm" c="dimmed">
+                  Planned adapters, not selectable yet: {plannedMailProviderOptions.map((option) => option.label).join(", ")}.
+                </Text>
+              ) : null}
               {!providerImplemented ? (
                 <Alert color="yellow" title="Adapter pending">
                   This provider is planned and cannot be saved yet.
