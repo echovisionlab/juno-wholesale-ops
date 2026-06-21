@@ -52,7 +52,7 @@ export type SsoProviderDraft = {
   tokenUrl: string;
   userInfoUrl: string;
   clientId: string;
-  clientSecret: string;
+  clientSecretRef: string;
   scopes: string;
   enabled: boolean;
   sortOrder: number;

@@ -1,8 +1,8 @@
 import { Box, Center } from "@mantine/core";
 import { LoginForm, type LoginExternalProvider } from "@/components/auth/LoginForm";
 import { normalizeLoginLogoUrl } from "@/lib/auth/login-logo";
-import { listSsoProviders, redactSsoProvider } from "@/lib/auth/sso-provider-repository";
-import { resolveAppAuthSettings } from "@/lib/auth/settings";
+import { listSsoProviders } from "@/lib/auth/sso-provider-repository";
+import { isExternalAuthProviderReady, resolveAppAuthSettings } from "@/lib/auth/settings";
 import { getDatabaseUrl, loadRuntimeEnv } from "@/lib/env";
 import { getServiceSettings } from "@/lib/settings/repository";
 
@@ -54,14 +54,12 @@ async function loadLoginSettings(): Promise<{
     const env = loadRuntimeEnv(process.env);
     const row = await getServiceSettings(databaseUrl);
     const providers = await listSsoProviders(databaseUrl);
-    const settings = resolveAppAuthSettings(env, row, { ssoProviders: providers });
-    const baseUrl = settings.baseUrl ?? null;
+    const settings = resolveAppAuthSettings(env, row, { ssoProviders: providers, rawEnv: process.env });
     return {
       loginLogoUrl: normalizeLoginLogoUrl(row?.auth_login_logo_url),
       emailPasswordLoginEnabled: settings.emailPasswordLoginEnabled,
-      externalProviders: providers
-        .map((provider) => redactSsoProvider(provider, baseUrl))
-        .filter((provider) => provider.status === "ready")
+      externalProviders: settings.externalProviders
+        .filter(isExternalAuthProviderReady)
         .map((provider) => ({
           providerId: provider.providerId,
           buttonLabel: provider.buttonLabel,

@@ -8,6 +8,7 @@ import {
   type SsoProviderInput,
   type SsoProviderPatch,
 } from "@/lib/auth/sso-provider-repository";
+import { resolveSsoProviderClientSecret } from "@/lib/auth/settings";
 import {
   authorizeSettingsRequest,
   databaseUrlResponse,
@@ -28,7 +29,13 @@ export async function GET(request: Request) {
   const row = await ensureServiceSettingsRow(database.databaseUrl);
   const baseUrl = row.auth_base_url ?? null;
   const providers = await listSsoProviders(database.databaseUrl);
-  return Response.json({ providers: providers.map((provider) => redactSsoProvider(provider, baseUrl)) });
+  return Response.json({
+    providers: providers.map((provider) =>
+      redactSsoProvider(provider, baseUrl, {
+        clientSecretAvailable: Boolean(resolveSsoProviderClientSecret(provider, process.env)),
+      }),
+    ),
+  });
 }
 
 export async function POST(request: Request) {

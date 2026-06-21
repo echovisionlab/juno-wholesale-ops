@@ -39,7 +39,7 @@ describe("SSO provider repository", () => {
       logoUrl: "https://login.example.test/logo.svg",
       discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
       clientId: "client-id",
-      clientSecret: "client-secret",
+      clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
       scopes: "openid email profile groups",
       enabled: true,
       sortOrder: 10,
@@ -51,7 +51,8 @@ describe("SSO provider repository", () => {
     expect(created).toMatchObject({
       providerId: "workspace",
       displayName: "Workspace",
-      clientSecret: "client-secret",
+      clientSecret: null,
+      clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
       clientSecretConfigured: true,
       protocol: "oidc",
       preset: "custom_oidc",
@@ -67,7 +68,7 @@ describe("SSO provider repository", () => {
     });
 
     const [listed] = await listSsoProviders(databaseUrl);
-    const publicProvider = redactSsoProvider(listed, "https://inventory-dev.example.test");
+    const publicProvider = redactSsoProvider(listed, "https://inventory-dev.example.test", { clientSecretAvailable: true });
     expect(publicProvider).toMatchObject({
       providerId: "workspace",
       clientSecretConfigured: true,
@@ -88,7 +89,8 @@ describe("SSO provider repository", () => {
     const [updated] = await listSsoProviders(databaseUrl);
     expect(updated).toMatchObject({
       displayName: "Renamed Workspace",
-      clientSecret: "client-secret",
+      clientSecret: null,
+      clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
       protocol: "oidc",
       preset: "custom_oidc",
       adminRules: [expect.objectContaining({ type: "email_allowlist", value: "admin@example.test" })],
@@ -144,8 +146,26 @@ describe("SSO provider repository", () => {
     expect(validateSsoProviderInput({ providerId: "Bad Provider", displayName: "" }, { requireSecret: true })).toEqual([
       "providerId must start with a lowercase letter or digit and contain only lowercase letters, digits, underscores, or dashes",
       "displayName is required",
-      "clientSecret is required when creating a provider",
+      "clientSecretRef is required when creating a provider",
     ]);
+    expect(validateSsoProviderInput({
+      providerId: "workspace",
+      displayName: "Workspace",
+      clientSecret: "raw-secret",
+    }, { requireSecret: true })).toEqual([
+      "clientSecret is not accepted; use clientSecretRef",
+      "clientSecretRef is required when creating a provider",
+    ]);
+    expect(validateSsoProviderInput({
+      providerId: "workspace",
+      displayName: "Workspace",
+      clientSecretRef: "WORKSPACE_CLIENT_SECRET",
+    }, { requireSecret: true })).toEqual(["clientSecretRef must use env:NAME or file:/absolute/path"]);
+    expect(validateSsoProviderInput({
+      providerId: "workspace",
+      displayName: "Workspace",
+      clientSecretRef: "aws-sm://workspace/client-secret",
+    }, { requireSecret: true })).toEqual(["clientSecretRef must use env:NAME or file:/absolute/path"]);
     expect(validateSsoProviderInput({
       providerId: "workspace",
       displayName: "Workspace",
@@ -212,7 +232,7 @@ describe("SSO provider repository", () => {
       tokenUrl: "https://login.example.test/oauth/token",
       userInfoUrl: "https://login.example.test/oauth/userinfo",
       clientId: "client-id",
-      clientSecret: "client-secret",
+      clientSecretRef: "env:CUSTOM_OAUTH2_CLIENT_SECRET",
     });
 
     expect(created).toMatchObject({
@@ -220,5 +240,44 @@ describe("SSO provider repository", () => {
       preset: "custom_oauth2",
       discoveryUrl: null,
     });
+  });
+
+  it("keeps legacy raw database secrets runtime-compatible without exposing them", async () => {
+    await database.pool.query(
+      `
+        INSERT INTO auth_sso_provider (
+          provider_id,
+          display_name,
+          discovery_url,
+          client_id,
+          client_secret,
+          enabled
+        )
+        VALUES ($1, $2, $3, $4, $5, true)
+      `,
+      [
+        "legacy-workspace",
+        "Legacy Workspace",
+        "https://login.example.test/.well-known/openid-configuration",
+        "legacy-client-id",
+        "legacy-client-secret",
+      ],
+    );
+
+    const [legacy] = await listSsoProviders(databaseUrl);
+    expect(legacy).toMatchObject({
+      providerId: "legacy-workspace",
+      clientSecret: "legacy-client-secret",
+      clientSecretRef: null,
+      clientSecretConfigured: true,
+    });
+
+    const publicProvider = redactSsoProvider(legacy, "https://inventory-dev.example.test");
+    expect(publicProvider).toMatchObject({
+      providerId: "legacy-workspace",
+      clientSecretConfigured: true,
+      status: "ready",
+    });
+    expect(JSON.stringify(publicProvider)).not.toContain("legacy-client-secret");
   });
 });

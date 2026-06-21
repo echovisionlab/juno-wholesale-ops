@@ -3,7 +3,7 @@ import { notifications } from "@mantine/notifications";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { emptySsoProviderDraft } from "./settings-options";
 import type { SsoProviderDraft } from "./settings-types";
-import { formatSettingsActionError } from "./settings-utils";
+import { formatSettingsActionError, ssoProviderPayload } from "./settings-utils";
 
 type SettingsSetter = Dispatch<SetStateAction<SettingsResponse | null>>;
 type ErrorSetter = Dispatch<SetStateAction<string | null>>;
@@ -43,16 +43,7 @@ export function useSsoProviderController({
 
   async function save() {
     const editing = Boolean(editingId);
-    const payload = {
-      ...draft,
-      id: editingId ?? undefined,
-      adminEmailAllowlist: draft.adminEmailAllowlist,
-      adminClaim: draft.adminClaim,
-      adminClaimValue: draft.adminClaimValue,
-    };
-    if (editing && payload.clientSecret.trim() === "") {
-      delete (payload as Partial<SsoProviderDraft>).clientSecret;
-    }
+    const payload = ssoProviderPayload(draft, editingId);
     setPending(editing ? editingId : "new");
     setError(null);
     try {

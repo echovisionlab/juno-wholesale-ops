@@ -123,6 +123,7 @@ export type SsoProviderUnit = {
   tokenUrl: string | null;
   userInfoUrl: string | null;
   clientId: string | null;
+  clientSecretRef: string | null;
   clientSecretConfigured: boolean;
   scopes: string[];
   callbackUrl: string | null;

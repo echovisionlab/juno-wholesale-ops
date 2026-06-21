@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Box, Button, Card, Code, Group, Modal, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
+import { Box, Button, Card, Code, Group, Modal, NativeSelect, NumberInput, Stack, Switch, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { Copy, Plus, Save, Trash2 } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import type { SsoProviderDraft, SsoProviderPreset } from "./settings-types";
@@ -9,9 +9,7 @@ import { applyProviderPreset, findSetting, formatAdminCount, normalizeOrigin, pr
 
 export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
-  const trustedOrigins = findSetting(settings, "auth_trusted_origins");
   const localLogin = findSetting(settings, "auth_email_password_login_enabled");
-  const authProvider = settings.units.authProvider;
   const currentOriginMatches = settings.environment.appBaseUrl && settings.environment.currentRequestOrigin
     ? normalizeOrigin(settings.environment.appBaseUrl) === normalizeOrigin(settings.environment.currentRequestOrigin)
     : false;
@@ -21,10 +19,10 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
       <Card>
         <Stack gap="xs">
           <Text fw={700}>Admin Gate</Text>
-          <SignalFact label="Admin access protection" value="On" />
           <SignalFact label="Site address" value={siteAddress?.displayValue ?? settings.environment.appBaseUrl ?? "Not set"} />
-          <SignalFact label="Current origin match" value={currentOriginMatches ? "matches" : "review required"} />
-          <SignalFact label="Trusted origins" value={trustedOrigins?.state === "configured" ? "configured" : "not configured"} />
+          {!currentOriginMatches ? (
+            <SignalFact label="Current origin" value={settings.environment.currentRequestOrigin ?? "Not available"} />
+          ) : null}
         </Stack>
       </Card>
 
@@ -32,8 +30,6 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
         <Stack gap="xs">
           <Text fw={700}>Admin Access</Text>
           <SignalFact label="Admin users" value={formatAdminCount(settings.security.authBootstrap.adminUserCount)} />
-          <SignalFact label="Initial admin seed" value={settings.security.authBootstrap.hasInitialAdminEnv ? "configured" : "not configured"} />
-          <SignalFact label="External admin mapping" value={settings.security.authBootstrap.hasExternalAdminMapping ? "configured" : "not configured"} />
         </Stack>
       </Card>
 
@@ -41,29 +37,9 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
         <Stack gap="xs">
           <Text fw={700}>Sign-in Methods</Text>
           <SignalFact label="Email/password login" value={localLogin?.displayValue ?? "enabled"} />
-          <SignalFact label="External SSO providers" value={`${authProvider.readyProviderCount} ready / ${authProvider.enabledProviderCount} enabled / ${authProvider.providerCount} total`} />
         </Stack>
       </Card>
     </ResponsiveGrid>
-  );
-}
-
-export function AuthSecretPolicyCard() {
-  return (
-    <Card>
-      <Stack gap="xs">
-        <Text fw={700}>Auth Secret Policy</Text>
-        <ResponsiveGrid minWidth={220} gap="xs">
-          <SignalFact label="Internal auth secret" value="Generated at startup and stored as a masked, non-editable database value" />
-          <SignalFact label="Rotation" value="Maintenance action; rotate alongside a planned session invalidation window" />
-          <SignalFact label="Backup" value="Included only in private Postgres backups, never public exports or issue text" />
-          <SignalFact label="SSO client secrets" value="Currently write-only database values; target secret_ref or encrypted storage" />
-        </ResponsiveGrid>
-        <Text size="sm" c="dimmed">
-          Re-enter an SSO client secret only when rotating it. Existing values are intentionally not echoed back into the form.
-        </Text>
-      </Stack>
-    </Card>
   );
 }
 
@@ -166,8 +142,9 @@ export function AuthProviderCard({
                   <ResponsiveGrid minWidth={220} gap="xs">
                     <SignalFact label="Protocol" value={provider.protocol === "oidc" ? "OpenID Connect" : "OAuth 2.0"} />
                     <SignalFact label="Client ID" value={provider.clientId ?? "not configured"} />
-                    <SignalFact label="Client secret" value={provider.clientSecretConfigured ? "configured" : "not configured"} />
-                    <SignalFact label="Admin rules" value={`${provider.adminEmailAllowlist.length + (provider.adminClaim ? 1 : 0)} configured`} />
+                    {provider.adminEmailAllowlist.length > 0 || provider.adminClaim ? (
+                      <SignalFact label="Admin rules" value={`${provider.adminEmailAllowlist.length + (provider.adminClaim ? 1 : 0)}`} />
+                    ) : null}
                   </ResponsiveGrid>
 
                   <Box>
@@ -185,7 +162,11 @@ export function AuthProviderCard({
                       </Button>
                     </Group>
                   </Box>
-                  {provider.missing.length > 0 || provider.invalid.length > 0 ? (
+                  {provider.missing.includes("client secret") ? (
+                    <Text size="sm" c="red.7">
+                      Client secret unavailable{provider.clientSecretRef ? `: ${provider.clientSecretRef}` : "."}
+                    </Text>
+                  ) : provider.missing.length > 0 || provider.invalid.length > 0 ? (
                     <Text size="sm" c="red.7">
                       Needs {[...provider.missing, ...provider.invalid].join(", ")}.
                     </Text>
@@ -254,11 +235,12 @@ export function AuthProviderCard({
                 value={draft.clientId}
                 onChange={(event) => onDraftChange({ ...draft, clientId: event.currentTarget.value })}
               />
-              <PasswordInput
-                label={editingId ? "New client secret" : "Client secret"}
-                placeholder={editingId ? "Leave blank to keep configured" : undefined}
-                value={draft.clientSecret}
-                onChange={(event) => onDraftChange({ ...draft, clientSecret: event.currentTarget.value })}
+              <TextInput
+                label="Client secret reference"
+                description="env:NAME or file:/absolute/path"
+                placeholder={editingId ? "Leave blank to keep existing secret" : "env:GOOGLE_CLIENT_SECRET"}
+                value={draft.clientSecretRef}
+                onChange={(event) => onDraftChange({ ...draft, clientSecretRef: event.currentTarget.value })}
               />
               <TextInput
                 label="Scopes"

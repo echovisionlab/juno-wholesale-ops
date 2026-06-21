@@ -1,4 +1,5 @@
 import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
+import type { SsoProviderInput, SsoProviderPatch } from "@/lib/auth/sso-provider-repository";
 import type { MailAuthType, MailCredentialType, MailProvider, MailboxSourceInput, MailboxSourcePatch, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
@@ -40,7 +41,7 @@ export function providerToDraft(provider: SettingsResponse["units"]["authProvide
     tokenUrl: provider.tokenUrl ?? "",
     userInfoUrl: provider.userInfoUrl ?? "",
     clientId: provider.clientId ?? "",
-    clientSecret: "",
+    clientSecretRef: provider.clientSecretRef ?? "",
     scopes: provider.scopes.join(" "),
     enabled: provider.enabled,
     sortOrder: provider.sortOrder,
@@ -62,6 +63,35 @@ export function applyProviderPreset(draft: SsoProviderDraft, presetValue: SsoPro
     scopes: draft.scopes || preset.scopes,
     discoveryUrl: preset.discoveryUrl ?? draft.discoveryUrl,
   };
+}
+
+export function ssoProviderPayload(draft: SsoProviderDraft, editingId: string | null): SsoProviderInput | SsoProviderPatch {
+  const editing = Boolean(editingId);
+  const payload: SsoProviderInput | SsoProviderPatch = {
+    ...(editing && editingId ? { id: editingId } : {}),
+    providerId: draft.providerId,
+    displayName: draft.displayName,
+    protocol: draft.protocol,
+    preset: draft.preset,
+    buttonLabel: draft.buttonLabel,
+    logoUrl: draft.logoUrl,
+    discoveryUrl: draft.discoveryUrl,
+    authorizationUrl: draft.authorizationUrl,
+    tokenUrl: draft.tokenUrl,
+    userInfoUrl: draft.userInfoUrl,
+    clientId: draft.clientId,
+    clientSecretRef: draft.clientSecretRef,
+    scopes: draft.scopes,
+    enabled: draft.enabled,
+    sortOrder: draft.sortOrder,
+    adminEmailAllowlist: draft.adminEmailAllowlist,
+    adminClaim: draft.adminClaim,
+    adminClaimValue: draft.adminClaimValue,
+  };
+  if (editing && "clientSecretRef" in payload && !draft.clientSecretRef.trim()) {
+    delete payload.clientSecretRef;
+  }
+  return payload;
 }
 
 export function presetLabel(value: string): string {
@@ -235,6 +265,12 @@ const settingsActionErrorMessages: Record<string, string> = {
   sso_provider_not_found: "Provider was not found.",
 };
 
+const settingsActionErrorIssueMessages: Array<[RegExp, string]> = [
+  [/clientSecretRef is required/i, "Add a client secret reference before creating the provider."],
+  [/clientSecretRef must use/i, "Use env:NAME or file:/absolute/path for the client secret reference."],
+  [/clientSecret is not accepted/i, "Use a client secret reference instead of a raw client secret."],
+];
+
 export function formatSettingsActionError(error: unknown, fallback: string): string {
   if (typeof error !== "string" || !error.trim()) {
     return fallback;
@@ -242,6 +278,10 @@ export function formatSettingsActionError(error: unknown, fallback: string): str
   const trimmed = error.trim();
   if (settingsActionErrorMessages[trimmed]) {
     return settingsActionErrorMessages[trimmed];
+  }
+  const issueMessage = settingsActionErrorIssueMessages.find(([pattern]) => pattern.test(trimmed))?.[1];
+  if (issueMessage) {
+    return issueMessage;
   }
   return /^[a-z]+(?:_[a-z0-9]+)+$/.test(trimmed) ? fallback : trimmed;
 }

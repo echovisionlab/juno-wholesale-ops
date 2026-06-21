@@ -184,10 +184,13 @@ the provider callback URL that must be registered in the provider console. Auth
 is always enabled. Startup creates an internal random Better Auth secret in the
 database when one is missing; it is not an editable operator-facing value. At
 least one admin bootstrap path is still required.
-Secret fields such as mail source credentials, Juno passwords, OIDC client
-secrets, and webhook configuration are write-only and masked in API responses.
-The Settings Center displays the auth secret policy, but never displays or
-edits the internal auth secret value.
+Secret fields such as mail source credentials, Juno passwords, legacy OIDC
+client secrets, and webhook configuration are write-only and masked in API
+responses. New SSO providers store only a `client_secret_ref` such as
+`env:GOOGLE_CLIENT_SECRET` or `file:/run/secrets/google-client-secret`; the
+runtime marks the provider unavailable if that reference cannot be resolved. The
+Settings Center displays the auth secret policy, but never displays or edits
+the internal auth secret value.
 
 ## Mail ingestion
 

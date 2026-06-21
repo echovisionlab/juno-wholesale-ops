@@ -346,6 +346,7 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "client-secret",
+    clientSecretRef: null,
     clientSecretConfigured: true,
     scopes: ["openid", "email", "profile"],
     enabled: true,

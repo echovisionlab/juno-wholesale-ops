@@ -33,6 +33,9 @@ console on `http://localhost:29101`.
 - Set the Settings Center `Site address` to the public app URL.
 - Register the displayed External SSO callback URL in the provider console when
   enabling Generic OAuth/OIDC.
+- Store SSO client secrets outside Postgres and save only a Settings Center
+  reference such as `env:GOOGLE_CLIENT_SECRET` or
+  `file:/run/secrets/google-client-secret`.
 - Configure each mailbox source in the Settings Center. For Gmail, paste or
   mount the Google Workspace service account JSON into the mail source secret
   field or a private secret reference.
@@ -55,18 +58,21 @@ always enabled before the service is exposed beyond trusted local access.
 ## Secret Storage, Rotation, and Backup
 
 Warning: Postgres backups are secret-bearing backups. They include saved auth
-settings, SSO client secrets, mail source credentials, Juno passwords, and
-notification secrets unless every credential has already moved to an external
-`secret_ref`. Treat each backup like production credentials.
+settings, legacy SSO `client_secret` values that have not moved to
+`client_secret_ref`, mail source credentials, Juno passwords, and notification
+secrets unless every credential has already moved to an external reference.
+Treat each backup like production credentials.
 
 Current storage policy:
 
 - The internal Better Auth secret is generated during startup when missing and
   stored in Postgres as a masked, non-editable service setting.
-- SSO client secrets are currently stored as write-only Postgres values on
-  `auth_sso_provider` rows. They are redacted from Settings Center and API
-  responses; updating a provider with a blank client secret keeps the existing
-  value.
+- New SSO provider saves store `auth_sso_provider.client_secret_ref` only. The
+  runtime supports `env:NAME` and `file:/absolute/path` references; unsupported or
+  unavailable references leave that SSO provider unavailable.
+- Existing legacy `auth_sso_provider.client_secret` values remain masked and
+  runtime-compatible until migrated. Saving a `client_secret_ref` for that
+  provider clears the raw database secret.
 - Mail source credentials, Juno passwords, and local webhook URLs are also
   write-only saved secret values unless a provider-specific `secret_ref` path is
   available.
@@ -75,8 +81,9 @@ Current storage policy:
 
 Rotation policy:
 
-- Rotate SSO client secrets in the upstream identity provider first, then paste
-  the new value into the Settings Center and save the provider.
+- Rotate SSO client secrets in the upstream identity provider first, then update
+  the referenced runtime secret. If the reference name or file path changes,
+  update the provider's `client_secret_ref` in Settings Center.
 - Rotate mail source credentials, Juno passwords, and webhook URLs by updating
   the upstream credential and then replacing the saved secret value or referenced
   runtime secret.
@@ -88,7 +95,7 @@ Rotation policy:
 Backup policy:
 
 - Treat Postgres backups as secret-bearing artifacts because they include saved
-  auth, SSO, mail source, Juno, and notification secret values.
+  auth settings and any legacy or non-migrated saved secret values.
 - Encrypt backups at rest, restrict restore access, and keep them out of git,
   public issue text, CI logs, and screenshots.
 - Back up attachment storage and browser profile storage separately from
@@ -96,9 +103,10 @@ Backup policy:
 - If `secret_ref` values point to an external secret manager or deployment
   platform, back up that secret inventory and restore it before starting the app.
 
-Planned hardening: migrate SSO client secrets and other saved credentials toward
-`secret_ref` or encrypted-at-rest storage so Postgres can hold references or
-ciphertext instead of raw secret values.
+SSO hardening status: new SSO provider saves use `client_secret_ref`, so
+Postgres backups no longer contain that provider's SSO client secret after it is
+migrated. Legacy raw SSO rows remain secret-bearing until each provider is
+updated to a reference.
 
 ## Docker
 

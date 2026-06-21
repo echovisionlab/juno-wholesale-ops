@@ -77,19 +77,19 @@ Status: remaining hardening.
 - Keep Settings Center admin bootstrap and SSO readiness copy aligned with the
   login page.
 
-### P0 blocker: SSO secret storage hardening
+### SSO secret storage hardening
 
 Issue: [#54](https://github.com/echovisionlab/juno-wholesale-ops/issues/54)
-Priority: P0 stabilization blocker.
+Status: implemented for new and migrated SSO providers.
 
-- Document current storage for internal auth secret, SSO client secrets, mail
-  source credentials, Juno passwords, and notification webhook secrets.
-- Document rotation order and session impact for internal auth secret rotation.
-- Treat Postgres backups as secret-bearing artifacts; keep backup/restore
-  guidance explicit without publishing secret values.
-- Before v0.6.x stabilization is considered complete, implement `secret_ref` or
-  encrypted-at-rest storage for SSO client secrets, or explicitly accept and
-  document the residual risk for the release.
+- Store new SSO provider secrets through `client_secret_ref` only.
+- Keep legacy raw `client_secret` values masked and runtime-compatible until
+  each provider is migrated.
+- Treat Postgres backups as secret-bearing while any legacy raw SSO secret rows
+  or other saved credentials remain.
+- Keep rotation and restore docs explicit without publishing secret values.
+- Remaining follow-up: add a migration/reporting aid for operators to identify
+  legacy SSO rows that still need `client_secret_ref` migration.
 
 ### Mail provider UX stabilization
 

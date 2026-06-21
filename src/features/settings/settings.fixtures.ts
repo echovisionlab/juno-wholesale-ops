@@ -36,6 +36,7 @@ export function settingsFixture(): SettingsResponse {
             tokenUrl: null,
             userInfoUrl: null,
             clientId: "client-id",
+            clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
             clientSecretConfigured: true,
             scopes: ["openid", "email", "profile"],
             callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
@@ -189,8 +190,9 @@ export function settingsInvalidSsoFixture(): SettingsResponse {
         providers: settings.units.authProvider.providers.map((provider) => ({
           ...provider,
           status: "missing",
+          clientSecretRef: null,
           clientSecretConfigured: false,
-          missing: ["client_secret"],
+          missing: ["client secret"],
         })),
       },
     },
