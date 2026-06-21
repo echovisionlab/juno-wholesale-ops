@@ -5,6 +5,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { theme } from "@/theme";
+import { dashboardPanelLayoutStorageKey, optionalDashboardPanelDefinitions } from "@/lib/dashboard/panel-layout";
 import { CatalogOpsDashboard, type CatalogOpsDashboardProps } from "./CatalogOpsDashboard";
 import { dashboardFixture } from "./dashboard.fixtures";
 
@@ -24,6 +25,7 @@ describe("CatalogOpsDashboard", () => {
       removeListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }));
+    window.localStorage?.clear();
     globalThis.ResizeObserver = class ResizeObserver {
       observe() {}
       unobserve() {}
@@ -37,6 +39,7 @@ describe("CatalogOpsDashboard", () => {
   afterEach(() => {
     act(() => root.unmount());
     container.remove();
+    document.body.replaceChildren();
     vi.restoreAllMocks();
   });
 
@@ -752,6 +755,75 @@ describe("CatalogOpsDashboard", () => {
     );
     clickByAriaLabel("Delete saved view");
     expect(onDeleteDashboardSavedView).toHaveBeenCalledWith(expect.objectContaining({ id: "dashboard-view-1" }));
+    clickByAriaLabel("Clear saved view");
+  });
+
+  it("lets operators hide optional panels while pinned panels stay visible", async () => {
+    renderDashboard(dashboardFixture);
+
+    expect(pageText()).toContain("Today Signals");
+    expect(pageText()).toContain("Signal Filters");
+
+    clickButton("Panels");
+    await act(async () => undefined);
+    clickByAriaLabel("Today signals");
+
+    expect(pageText()).not.toContain("Today Signals");
+    expect(pageText()).toContain("Panels (1 hidden)");
+    expect(pageText()).toContain("Signal Filters");
+    expect(window.localStorage?.getItem(dashboardPanelLayoutStorageKey)).toContain("todaySignals");
+
+    clickByAriaLabel("Today signals");
+    expect(pageText()).toContain("Today Signals");
+    clickByAriaLabel("Today signals");
+    expect(pageText()).not.toContain("Today Signals");
+    clickButton("Show all");
+    expect(pageText()).toContain("Today Signals");
+  });
+
+  it("restores hidden optional panels from local preferences", async () => {
+    window.localStorage?.setItem(
+      dashboardPanelLayoutStorageKey,
+      JSON.stringify({
+        schemaVersion: 1,
+        hiddenPanelIds: optionalDashboardPanelDefinitions.map((definition) => definition.id),
+      }),
+    );
+
+    renderDashboard(dashboardFixture);
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(pageText()).toContain("Signal Filters");
+    expect(pageText()).not.toContain("Ingestion Pipeline");
+    expect(pageText()).not.toContain("Today Signals");
+    expect(pageText()).not.toContain("worker status unavailable");
+  });
+
+  it("keeps panel visibility changes in memory when preference storage fails", async () => {
+    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    renderDashboard(dashboardFixture);
+    clickButton("Panels");
+    await clickByAriaLabelAsync("Today signals");
+    expect(pageText()).not.toContain("Today Signals");
+  });
+
+  it("keeps the dashboard usable when panel preference storage is unavailable", async () => {
+    vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("storage unavailable");
+    });
+
+    renderDashboard(dashboardFixture);
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+
+    expect(pageText()).toContain("Today Signals");
+    expect(pageText()).toContain("Signal Filters");
   });
 });
 
@@ -767,6 +839,9 @@ function renderDashboard(props: CatalogOpsDashboardProps): void {
 
 function emptyIngestState(): NonNullable<CatalogOpsDashboardProps["ingestState"]> {
   return {
+    mailboxSourceId: null,
+    mailboxAddress: null,
+    provider: null,
     lastQuery: null,
     lastQueryWindowFrom: null,
     lastQueryWindowTo: null,
@@ -843,6 +918,26 @@ function clickByAriaLabel(label: string): void {
     }
     element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
+}
+
+async function clickByAriaLabelAsync(label: string): Promise<void> {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const element = document.querySelector(`[aria-label="${label}"]`);
+    if (element) {
+      act(() => {
+        if (element instanceof HTMLInputElement && element.type === "checkbox") {
+          element.click();
+          return;
+        }
+        element.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
+      return;
+    }
+    await act(async () => {
+      await new Promise((resolve) => window.setTimeout(resolve, 0));
+    });
+  }
+  throw new Error(`Missing control ${label}`);
 }
 
 function selectComboboxOption(label: string, option: string): void {

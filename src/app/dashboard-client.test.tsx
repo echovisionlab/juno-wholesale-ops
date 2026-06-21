@@ -202,7 +202,9 @@ describe("Home dashboard polling", () => {
     });
     await act(async () => undefined);
 
-    expect(readProps()).toContain('"workerStatus":null');
+    expect(readProps()).toContain('"pid":123');
+    expect(readProps()).toContain('"label":"Live worker stop"');
+    expect(readProps()).toContain('"status":"server_error"');
 
     await act(async () => {
       clickButton("create-rule");
@@ -372,6 +374,33 @@ describe("Home dashboard polling", () => {
     await act(async () => undefined);
 
     expect(readProps()).toContain('"id":"rule-from-null"');
+  });
+
+  it("clears stale action issues after the matching endpoint recovers", async () => {
+    const fetchMock = vi.fn();
+    queueDashboardPoll(fetchMock, { state: "stopped" });
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ error: "stop failed" }), { status: 500 }));
+    queueDashboardPoll(fetchMock, { state: "running" });
+    vi.stubGlobal("fetch", fetchMock);
+
+    await act(async () => {
+      root.render(<Home />);
+    });
+    await act(async () => undefined);
+
+    await act(async () => {
+      clickButton("stop");
+    });
+    await act(async () => undefined);
+    expect(readProps()).toContain('"label":"Live worker stop"');
+
+    await act(async () => {
+      vi.advanceTimersByTime(30000);
+    });
+    await act(async () => undefined);
+
+    expect(readProps()).not.toContain('"label":"Live worker stop"');
+    expect(readProps()).toContain('"workerStatus":{"state":"running"');
   });
 
   it("adds a watch rule when the current watch rule list is still nullable", async () => {
@@ -593,6 +622,23 @@ function jsonResponse(value: unknown): Response {
     status: 200,
     headers: { "content-type": "application/json" },
   });
+}
+
+function queueDashboardPoll(fetchMock: ReturnType<typeof vi.fn>, worker: unknown): void {
+  fetchMock
+    .mockResolvedValueOnce(jsonResponse({ state: { lastQueryStatus: null } }))
+    .mockResolvedValueOnce(jsonResponse({ summary: { queued: 0 } }))
+    .mockResolvedValueOnce(jsonResponse({ worker }))
+    .mockResolvedValueOnce(jsonResponse({ setup: { ready: false, steps: [] } }))
+    .mockResolvedValueOnce(jsonResponse({ signals: [] }))
+    .mockResolvedValueOnce(jsonResponse({ signals: [] }))
+    .mockResolvedValueOnce(jsonResponse({ trends: { genres: [], labels: [], watchOverlap: [] } }))
+    .mockResolvedValueOnce(jsonResponse({ digest: { generatedAt: "2026-06-17T00:00:00.000Z", counts: {} } }))
+    .mockResolvedValueOnce(jsonResponse({ views: [] }))
+    .mockResolvedValueOnce(jsonResponse({ rules: [] }))
+    .mockResolvedValueOnce(jsonResponse({ deliveries: [] }))
+    .mockResolvedValueOnce(jsonResponse({ rules: [] }))
+    .mockResolvedValueOnce(jsonResponse({ channels: [] }));
 }
 
 function readProps(): string {
