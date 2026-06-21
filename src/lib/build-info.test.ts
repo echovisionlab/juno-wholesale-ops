@@ -3,17 +3,18 @@ import packageJson from "../../package.json";
 import { getPublicVersionInfo } from "./build-info";
 
 describe("getPublicVersionInfo", () => {
-  it("exposes only minimal public version metadata", () => {
-    const info = getPublicVersionInfo(process.cwd());
+  it("exposes only public service version metadata", () => {
+    const info = getPublicVersionInfo();
 
     expect(info.status).toBe("ok");
     expect(info.version).toBe(packageJson.version);
-    expect(Object.keys(info).sort()).toEqual(["gitSha", "status", "version"]);
+    expect(Object.keys(info).sort()).toEqual(["status", "version"]);
+    expect(info).not.toHaveProperty("gitSha");
     expect(info).not.toHaveProperty("buildTime");
     expect(info).not.toHaveProperty("environment");
   });
 
-  it("does not read ad-hoc env aliases for public metadata", () => {
+  it("does not expose env or source metadata", () => {
     const originalEnv = { ...process.env };
     Object.assign(process.env, {
       NODE_ENV: "test",
@@ -33,9 +34,10 @@ describe("getPublicVersionInfo", () => {
     });
 
     try {
-      const info = getPublicVersionInfo("/missing-worktree");
+      const info = getPublicVersionInfo();
 
-      expect(info).toEqual({ status: "ok", version: packageJson.version, gitSha: null });
+      expect(info).toEqual({ status: "ok", version: packageJson.version });
+      expect(info).not.toHaveProperty("gitSha");
       expect(JSON.stringify(info)).not.toContain("postgres://");
       expect(JSON.stringify(info)).not.toContain("not-public");
       expect(JSON.stringify(info)).not.toContain("2026-06-20");

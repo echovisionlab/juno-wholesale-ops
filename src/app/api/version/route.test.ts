@@ -7,7 +7,8 @@ describe("GET /api/version", () => {
     const payload = await GET().json();
 
     expect(payload).toMatchObject({ status: "ok", version: packageJson.version });
-    expect(Object.keys(payload).sort()).toEqual(["gitSha", "status", "version"]);
+    expect(Object.keys(payload).sort()).toEqual(["status", "version"]);
+    expect(payload).not.toHaveProperty("gitSha");
     expect(payload).not.toHaveProperty("buildTime");
     expect(payload).not.toHaveProperty("environment");
   });
