@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.6.4](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.3...v0.6.4) (2026-06-21)
+
+
+### Bug Fixes
+
+* harden SSO client secret references ([e1d6993](https://github.com/echovisionlab/juno-wholesale-ops/commit/e1d6993625f43a9bde40156aaa80deb745d55ce6))
+* simplify operations status UI ([#69](https://github.com/echovisionlab/juno-wholesale-ops/issues/69)) ([e94f3d1](https://github.com/echovisionlab/juno-wholesale-ops/commit/e94f3d131ef29624e2e2af35627972204636431d))
+
 ## [0.6.3](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.2...v0.6.3) (2026-06-21)
 
 
