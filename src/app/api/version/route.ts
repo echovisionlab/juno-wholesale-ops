@@ -1,5 +1,5 @@
-import { getPublicBuildInfo } from "@/lib/build-info";
+import { getPublicVersionInfo } from "@/lib/build-info";
 
 export function GET() {
-  return Response.json(getPublicBuildInfo());
+  return Response.json(getPublicVersionInfo());
 }

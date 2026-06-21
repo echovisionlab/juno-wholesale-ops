@@ -2,63 +2,18 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import packageJson from "../../package.json";
 
-export type PublicBuildInfo = {
+export type PublicVersionInfo = {
   status: "ok";
   version: string;
   gitSha: string | null;
-  buildTime: string | null;
-  environment: string;
 };
 
-const gitShaEnvKeys = [
-  "JUNO_WHOLESALE_OPS_GIT_SHA",
-  "GIT_SHA",
-  "COMMIT_SHA",
-  "SOURCE_COMMIT",
-  "VERCEL_GIT_COMMIT_SHA",
-] as const;
-
-const buildTimeEnvKeys = [
-  "JUNO_WHOLESALE_OPS_BUILD_TIME",
-  "BUILD_TIME",
-  "SOURCE_BUILD_TIME",
-] as const;
-
-export function getPublicBuildInfo(env: NodeJS.ProcessEnv = process.env, cwd = process.cwd()): PublicBuildInfo {
+export function getPublicVersionInfo(cwd = process.cwd()): PublicVersionInfo {
   return {
     status: "ok",
     version: packageJson.version,
-    gitSha: resolveGitSha(env, cwd),
-    buildTime: firstPresentEnv(env, buildTimeEnvKeys),
-    environment: resolveEnvironment(env),
+    gitSha: readGitSha(cwd),
   };
-}
-
-function resolveGitSha(env: NodeJS.ProcessEnv, cwd: string): string | null {
-  const envSha = firstPresentEnv(env, gitShaEnvKeys);
-  if (envSha && matchesFullGitSha(envSha)) {
-    return envSha;
-  }
-
-  return readGitSha(cwd);
-}
-
-function resolveEnvironment(env: NodeJS.ProcessEnv): string {
-  return env.JUNO_WHOLESALE_OPS_ENV?.trim()
-    || env.APP_ENV?.trim()
-    || env.VERCEL_ENV?.trim()
-    || env.NODE_ENV?.trim()
-    || "development";
-}
-
-function firstPresentEnv(env: NodeJS.ProcessEnv, keys: readonly string[]): string | null {
-  for (const key of keys) {
-    const value = env[key]?.trim();
-    if (value) {
-      return value;
-    }
-  }
-  return null;
 }
 
 function readGitSha(cwd: string): string | null {
