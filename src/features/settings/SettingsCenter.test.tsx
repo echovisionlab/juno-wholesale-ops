@@ -78,7 +78,6 @@ describe("SettingsCenter", () => {
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
     expect(pageText()).toContain("Auth Secret Policy");
-    expect(pageText()).toContain("database-managed");
     expect(pageText()).toContain("target secret_ref or encrypted storage");
     expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).toContain("Workspace");

@@ -130,7 +130,7 @@ export function settingsFixture(): SettingsResponse {
         state: "complete",
         settings: [
           setting("auth_base_url", "Site address", "database", "configured", "https://inventory-dev.example.test", false, true, "url"),
-          setting("auth_email_password_login_enabled", "Email/password login", "database", "configured", "Enabled", false, true, "boolean"),
+          setting("auth_email_password_login_enabled", "Email/password login", "database", "configured", "On", false, true, "boolean"),
           setting("auth_login_logo_url", "Login logo URL", "unset", "disabled", "Not set", false, true, "url"),
         ],
       },

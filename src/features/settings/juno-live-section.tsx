@@ -1,15 +1,13 @@
-import { Badge, Button, Card, Group, Stack, Text } from "@mantine/core";
-import type { SettingsGroup, SettingsResponse } from "@/lib/settings/descriptors";
+import { Button, Card, Group, Stack, Text } from "@mantine/core";
+import type { SettingsGroup } from "@/lib/settings/descriptors";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
-import { findGroupSetting, unitStatusColor } from "./settings-utils";
+import { findGroupSetting } from "./settings-utils";
 
 export function JunoLiveSessionCard({
-  settings,
   group,
   pending,
   onTest,
 }: {
-  settings: SettingsResponse;
   group: SettingsGroup;
   pending: boolean;
   onTest: () => void;
@@ -25,12 +23,7 @@ export function JunoLiveSessionCard({
   return (
     <Card>
       <Stack gap="sm">
-        <Group justify="space-between" align="flex-start">
-          <Text fw={700}>Juno Live Session</Text>
-          <Badge color={unitStatusColor(settings.units.junoLive.status)} variant="light">
-            {settings.units.junoLive.status}
-          </Badge>
-        </Group>
+        <Text fw={700}>Juno Live Session</Text>
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Login email" value={loginEmail?.state === "configured" ? "configured" : "not configured"} />
           <SignalFact label="Password" value={loginPassword?.state === "configured" ? "configured" : "not configured"} />

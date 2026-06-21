@@ -153,7 +153,6 @@ export function SettingsCenter({
                         ) : null}
                         {groupId === "juno" ? (
                           <JunoLiveSessionCard
-                            settings={settings}
                             group={groupsById[groupId]}
                             pending={junoLive.pending}
                             onTest={() => void junoLive.testSession()}
@@ -161,7 +160,6 @@ export function SettingsCenter({
                         ) : null}
                         {groupId === "notifications" ? (
                           <NotificationsSettingsCard
-                            settings={settings}
                             channels={notificationsState.channels}
                             rules={notificationsState.rules}
                             loading={notificationsState.loading}

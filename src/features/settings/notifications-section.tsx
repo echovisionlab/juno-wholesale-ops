@@ -1,7 +1,6 @@
 import { useEffect } from "react";
-import { Alert, Badge, Button, Card, Group, Modal, MultiSelect, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { Alert, Button, Card, Group, Modal, MultiSelect, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { ListPlus, Plus, RefreshCw, Save, Send, ShieldCheck, Trash2 } from "lucide-react";
-import type { SettingsResponse } from "@/lib/settings/descriptors";
 import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type { NotificationChannel, NotificationRule } from "@/lib/notifications/types";
 import type { NotificationChannelDraft, NotificationRuleDraft } from "./settings-types";
@@ -12,11 +11,9 @@ import {
   formatNotificationChannelType,
   notificationProviderFromKey,
   formatSignalType,
-  unitStatusColor,
 } from "./settings-utils";
 
 export function NotificationsSettingsCard({
-  settings,
   channels,
   rules,
   loading,
@@ -47,7 +44,6 @@ export function NotificationsSettingsCard({
   onSendDispatch,
   onRefreshNotifications,
 }: {
-  settings: SettingsResponse;
   channels: NotificationChannel[] | null;
   rules: NotificationRule[] | null;
   loading: boolean;
@@ -94,12 +90,7 @@ export function NotificationsSettingsCard({
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Group gap="xs">
-            <Text fw={700}>Notifications</Text>
-            <Badge color={unitStatusColor(settings.units.notifications.status)} variant="light">
-              {settings.units.notifications.status}
-            </Badge>
-          </Group>
+          <Text fw={700}>Notifications</Text>
           <Group gap="xs">
             <Button size="xs" variant="light" loading={loading} onClick={onRefresh}>
               Reload
@@ -115,7 +106,7 @@ export function NotificationsSettingsCard({
 
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Channels" value={loading && !channels ? "loading" : String(safeChannels.length)} />
-          <SignalFact label="Enabled rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
+          <SignalFact label="Active rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
           <SignalFact label="Local delivery" value={`${localChannelCount} in-app/logging normal`} />
           <SignalFact label="External webhooks" value={`${readyWebhookCount} ready / ${webhookChannels.length} configured`} />
           <SignalFact label="External send" value="send button only" />
@@ -178,9 +169,9 @@ export function NotificationsSettingsCard({
                       <Table.Td>{formatNotificationChannelProvider(channel)}</Table.Td>
                       <Table.Td>{channel.configSummary}</Table.Td>
                       <Table.Td>
-                        <Badge color={channel.enabled ? "green" : "gray"} variant="light" size="xs">
-                          {channel.enabled ? "enabled" : "disabled"}
-                        </Badge>
+                        <Text size="sm" c="gray.8">
+                          {channel.enabled ? "on" : "off"}
+                        </Text>
                       </Table.Td>
                       <Table.Td>
                         <Group gap="xs" wrap="nowrap">
@@ -250,9 +241,9 @@ export function NotificationsSettingsCard({
                       <Table.Td>{rule.severities.length > 0 ? rule.severities.join(", ") : "All"}</Table.Td>
                       <Table.Td>{`score ${rule.minScore}, ${rule.cooldownMinutes} min`}</Table.Td>
                       <Table.Td>
-                        <Badge color={rule.enabled ? "green" : "gray"} variant="light" size="xs">
-                          {rule.enabled ? "enabled" : "disabled"}
-                        </Badge>
+                        <Text size="sm" c="gray.8">
+                          {rule.enabled ? "on" : "off"}
+                        </Text>
                       </Table.Td>
                       <Table.Td>
                         <Group gap="xs" wrap="nowrap">
@@ -312,7 +303,7 @@ export function NotificationsSettingsCard({
                 }}
               />
               <Switch
-                label="Enabled"
+                label="Active"
                 checked={channelDraft.enabled}
                 onChange={(event) => onChannelDraftChange({ ...channelDraft, enabled: event.currentTarget.checked })}
               />
@@ -385,7 +376,7 @@ export function NotificationsSettingsCard({
                 onChange={(value) => onRuleDraftChange({ ...ruleDraft, cooldownMinutes: typeof value === "number" ? value : 60 })}
               />
               <Switch
-                label="Enabled"
+                label="Active"
                 checked={ruleDraft.enabled}
                 onChange={(event) => onRuleDraftChange({ ...ruleDraft, enabled: event.currentTarget.checked })}
               />

@@ -112,7 +112,7 @@ function displaySettingValue(
     return definition.required ? "Not configured" : "Not set";
   }
   if (typeof value === "boolean") {
-    return value ? "Enabled" : "Disabled";
+    return value ? "On" : "Off";
   }
   return String(value);
 }

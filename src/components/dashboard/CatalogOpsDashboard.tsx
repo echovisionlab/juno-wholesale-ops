@@ -4,7 +4,6 @@ import { useState } from "react";
 import {
   ActionIcon,
   Alert,
-  Badge,
   Box,
   Button,
   Card,
@@ -33,7 +32,6 @@ import {
   Bell,
   Boxes,
   CheckCircle2,
-  Clock3,
   ClipboardCheck,
   MailSearch,
   PackageCheck,
@@ -171,14 +169,6 @@ export function CatalogOpsDashboard({
                   Juno catalog control desk
                 </Title>
               </Box>
-              <Badge
-                color="sage"
-                size="lg"
-                variant="outline"
-                leftSection={<Clock3 size={14} aria-hidden="true" />}
-              >
-                Daily polling MVP
-              </Badge>
             </Group>
 
             <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
@@ -500,13 +490,13 @@ function TodaySignalsPanel({ signals, filtersActive }: { signals?: TodayInsight[
           <Box key={signal.signalId}>
             <Group justify="space-between" align="flex-start" gap="sm">
               <Stack gap={4}>
-                <Group gap={6}>
-                  <Badge color={signalSeverityColor(signal.severity)} variant="light">
+                <Group gap="xs">
+                  <Text size="sm" c={signalSeverityColor(signal.severity)}>
                     {formatSignalType(signal.type)}
-                  </Badge>
-                  <Badge color="gray" variant="outline">
+                  </Text>
+                  <Text size="sm" c="dimmed">
                     score {signal.score}
-                  </Badge>
+                  </Text>
                 </Group>
                 <Text fw={700}>{signal.title}</Text>
                 <Text size="sm" c="dimmed">
@@ -684,9 +674,9 @@ function NotificationCenterPanel({ deliveries }: { deliveries?: NotificationDeli
             {deliveries.map((delivery) => (
               <Table.Tr key={delivery.id}>
                 <Table.Td>
-                  <Badge color={deliveryStatusColor(delivery.status)} variant="light">
+                  <Text size="sm" c={deliveryStatusColor(delivery.status)}>
                     {formatDeliveryStatus(delivery.status)}
-                  </Badge>
+                  </Text>
                 </Table.Td>
                 <Table.Td>
                   <Text fw={700}>{delivery.subject}</Text>
@@ -750,16 +740,16 @@ function NotificationRulesPanel({ rules }: { rules?: NotificationRule[] | null }
             {rules.map((rule) => (
               <Table.Tr key={rule.id}>
                 <Table.Td>
-                  <Group gap={6}>
-                    <Badge color={rule.enabled ? "green" : "gray"} variant="light">
-                      {rule.enabled ? "Enabled" : "Disabled"}
-                    </Badge>
+                  <Stack gap={2}>
+                    <Text size="sm" c={rule.enabled ? "gray.8" : "dimmed"}>
+                      {rule.enabled ? "On" : "Off"}
+                    </Text>
                     {rule.includeDigest ? (
-                      <Badge color="blue" variant="outline">
+                      <Text size="xs" c="dimmed">
                         Digest
-                      </Badge>
+                      </Text>
                     ) : null}
-                  </Group>
+                  </Stack>
                   <Text fw={700} mt={4}>
                     {rule.name}
                   </Text>
@@ -829,9 +819,9 @@ function NotificationChannelsPanel({ channels }: { channels?: NotificationChanne
                 </Table.Td>
                 <Table.Td>{formatNotificationChannelType(channel.type)}</Table.Td>
                 <Table.Td>
-                  <Badge color={channel.enabled ? "green" : "gray"} variant="light">
-                    {channel.enabled ? "Enabled" : "Disabled"}
-                  </Badge>
+                  <Text size="sm" c={channel.enabled ? "gray.8" : "dimmed"}>
+                    {channel.enabled ? "On" : "Off"}
+                  </Text>
                 </Table.Td>
                 <Table.Td>{channel.configSummary}</Table.Td>
               </Table.Tr>
@@ -848,13 +838,13 @@ function SignalRow({ signal }: { signal: TodayInsight }) {
     <Box>
       <Group justify="space-between" align="flex-start" gap="sm">
         <Stack gap={4}>
-          <Group gap={6}>
-            <Badge color={signalSeverityColor(signal.severity)} variant="light">
+          <Group gap="xs">
+            <Text size="sm" c={signalSeverityColor(signal.severity)}>
               {formatSignalType(signal.type)}
-            </Badge>
-            <Badge color="gray" variant="outline">
+            </Text>
+            <Text size="sm" c="dimmed">
               score {signal.score}
-            </Badge>
+            </Text>
           </Group>
           <Text fw={700}>{signal.title}</Text>
           <Text size="sm" c="dimmed">
@@ -1021,9 +1011,9 @@ function WatchRulesPanel({
                   <Table.Tr key={rule.id}>
                     <Table.Td>
                       <Stack gap={2}>
-                        <Badge color={rule.type === "exclude_keyword" ? "red" : "blue"} variant="light">
+                        <Text size="sm" c={rule.type === "exclude_keyword" ? "red.7" : "gray.8"}>
                           {formatWatchRuleType(rule.type)}
-                        </Badge>
+                        </Text>
                         <Text fw={700}>{rule.pattern}</Text>
                         <Text size="xs" c="dimmed">
                           normalized {rule.patternNorm}
@@ -1036,7 +1026,7 @@ function WatchRulesPanel({
                         aria-label={`Toggle ${rule.pattern}`}
                         checked={rule.enabled}
                         disabled={pending || !onToggle}
-                        label={rule.enabled ? "Enabled" : "Disabled"}
+                        label={rule.enabled ? "On" : "Off"}
                         onChange={() => onToggle?.(rule)}
                       />
                     </Table.Td>
@@ -1076,8 +1066,6 @@ function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) 
     );
   }
 
-  const status = ingestStatusPresentation(state.lastQueryStatus);
-
   return (
     <Card>
       <Group justify="space-between" align="flex-start">
@@ -1087,9 +1075,9 @@ function GmailIngestStatusPanel({ state }: { state?: GmailIngestState | null }) 
             {formatIngestRunDetail(state)}
           </Text>
         </Stack>
-        <Badge color={status.color} variant="light">
-          {status.label}
-        </Badge>
+        <Text size="sm" c="dimmed">
+          {formatIngestStatus(state.lastQueryStatus)}
+        </Text>
       </Group>
 
       {state.lastQueryError ? (
@@ -1308,17 +1296,17 @@ function formatDelta(value: number): string {
   return String(value);
 }
 
-function ingestStatusPresentation(status: GmailIngestState["lastQueryStatus"]): { label: string; color: string } {
+function formatIngestStatus(status: GmailIngestState["lastQueryStatus"]): string {
   if (status === "succeeded") {
-    return { label: "Succeeded", color: "green" };
+    return "Succeeded";
   }
   if (status === "running") {
-    return { label: "Running", color: "blue" };
+    return "Running";
   }
   if (status === "failed") {
-    return { label: "Failed", color: "red" };
+    return "Failed";
   }
-  return { label: "Not run", color: "gray" };
+  return "Not run";
 }
 
 function formatIngestRunDetail(state: GmailIngestState): string {
@@ -1406,9 +1394,9 @@ function ApiIssuePanel({ issues }: { issues: DashboardResourceIssue[] }) {
                 {issue.message}
               </Text>
             </Stack>
-            <Badge color={apiIssueColor(issue.status)} variant="light">
+            <Text size="sm" c={apiIssueColor(issue.status)}>
               {issue.httpStatus ?? issue.status}
-            </Badge>
+            </Text>
           </Group>
         ))}
         <Button component="a" href="/settings" size="xs" variant="light">
@@ -1430,20 +1418,14 @@ function apiIssueColor(status: DashboardResourceIssue["status"]): string {
 }
 
 function SetupStepCard({ step }: { step: SetupStep }) {
-  const status = setupStepPresentation(step);
   return (
     <Card>
-      <Group justify="space-between" align="flex-start">
-        <Stack gap={4}>
-          <Text fw={700}>{step.label}</Text>
-          <Text size="sm" c="dimmed">
-            {step.detail}
-          </Text>
-        </Stack>
-        <Badge color={status.color} variant="light">
-          {status.label}
-        </Badge>
-      </Group>
+      <Stack gap={4}>
+        <Text fw={700}>{step.label}</Text>
+        <Text size="sm" c="dimmed">
+          {step.detail}
+        </Text>
+      </Stack>
       {step.missing.length > 0 ? (
         <Stack gap={6} mt="md">
           <Text size="xs" fw={700} tt="uppercase" c="red.7">
@@ -1487,35 +1469,13 @@ function SetupStepCard({ step }: { step: SetupStep }) {
   );
 }
 
-function setupStepPresentation(step: SetupStep): { label: string; color: string } {
-  if (step.state === "complete") {
-    return { label: "Complete", color: "green" };
-  }
-  if (step.state === "disabled") {
-    return { label: "Disabled", color: "gray" };
-  }
-  if (step.state === "warning") {
-    return { label: "Review", color: "yellow" };
-  }
-  return { label: "Missing", color: "red" };
-}
-
 function SetupSettingRow({ setting }: { setting: SetupSetting }) {
-  const state = setupSettingStatePresentation(setting);
-
   return (
     <Box>
       <Group justify="space-between" gap="xs" align="flex-start">
-        <Stack gap={2}>
-          <Text size="sm" fw={600}>
-            {setting.label}
-          </Text>
-          <Group gap={4}>
-            <Badge color={state.color} size="xs" variant="light">
-              {state.label}
-            </Badge>
-          </Group>
-        </Stack>
+        <Text size="sm" fw={600}>
+          {setting.label}
+        </Text>
         <Text size="sm" ta="right" c={setting.state === "missing" ? "red.7" : "gray.8"} lineClamp={2}>
           {setting.value}
         </Text>
@@ -1537,22 +1497,12 @@ function SetupGuardrailRow({ guardrail }: { guardrail: SetupGuardrail }) {
             {guardrail.detail}
           </Text>
         </Stack>
-        <Badge color={presentation.color} size="xs" variant="light">
+        <Text size="sm" c={presentation.color}>
           {presentation.label}
-        </Badge>
+        </Text>
       </Group>
     </Box>
   );
-}
-
-function setupSettingStatePresentation(setting: SetupSetting): { label: string; color: string } {
-  if (setting.state === "configured") {
-    return { label: setting.secret ? "Secret set" : "Set", color: "green" };
-  }
-  if (setting.state === "disabled") {
-    return { label: "Optional", color: "gray" };
-  }
-  return { label: "Missing", color: "red" };
 }
 
 function setupGuardrailPresentation(guardrail: SetupGuardrail): { label: string; color: string } {
@@ -1597,9 +1547,9 @@ function WorkerControlPanel({
             {formatWorkerDetail(status)}
           </Text>
         </Stack>
-        <Badge color={isRunning ? "green" : "gray"} variant="light">
+        <Text size="sm" c="dimmed">
           {status?.state ?? "unknown"}
-        </Badge>
+        </Text>
       </Group>
 
       <Group mt="md" gap="xs">
