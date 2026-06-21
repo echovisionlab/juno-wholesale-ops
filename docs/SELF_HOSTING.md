@@ -13,13 +13,14 @@ pnpm db:migrate
 pnpm dev
 ```
 
-After migrations, open `/settings`. Process env is limited to `DATABASE_URL`
-and optional initial admin bootstrap values. Saved Postgres settings are the
-primary operator settings surface. Mail ingest uses separate
-`mail_connection` and `mail_mailbox_source` records, with no env fallback for
-mailbox addresses, Gmail service account JSON, attachment storage settings, or
-supplier codes. The Settings Center shows current editable values directly in
-inputs, masks secrets, and avoids raw payload dumps.
+After migrations, open `/settings`. Process env is limited to `DATABASE_URL`,
+the internal auth proxy origin used by reverse-proxy deployments, and optional
+initial admin bootstrap values. Saved Postgres settings are the primary operator
+settings surface. Mail ingest uses separate `mail_connection` and
+`mail_mailbox_source` records, with no env fallback for mailbox addresses,
+Gmail service account JSON, attachment storage settings, or supplier codes. The
+Settings Center shows current editable values directly in inputs, masks
+secrets, and avoids raw payload dumps.
 
 Local MinIO is available through `pnpm storage:dev:up` for S3-compatible storage
 testing. It uses the same MinIO release as the dsub local stack and exposes the
@@ -47,10 +48,14 @@ console on `http://localhost:29101`.
 - Prefer webhook `secret_ref` over inline config.
 
 `DATABASE_URL` remains runtime-only and required at process start. The app does
-not fall back to database settings when it is missing. The internal Better Auth
-secret value is never editable or displayed in the Settings Center. The Settings
-Center shows the policy for how it is stored, rotated, and backed up. Auth is
-always enabled before the service is exposed beyond trusted local access.
+not fall back to database settings when it is missing.
+`JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN` should point at the app's
+private in-container origin, such as `http://127.0.0.1:3006`, so protected route
+checks do not call back through the public Caddy or TLS path. The internal
+Better Auth secret value is never editable or displayed in the Settings Center.
+The Settings Center shows the policy for how it is stored, rotated, and backed
+up. Auth is always enabled before the service is exposed beyond trusted local
+access.
 
 ## Secret Storage, Rotation, and Backup
 
@@ -148,9 +153,11 @@ KOMODO_STACK_NAME
 
 `KOMODO_TOKEN` or `KOMODO_USERNAME` / `KOMODO_PASSWORD` may be used instead of
 API key credentials. The Komodo stack must already exist, and its environment
-must include `DATABASE_URL` before a production deploy can pass. Do not put
-database URLs, supplier credentials, or raw attachment storage paths in GitHub
-Actions secrets.
+must include `DATABASE_URL` before a production deploy can pass. Keep
+`JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN` set to the private web origin
+unless the compose default is correct for the stack. Do not put database URLs,
+supplier credentials, or raw attachment storage paths in GitHub Actions
+secrets.
 
 If the external Caddy layer serves a certificate chain that the GitHub runner
 trust store has not caught up with yet, set the production environment variable
