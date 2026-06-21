@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { describe, expect, it, vi } from "vitest";
-import { JunoLiveWorkerProcessManager, resolveWorkerProcessCommand } from "./worker-process";
+import { JunoLiveWorkerProcessManager, resolveWorkerProcessCommand, toPublicWorkerProcessStatus } from "./worker-process";
 
 describe("resolveWorkerProcessCommand", () => {
   it("uses the repo-local tsx binary when present", () => {
@@ -78,6 +78,33 @@ describe("JunoLiveWorkerProcessManager", () => {
 
     expect(secondStart.state).toBe("running");
     expect(spawnFn).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("toPublicWorkerProcessStatus", () => {
+  it("removes command arguments and raw process logs", () => {
+    expect(
+      toPublicWorkerProcessStatus({
+        state: "running",
+        pid: 1234,
+        startedAt: "2026-06-17T00:00:00.000Z",
+        stoppedAt: null,
+        exitCode: null,
+        signal: null,
+        lastError: null,
+        command: "tsx",
+        args: ["scripts/juno-live-worker.ts", "--loop"],
+        recentLogs: [{ stream: "stdout", line: "operator@example.com", occurredAt: "2026-06-17T00:00:01.000Z" }],
+      }),
+    ).toEqual({
+      state: "running",
+      pid: 1234,
+      startedAt: "2026-06-17T00:00:00.000Z",
+      stoppedAt: null,
+      exitCode: null,
+      signal: null,
+      lastError: null,
+    });
   });
 });
 

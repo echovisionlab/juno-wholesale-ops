@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ComponentProps, type ReactNode } from "react";
 import {
   ActionIcon,
   Alert,
@@ -76,6 +76,7 @@ import {
 import type {
   AppSetupStatus,
   CatalogTrendSummary,
+  DashboardIcon,
   DashboardSavedView,
   DashboardSavedViewDraft,
   DashboardResourceIssue,
@@ -128,6 +129,32 @@ export type CatalogOpsDashboardProps = {
   onUpdateDashboardSavedView?: (view: DashboardSavedView, filters: DashboardSignalFilters) => void;
   onDeleteDashboardSavedView?: (view: DashboardSavedView) => void;
 };
+
+type DashboardOptionalPanelId = Exclude<DashboardPanelId, "configuration" | "apiIssues" | "signalFilters">;
+type DashboardOptionalPanelSlot = "beforeFilters" | "afterFilters";
+type DashboardOptionalPanelRenderMetadata = {
+  id: DashboardOptionalPanelId;
+  title?: string;
+  icon?: DashboardIcon;
+  span: ComponentProps<typeof Grid.Col>["span"];
+  slot: DashboardOptionalPanelSlot;
+};
+
+export const dashboardOptionalPanelRenderRegistry: DashboardOptionalPanelRenderMetadata[] = [
+  { id: "ingestionPipeline", title: "Ingestion Pipeline", icon: PackageCheck, span: { base: 12, lg: 8 }, slot: "beforeFilters" },
+  { id: "commands", span: { base: 12, lg: 4 }, slot: "beforeFilters" },
+  { id: "mailIngest", title: "Mail Ingest State", icon: MailSearch, span: 12, slot: "beforeFilters" },
+  { id: "todaySignals", title: "Today Signals", icon: Signal, span: { base: 12, lg: 7 }, slot: "afterFilters" },
+  { id: "watchRules", title: "Watch Rules", icon: SlidersHorizontal, span: { base: 12, lg: 5 }, slot: "afterFilters" },
+  { id: "movementSignals", title: "Movement Signals", icon: Activity, span: { base: 12, lg: 7 }, slot: "afterFilters" },
+  { id: "operatorDigest", title: "Operator Digest", icon: ClipboardCheck, span: { base: 12, lg: 5 }, slot: "afterFilters" },
+  { id: "catalogTrends", title: "Catalog Trends", icon: BarChart3, span: 12, slot: "afterFilters" },
+  { id: "notificationCenter", title: "Notification Center", icon: Bell, span: { base: 12, lg: 7 }, slot: "afterFilters" },
+  { id: "notificationRules", title: "Notification Rules", icon: Send, span: { base: 12, lg: 5 }, slot: "afterFilters" },
+  { id: "notificationChannels", title: "Notification Channels", icon: Webhook, span: 12, slot: "afterFilters" },
+  { id: "liveStockWatch", title: "Live Stock Watch", icon: PackageSearch, span: 12, slot: "afterFilters" },
+  { id: "workerControls", span: 12, slot: "afterFilters" },
+];
 
 export function CatalogOpsDashboard({
   stats,
@@ -194,6 +221,100 @@ export function CatalogOpsDashboard({
     return isDashboardPanelVisible(panelLayout, panelId);
   }
 
+  function renderOptionalPanel(panel: DashboardOptionalPanelRenderMetadata): ReactNode {
+    if (!panelVisible(panel.id)) {
+      return null;
+    }
+    return (
+      <Grid.Col key={panel.id} span={panel.span}>
+        {panel.title && panel.icon ? <SectionHeader icon={panel.icon}>{panel.title}</SectionHeader> : null}
+        {renderOptionalPanelBody(panel.id)}
+      </Grid.Col>
+    );
+  }
+
+  function renderOptionalPanelBody(panelId: DashboardOptionalPanelId): ReactNode {
+    switch (panelId) {
+      case "ingestionPipeline":
+        return (
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            {pipeline.map((item) => (
+              <PipelineCard key={item.title} {...item} />
+            ))}
+          </SimpleGrid>
+        );
+      case "commands":
+        return <CommandPanel commands={commands} />;
+      case "mailIngest":
+        return <GmailIngestStatusPanel state={ingestState} />;
+      case "todaySignals":
+        return <TodaySignalsPanel signals={filteredTodaySignals} filtersActive={filtersActive} />;
+      case "watchRules":
+        return (
+          <WatchRulesPanel
+            rules={watchRules}
+            pending={watchRuleActionPending}
+            onCreate={onCreateWatchRule}
+            onToggle={onToggleWatchRule}
+            onDelete={onDeleteWatchRule}
+          />
+        );
+      case "movementSignals":
+        return <MovementSignalsPanel signals={filteredMovementSignals} filtersActive={filtersActive} />;
+      case "operatorDigest":
+        return <OperatorDigestPanel digest={operatorDigest} />;
+      case "catalogTrends":
+        return <CatalogTrendsPanel trends={catalogTrends} />;
+      case "notificationCenter":
+        return <NotificationCenterPanel deliveries={filteredNotificationDeliveries} filtersActive={filtersActive} />;
+      case "notificationRules":
+        return <NotificationRulesPanel rules={notificationRules} />;
+      case "notificationChannels":
+        return <NotificationChannelsPanel channels={notificationChannels} />;
+      case "liveStockWatch":
+        return (
+          <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
+            <StatCard
+              label="Queued / Running"
+              value={liveSummary ? `${liveSummary.queued} / ${liveSummary.running}` : "N/A"}
+              detail="browser worker job backlog"
+              icon={Boxes}
+            />
+            <StatCard
+              label="Succeeded / Failed"
+              value={liveSummary ? `${liveSummary.succeeded} / ${liveSummary.failed}` : "N/A"}
+              detail="completed lookup jobs"
+              icon={CheckCircle2}
+            />
+            <StatCard
+              label="Blocked / Manual"
+              value={liveSummary ? `${liveSummary.blocked} / ${liveSummary.manualRequired}` : "N/A"}
+              detail="challenge or credential intervention"
+              icon={AlertTriangle}
+            />
+            <StatCard
+              label="Latest Live Stock"
+              value={liveSummary?.latestDisplayStock ?? "N/A"}
+              detail={formatObservedAt(liveSummary?.latestObservedAt)}
+              icon={PackageSearch}
+            />
+          </SimpleGrid>
+        );
+      case "workerControls":
+        return (
+          <WorkerControlPanel
+            status={workerStatus}
+            pending={workerActionPending}
+            disabledReason={workerDisabledReason}
+            onAction={onWorkerAction}
+          />
+        );
+      /* v8 ignore next -- TypeScript keeps this switch exhaustive for registered panel ids. */
+      default:
+        return assertNever(panelId);
+    }
+  }
+
   return (
     <Box component="main" bg="gray.0" mih="100vh">
       <Box component="section" bg="white">
@@ -240,29 +361,7 @@ export function CatalogOpsDashboard({
             </Grid.Col>
           ) : null}
 
-          {panelVisible("ingestionPipeline") ? (
-            <Grid.Col span={{ base: 12, lg: 8 }}>
-              <SectionHeader icon={PackageCheck}>Ingestion Pipeline</SectionHeader>
-              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                {pipeline.map((item) => (
-                  <PipelineCard key={item.title} {...item} />
-                ))}
-              </SimpleGrid>
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("commands") ? (
-            <Grid.Col span={{ base: 12, lg: 4 }}>
-              <CommandPanel commands={commands} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("mailIngest") ? (
-            <Grid.Col span={12}>
-              <SectionHeader icon={MailSearch}>Mail Ingest State</SectionHeader>
-              <GmailIngestStatusPanel state={ingestState} />
-            </Grid.Col>
-          ) : null}
+          {dashboardOptionalPanelRenderRegistry.filter((panel) => panel.slot === "beforeFilters").map(renderOptionalPanel)}
 
           <Grid.Col span={12}>
             <SectionHeader icon={SlidersHorizontal}>Signal Filters</SectionHeader>
@@ -278,110 +377,7 @@ export function CatalogOpsDashboard({
             />
           </Grid.Col>
 
-          {panelVisible("todaySignals") ? (
-            <Grid.Col span={{ base: 12, lg: 7 }}>
-              <SectionHeader icon={Signal}>Today Signals</SectionHeader>
-              <TodaySignalsPanel signals={filteredTodaySignals} filtersActive={filtersActive} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("watchRules") ? (
-            <Grid.Col span={{ base: 12, lg: 5 }}>
-              <SectionHeader icon={SlidersHorizontal}>Watch Rules</SectionHeader>
-              <WatchRulesPanel
-                rules={watchRules}
-                pending={watchRuleActionPending}
-                onCreate={onCreateWatchRule}
-                onToggle={onToggleWatchRule}
-                onDelete={onDeleteWatchRule}
-              />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("movementSignals") ? (
-            <Grid.Col span={{ base: 12, lg: 7 }}>
-              <SectionHeader icon={Activity}>Movement Signals</SectionHeader>
-              <MovementSignalsPanel signals={filteredMovementSignals} filtersActive={filtersActive} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("operatorDigest") ? (
-            <Grid.Col span={{ base: 12, lg: 5 }}>
-              <SectionHeader icon={ClipboardCheck}>Operator Digest</SectionHeader>
-              <OperatorDigestPanel digest={operatorDigest} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("catalogTrends") ? (
-            <Grid.Col span={12}>
-              <SectionHeader icon={BarChart3}>Catalog Trends</SectionHeader>
-              <CatalogTrendsPanel trends={catalogTrends} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("notificationCenter") ? (
-            <Grid.Col span={{ base: 12, lg: 7 }}>
-              <SectionHeader icon={Bell}>Notification Center</SectionHeader>
-              <NotificationCenterPanel deliveries={filteredNotificationDeliveries} filtersActive={filtersActive} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("notificationRules") ? (
-            <Grid.Col span={{ base: 12, lg: 5 }}>
-              <SectionHeader icon={Send}>Notification Rules</SectionHeader>
-              <NotificationRulesPanel rules={notificationRules} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("notificationChannels") ? (
-            <Grid.Col span={12}>
-              <SectionHeader icon={Webhook}>Notification Channels</SectionHeader>
-              <NotificationChannelsPanel channels={notificationChannels} />
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("liveStockWatch") ? (
-            <Grid.Col span={12}>
-              <SectionHeader icon={PackageSearch}>Live Stock Watch</SectionHeader>
-              <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
-                <StatCard
-                  label="Queued / Running"
-                  value={liveSummary ? `${liveSummary.queued} / ${liveSummary.running}` : "N/A"}
-                  detail="browser worker job backlog"
-                  icon={Boxes}
-                />
-                <StatCard
-                  label="Succeeded / Failed"
-                  value={liveSummary ? `${liveSummary.succeeded} / ${liveSummary.failed}` : "N/A"}
-                  detail="completed lookup jobs"
-                  icon={CheckCircle2}
-                />
-                <StatCard
-                  label="Blocked / Manual"
-                  value={liveSummary ? `${liveSummary.blocked} / ${liveSummary.manualRequired}` : "N/A"}
-                  detail="challenge or credential intervention"
-                  icon={AlertTriangle}
-                />
-                <StatCard
-                  label="Latest Live Stock"
-                  value={liveSummary?.latestDisplayStock ?? "N/A"}
-                  detail={formatObservedAt(liveSummary?.latestObservedAt)}
-                  icon={PackageSearch}
-                />
-              </SimpleGrid>
-            </Grid.Col>
-          ) : null}
-
-          {panelVisible("workerControls") ? (
-            <Grid.Col span={12}>
-              <WorkerControlPanel
-                status={workerStatus}
-                pending={workerActionPending}
-                disabledReason={workerDisabledReason}
-                onAction={onWorkerAction}
-              />
-            </Grid.Col>
-          ) : null}
+          {dashboardOptionalPanelRenderRegistry.filter((panel) => panel.slot === "afterFilters").map(renderOptionalPanel)}
         </Grid>
       </Container>
     </Box>
@@ -1317,7 +1313,6 @@ function WorkerControlPanel({
   onAction?: (action: LiveWorkerAction) => void;
 }) {
   const isRunning = status?.state === "running";
-  const latestLogs = status?.recentLogs.slice(-4) ?? [];
   const startDisabled = pending || isRunning || !onAction || Boolean(disabledReason);
   const restartDisabled = pending || !onAction || Boolean(disabledReason);
 
@@ -1368,10 +1363,10 @@ function WorkerControlPanel({
         </Alert>
       ) : null}
 
-      {status ? (
-        <Code mt="md" block>
-          {[`${status.command} ${status.args.join(" ")}`.trim(), ...latestLogs.map(formatWorkerLogLine)].join("\n")}
-        </Code>
+      {status?.lastError ? (
+        <Alert color="red" mt="md" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Last worker error">
+          {status.lastError}
+        </Alert>
       ) : null}
     </Card>
   );
@@ -1419,6 +1414,7 @@ function formatOptionalDate(value: string | null): string {
   return value ? new Date(value).toLocaleString() : "N/A";
 }
 
-function formatWorkerLogLine(log: LiveWorkerStatus["recentLogs"][number]): string {
-  return `[${log.stream}] ${log.line}`;
+/* v8 ignore next 3 -- Exhaustive guard only; registered panel ids are covered by rendering tests. */
+function assertNever(value: never): never {
+  throw new Error(`Unhandled dashboard panel: ${String(value)}`);
 }

@@ -1,8 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
+  dashboardPanelDefinitions,
+  getDashboardPanelDefinition,
   getVisibleOptionalDashboardPanelIds,
   isDashboardPanelVisible,
+  isPinnedDashboardPanel,
   normalizeDashboardPanelLayout,
+  optionalDashboardPanelDefinitions,
   readDashboardPanelLayout,
   setVisibleOptionalDashboardPanels,
 } from "./panel-layout";
@@ -25,7 +29,18 @@ describe("dashboard panel layout", () => {
 
     expect(getVisibleOptionalDashboardPanelIds(layout)).toEqual(["todaySignals", "catalogTrends"]);
     expect(isDashboardPanelVisible(layout, "signalFilters")).toBe(true);
+    expect(isPinnedDashboardPanel("signalFilters")).toBe(true);
     expect(isDashboardPanelVisible(layout, "watchRules")).toBe(false);
+  });
+
+  it("keeps panel metadata in one registry", () => {
+    expect(getDashboardPanelDefinition("todaySignals")).toMatchObject({
+      id: "todaySignals",
+      label: "Today signals",
+    });
+    expect(optionalDashboardPanelDefinitions.map((definition) => definition.id)).toEqual(
+      dashboardPanelDefinitions.filter((definition) => !definition.pinned).map((definition) => definition.id),
+    );
   });
 
   it("reads serialized layout defensively", () => {

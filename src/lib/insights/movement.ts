@@ -1,4 +1,4 @@
-import type { SignalEventType, SignalSeverity } from "./repository";
+import { liveMovementSignalTypes, type SignalEventType, type SignalSeverity } from "./signal-types";
 
 export type LiveObservationStatus =
   | "in_stock"
@@ -41,14 +41,7 @@ export type MovementSignalOptions = {
   fastMoverLookbackHours?: number;
 };
 
-export const movementSignalTypes = [
-  "observed_restock",
-  "observed_stock_drop",
-  "observed_live_low_stock",
-  "observed_status_change",
-  "observed_price_change",
-  "fast_mover_candidate",
-] as const satisfies SignalEventType[];
+export const movementSignalTypes = liveMovementSignalTypes;
 
 const restockFromStatuses = new Set<LiveObservationStatus>(["out_of_stock", "unknown", "failed"]);
 const restockToStatuses = new Set<LiveObservationStatus>(["in_stock", "preorder", "coming_soon"]);

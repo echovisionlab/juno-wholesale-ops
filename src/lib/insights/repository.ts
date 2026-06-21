@@ -11,20 +11,9 @@ import {
   type WatchRule,
   type WatchRuleType,
 } from "./watch-matcher";
+import type { SignalEventType, SignalSeverity } from "./signal-types";
 
-export type SignalEventType =
-  | "new_arrival"
-  | "watch_hit"
-  | "low_catalog_stock"
-  | "exclude_match"
-  | "observed_restock"
-  | "observed_stock_drop"
-  | "observed_live_low_stock"
-  | "observed_status_change"
-  | "observed_price_change"
-  | "fast_mover_candidate"
-  | "trend_spike";
-export type SignalSeverity = "info" | "watch" | "warning" | "critical";
+export type { SignalEventType, SignalSeverity } from "./signal-types";
 
 export type WatchRuleInput = {
   type: WatchRuleType;

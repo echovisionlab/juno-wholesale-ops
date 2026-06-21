@@ -25,6 +25,8 @@ export type WorkerProcessStatus = {
   recentLogs: WorkerProcessLogLine[];
 };
 
+export type PublicWorkerProcessStatus = Omit<WorkerProcessStatus, "command" | "args" | "recentLogs">;
+
 export type WorkerProcessCommand = {
   command: string;
   args: string[];
@@ -193,6 +195,18 @@ export function resolveWorkerProcessCommand(cwd: string): WorkerProcessCommand {
   return {
     command: "pnpm",
     args: ["exec", "tsx", "-r", "tsconfig-paths/register", "scripts/juno-live-worker.ts", "--loop"],
+  };
+}
+
+export function toPublicWorkerProcessStatus(status: WorkerProcessStatus): PublicWorkerProcessStatus {
+  return {
+    state: status.state,
+    pid: status.pid,
+    startedAt: status.startedAt,
+    stoppedAt: status.stoppedAt,
+    exitCode: status.exitCode,
+    signal: status.signal,
+    lastError: status.lastError,
   };
 }
 

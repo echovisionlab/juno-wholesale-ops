@@ -203,6 +203,17 @@ vi.mock("@/lib/juno-live/repository", () => ({
 
 vi.mock("@/lib/juno-live/worker-process", () => ({
   getJunoLiveWorkerProcessManager: vi.fn(),
+  toPublicWorkerProcessStatus: vi.fn((status: Record<string, unknown>) => {
+    return {
+      state: status.state,
+      pid: status.pid,
+      startedAt: status.startedAt,
+      stoppedAt: status.stoppedAt,
+      exitCode: status.exitCode,
+      signal: status.signal,
+      lastError: status.lastError,
+    };
+  }),
 }));
 
 vi.mock("@/lib/notifications/dispatcher", () => ({
@@ -281,7 +292,12 @@ describe("admin guarded API routes", () => {
     getSummary: vi.fn(async () => ({ queued: 2 })),
   };
   const manager = {
-    getStatus: vi.fn(() => ({ state: "stopped" })),
+    getStatus: vi.fn(() => ({
+      state: "stopped",
+      command: "tsx",
+      args: ["scripts/juno-live-worker.ts", "--loop"],
+      recentLogs: [{ stream: "stdout", line: "operator@example.com", occurredAt: "2026-06-17T00:00:00.000Z" }],
+    })),
     start: vi.fn(() => ({ state: "running" })),
     stopAndWait: vi.fn(async () => ({ state: "stopped" })),
     restart: vi.fn(async () => ({ state: "running", restarts: 1 })),
@@ -1404,6 +1420,12 @@ describe("admin guarded API routes", () => {
       status: 200,
       body: { worker: { state: "stopped" } },
     });
+    await expect(expectJson(getLiveLookupWorker(request()))).resolves.not.toMatchObject({
+      body: { worker: { command: expect.any(String) } },
+    });
+    await expect(expectJson(getLiveLookupWorker(request()))).resolves.not.toMatchObject({
+      body: { worker: { recentLogs: expect.any(Array) } },
+    });
     await expect(expectJson(postLiveLookupWorker(jsonRequest({ action: "start" })))).resolves.toEqual({
       status: 200,
       body: { worker: { state: "running" } },
@@ -1414,7 +1436,7 @@ describe("admin guarded API routes", () => {
     });
     await expect(expectJson(postLiveLookupWorker(jsonRequest({ action: "restart" })))).resolves.toEqual({
       status: 200,
-      body: { worker: { state: "running", restarts: 1 } },
+      body: { worker: { state: "running" } },
     });
     await expect(expectJson(postLiveLookupWorker(jsonRequest({ action: "pause" })))).resolves.toEqual({
       status: 400,

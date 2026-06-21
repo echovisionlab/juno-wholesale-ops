@@ -33,7 +33,7 @@ export class PlaywrightJunoBrowser implements JunoLiveBrowser {
       if (!this.options.loginEmail || !this.options.loginPassword) {
         return { status: "failed", error: "missing_juno_credentials" };
       }
-      await this.options.logger.info("login.start", { url: page.url(), email: this.options.loginEmail });
+      await this.options.logger.info("login.start", { url: page.url(), emailConfigured: true });
       await page.getByLabel(/e-?mail address/i).fill(this.options.loginEmail);
       await page.getByLabel(/password/i).fill(this.options.loginPassword);
       await page.getByRole("button", { name: /log in/i }).click();

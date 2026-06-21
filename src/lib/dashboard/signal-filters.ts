@@ -1,17 +1,14 @@
-export type DashboardSignalType =
-  | "new_arrival"
-  | "watch_hit"
-  | "low_catalog_stock"
-  | "exclude_match"
-  | "observed_restock"
-  | "observed_stock_drop"
-  | "observed_live_low_stock"
-  | "observed_status_change"
-  | "observed_price_change"
-  | "fast_mover_candidate"
-  | "trend_spike";
+import {
+  isDashboardMovementSignalType,
+  isLowStockSignalType,
+  signalEventTypes,
+  signalSeverities,
+  type SignalEventType,
+  type SignalSeverity,
+} from "@/lib/insights/signal-types";
 
-export type DashboardSignalSeverity = "info" | "watch" | "warning" | "critical";
+export type DashboardSignalType = SignalEventType;
+export type DashboardSignalSeverity = SignalSeverity;
 export type DashboardDateRange = "today" | "7d" | "30d" | "all";
 
 export type DashboardSignalFilters = {
@@ -38,21 +35,8 @@ export type FilterableDashboardNotificationDelivery = {
   queuedAt: string;
 };
 
-export const dashboardSignalTypes: DashboardSignalType[] = [
-  "new_arrival",
-  "watch_hit",
-  "low_catalog_stock",
-  "exclude_match",
-  "observed_restock",
-  "observed_stock_drop",
-  "observed_live_low_stock",
-  "observed_status_change",
-  "observed_price_change",
-  "fast_mover_candidate",
-  "trend_spike",
-];
-
-export const dashboardSignalSeverities: DashboardSignalSeverity[] = ["info", "watch", "warning", "critical"];
+export const dashboardSignalTypes: DashboardSignalType[] = [...signalEventTypes];
+export const dashboardSignalSeverities: DashboardSignalSeverity[] = [...signalSeverities];
 export const dashboardDateRanges: DashboardDateRange[] = ["today", "7d", "30d", "all"];
 
 export const defaultDashboardSignalFilters: DashboardSignalFilters = {
@@ -67,15 +51,6 @@ export const defaultDashboardSignalFilters: DashboardSignalFilters = {
 const signalTypeSet = new Set(dashboardSignalTypes);
 const severitySet = new Set(dashboardSignalSeverities);
 const dateRangeSet = new Set(dashboardDateRanges);
-const movementSignalTypeSet = new Set<DashboardSignalType>([
-  "observed_restock",
-  "observed_stock_drop",
-  "observed_live_low_stock",
-  "observed_status_change",
-  "observed_price_change",
-  "fast_mover_candidate",
-  "trend_spike",
-]);
 
 export function normalizeDashboardSignalFilters(value: unknown): DashboardSignalFilters {
   if (!isRecord(value)) {
@@ -117,7 +92,7 @@ export function filterDashboardSignals<T extends FilterableDashboardSignal>(
     if (normalized.lowStockOnly && !isLowStockSignal(signal)) {
       return false;
     }
-    if (normalized.movementOnly && !movementSignalTypeSet.has(signal.type)) {
+    if (normalized.movementOnly && !isDashboardMovementSignalType(signal.type)) {
       return false;
     }
     if (fromDate && !isSignalOnOrAfter(signal.createdAt, fromDate)) {
@@ -155,7 +130,7 @@ export function filterDashboardNotificationDeliveries<T extends FilterableDashbo
     if (normalized.lowStockOnly && !isLowStockSignalType(delivery.signalType)) {
       return false;
     }
-    if (normalized.movementOnly && !movementSignalTypeSet.has(delivery.signalType)) {
+    if (normalized.movementOnly && !isDashboardMovementSignalType(delivery.signalType)) {
       return false;
     }
     return true;
@@ -199,10 +174,6 @@ function isLowStockSignal(signal: FilterableDashboardSignal): boolean {
     isLowStockSignalType(signal.type) ||
     (signal.item.stock !== null && signal.item.stock <= 3)
   );
-}
-
-function isLowStockSignalType(type: DashboardSignalType): boolean {
-  return type === "low_catalog_stock" || type === "observed_live_low_stock";
 }
 
 function hasSignalSpecificDashboardFilters(filters: DashboardSignalFilters): boolean {
