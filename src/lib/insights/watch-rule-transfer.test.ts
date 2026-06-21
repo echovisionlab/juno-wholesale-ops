@@ -154,6 +154,18 @@ describe("watch rule import and export", () => {
       updated: 0,
       skipped: 0,
     });
+    await expect(
+      importWatchRules(databaseUrl, {
+        schemaVersion: 1,
+        exportedAt: "2026-06-20T00:00:00.000Z",
+        rules: [{ type: "label", pattern: "Blue Note" }],
+      }),
+    ).resolves.toMatchObject({
+      dryRun: true,
+      created: 1,
+      updated: 0,
+      skipped: 0,
+    });
 
     await expect(listWatchRules(databaseUrl)).resolves.toEqual([
       expect.objectContaining({ type: "artist", pattern: "Lara Voss", weight: 10, enabled: true }),
@@ -166,12 +178,15 @@ describe("watch rule import and export", () => {
     await expect(importWatchRules(databaseUrl, { dryRun: "yes", rules: [] })).rejects.toThrow(
       "dryRun must be a boolean when provided",
     );
-    await expect(importWatchRules(databaseUrl, { items: [] })).rejects.toThrow(
-      "Watch rule import payload must include a rules array",
-    );
+    await expect(importWatchRules(databaseUrl, { items: [] })).rejects.toThrow('Unrecognized key: "items"');
     await expect(importWatchRules(databaseUrl, { schemaVersion: 2, rules: [] })).rejects.toThrow(
       "Unsupported watch rule import schema version",
     );
+    await expect(
+      importWatchRules(databaseUrl, {
+        rules: Array.from({ length: 501 }, () => ({ type: "artist", pattern: "Lara Voss" })),
+      }),
+    ).rejects.toThrow("Watch rule import supports up to 500 rules");
     await expect(
       importWatchRules(databaseUrl, {
         rules: [
@@ -187,6 +202,16 @@ describe("watch rule import and export", () => {
       updated: 0,
       skipped: 4,
       invalid: 4,
+      duplicateInPayload: 0,
+    });
+    await expect(
+      importWatchRules(databaseUrl, { rules: [{ type: "artist", pattern: "x".repeat(201) }] }),
+    ).resolves.toMatchObject({
+      total: 1,
+      created: 0,
+      updated: 0,
+      skipped: 1,
+      invalid: 1,
       duplicateInPayload: 0,
     });
   });

@@ -4,10 +4,16 @@ import { importWatchRules } from "@/lib/insights/watch-rule-transfer";
 
 export const dynamic = "force-dynamic";
 
+const maxWatchRuleImportBodyBytes = 256 * 1024;
+
 export async function POST(request: Request) {
   const authorization = await requireAdmin(request);
   if (!authorization.authorized) {
     return authorization.response;
+  }
+
+  if (requestBodyTooLarge(request)) {
+    return Response.json({ error: "watch_rule_import_too_large" }, { status: 413 });
   }
 
   try {
@@ -28,4 +34,13 @@ async function parseJson(request: Request): Promise<unknown> {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Invalid watch rule import request";
+}
+
+function requestBodyTooLarge(request: Request): boolean {
+  const contentLength = request.headers.get("content-length");
+  if (!contentLength) {
+    return false;
+  }
+  const byteLength = Number(contentLength);
+  return Number.isFinite(byteLength) && byteLength > maxWatchRuleImportBodyBytes;
 }
