@@ -56,12 +56,18 @@ type NormalizedDefinition = {
 };
 
 const watchRuleTypeValues = ["artist", "label", "genre", "keyword", "exclude_keyword"] as const satisfies WatchRuleType[];
+const watchRuleImportMaxRules = 500;
+const watchRulePatternMaxLength = 200;
 
 const watchRuleDefinitionSchema = z
   .object(
     {
       type: z.enum(watchRuleTypeValues, { error: "Rule type is invalid" }),
-      pattern: z.string({ error: "Rule pattern is required" }).trim().min(1, "Rule pattern is required"),
+      pattern: z
+        .string({ error: "Rule pattern is required" })
+        .trim()
+        .min(1, "Rule pattern is required")
+        .max(watchRulePatternMaxLength, `Rule pattern must be ${watchRulePatternMaxLength} characters or fewer`),
       weight: z.number({ error: "Rule weight must be an integer between -100 and 100" })
         .int("Rule weight must be an integer between -100 and 100")
         .min(-100, "Rule weight must be an integer between -100 and 100")
@@ -94,14 +100,19 @@ const watchRuleDefinitionSchema = z
     };
   });
 
+const importRulesSchema = z
+  .array(z.unknown(), { error: "Watch rule import payload must include a rules array" })
+  .max(watchRuleImportMaxRules, `Watch rule import supports up to ${watchRuleImportMaxRules} rules`);
+
 const importObjectEnvelopeSchema = z
   .object({
     schemaVersion: z.literal(1, { error: "Unsupported watch rule import schema version" }).optional(),
-    rules: z.array(z.unknown()).optional(),
-    watchRules: z.array(z.unknown()).optional(),
+    exportedAt: z.string({ error: "exportedAt must be a string when provided" }).optional(),
+    rules: importRulesSchema.optional(),
+    watchRules: importRulesSchema.optional(),
     dryRun: z.boolean({ error: "dryRun must be a boolean when provided" }).optional(),
   })
-  .passthrough()
+  .strict()
   .transform((value, context) => {
     const rules = value.rules ?? value.watchRules;
     if (!rules) {
@@ -274,11 +285,15 @@ async function upsertWatchRuleClient(client: PoolClient, definition: NormalizedD
 
 function parseImportEnvelope(payload: unknown): { rules: unknown[]; dryRun?: boolean } {
   if (Array.isArray(payload)) {
-    return { rules: payload };
+    const parsed = importRulesSchema.safeParse(payload);
+    if (!parsed.success) {
+      throw new Error(firstZodMessage(parsed.error, "Watch rule import payload must include a rules array"));
+    }
+    return { rules: parsed.data };
   }
   const parsed = importObjectEnvelopeSchema.safeParse(payload);
   if (!parsed.success) {
-    throw new Error(parsed.error.issues[0]?.message ?? "Watch rule import payload must include a rules array");
+    throw new Error(firstZodMessage(parsed.error, "Watch rule import payload must include a rules array"));
   }
   return parsed.data;
 }
@@ -291,6 +306,10 @@ function normalizeDefinition(value: unknown):
     return { ok: false, reason: parsed.error.issues[0]?.message ?? "Rule must be an object" };
   }
   return { ok: true, definition: parsed.data };
+}
+
+function firstZodMessage(error: z.ZodError, fallback: string): string {
+  return error.issues[0]?.message ?? fallback;
 }
 
 function summarizeImportItems(dryRun: boolean, total: number, items: WatchRuleImportItem[]): WatchRuleImportResult {

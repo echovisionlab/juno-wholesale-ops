@@ -1022,6 +1022,19 @@ describe("admin guarded API routes", () => {
         },
       },
     });
+    await expect(
+      expectJson(
+        importWatchRulesRoute(
+          new Request("http://app.test/api/watch-rules/import", {
+            method: "POST",
+            headers: { "content-length": String(256 * 1024 + 1) },
+          }),
+        ),
+      ),
+    ).resolves.toEqual({
+      status: 413,
+      body: { error: "watch_rule_import_too_large" },
+    });
 
     await expect(expectJson(postWatchRules(invalidJsonRequest()))).resolves.toEqual({
       status: 400,
