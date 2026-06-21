@@ -20,6 +20,7 @@ import { getDelegatedAccessToken, parseServiceAccountKeyJson } from "@/lib/inges
 import { getGmailIngestState } from "@/lib/ingest/repository";
 import {
   createDashboardSavedView,
+  DashboardSavedViewNameConflictError,
   deleteDashboardSavedView,
   listDashboardSavedViews,
   updateDashboardSavedView,
@@ -129,6 +130,12 @@ vi.mock("@/lib/ingest/repository", () => ({
 }));
 
 vi.mock("@/lib/dashboard/saved-views-repository", () => ({
+  DashboardSavedViewNameConflictError: class DashboardSavedViewNameConflictError extends Error {
+    constructor() {
+      super("Dashboard saved view name already exists");
+      this.name = "DashboardSavedViewNameConflictError";
+    }
+  },
   createDashboardSavedView: vi.fn(),
   deleteDashboardSavedView: vi.fn(),
   listDashboardSavedViews: vi.fn(),
@@ -910,6 +917,16 @@ describe("admin guarded API routes", () => {
     await expect(expectJson(postDashboardSavedViews(invalidJsonRequest()))).resolves.toEqual({
       status: 400,
       body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(postDashboardSavedViews(jsonRequest(["not", "an", "object"])))).resolves.toEqual({
+      status: 400,
+      body: { error: "Dashboard saved view request body must be an object" },
+    });
+
+    createDashboardSavedViewMock.mockRejectedValueOnce(new DashboardSavedViewNameConflictError());
+    await expect(expectJson(postDashboardSavedViews(jsonRequest({ name: "Warnings" })))).resolves.toEqual({
+      status: 409,
+      body: { error: "Dashboard saved view name already exists" },
     });
 
     createDashboardSavedViewMock.mockRejectedValueOnce("bad view");

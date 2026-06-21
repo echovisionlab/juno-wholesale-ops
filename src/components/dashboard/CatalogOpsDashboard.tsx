@@ -7,17 +7,13 @@ import {
   Box,
   Button,
   Card,
-  Checkbox,
   Code,
   Container,
   Divider,
   Grid,
   Group,
-  Menu,
-  MultiSelect,
   NativeSelect,
   NumberInput,
-  Select,
   SimpleGrid,
   Stack,
   Switch,
@@ -49,25 +45,21 @@ import {
   Webhook,
 } from "lucide-react";
 import { CommandPanel } from "./CommandPanel";
+import { DashboardPanelVisibilityControl } from "./DashboardPanelVisibilityControl";
+import { DashboardSignalFiltersPanel } from "./DashboardSignalFiltersPanel";
 import { PipelineCard } from "./PipelineCard";
 import { SectionHeader } from "./SectionHeader";
 import { StatCard } from "./StatCard";
 import {
-  dashboardDateRanges,
-  dashboardSignalSeverities,
-  dashboardSignalTypes,
   defaultDashboardSignalFilters,
+  filterDashboardNotificationDeliveries,
   filterDashboardSignals,
-  formatDashboardDateRange,
   hasActiveDashboardSignalFilters,
   type DashboardSignalFilters,
-  type DashboardSignalSeverity,
-  type DashboardSignalType,
 } from "@/lib/dashboard/signal-filters";
 import {
   formatNotificationChannelType,
   formatNotificationDeliveryStatus as formatDeliveryStatus,
-  formatSignalSeverity as formatSeverity,
   formatSignalType,
   formatWatchRuleType,
   watchRuleTypeOptions,
@@ -75,9 +67,7 @@ import {
 import {
   dashboardPanelLayoutStorageKey,
   defaultDashboardPanelLayout,
-  getVisibleOptionalDashboardPanelIds,
   isDashboardPanelVisible,
-  optionalDashboardPanelDefinitions,
   readDashboardPanelLayout,
   setVisibleOptionalDashboardPanels,
   type DashboardPanelId,
@@ -175,6 +165,9 @@ export function CatalogOpsDashboard({
   const filtersActive = hasActiveDashboardSignalFilters(signalFilters);
   const filteredTodaySignals = todaySignals ? filterDashboardSignals(todaySignals, signalFilters) : todaySignals;
   const filteredMovementSignals = movementSignals ? filterDashboardSignals(movementSignals, signalFilters) : movementSignals;
+  const filteredNotificationDeliveries = notificationDeliveries
+    ? filterDashboardNotificationDeliveries(notificationDeliveries, signalFilters)
+    : notificationDeliveries;
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
@@ -329,7 +322,7 @@ export function CatalogOpsDashboard({
           {panelVisible("notificationCenter") ? (
             <Grid.Col span={{ base: 12, lg: 7 }}>
               <SectionHeader icon={Bell}>Notification Center</SectionHeader>
-              <NotificationCenterPanel deliveries={notificationDeliveries} />
+              <NotificationCenterPanel deliveries={filteredNotificationDeliveries} filtersActive={filtersActive} />
             </Grid.Col>
           ) : null}
 
@@ -392,209 +385,6 @@ export function CatalogOpsDashboard({
         </Grid>
       </Container>
     </Box>
-  );
-}
-
-function DashboardPanelVisibilityControl({
-  layout,
-  onChange,
-}: {
-  layout: DashboardPanelLayout;
-  onChange: (panelIds: DashboardPanelId[]) => void;
-}) {
-  const visiblePanelIds = getVisibleOptionalDashboardPanelIds(layout);
-  const hiddenCount = optionalDashboardPanelDefinitions.length - visiblePanelIds.length;
-
-  function togglePanel(panelId: DashboardPanelId, checked: boolean) {
-    const nextPanelIds = checked
-      ? [...visiblePanelIds, panelId]
-      : visiblePanelIds.filter((visiblePanelId) => visiblePanelId !== panelId);
-    onChange(nextPanelIds);
-  }
-
-  return (
-    <Menu position="bottom-end" closeOnItemClick={false} withinPortal>
-      <Menu.Target>
-        <Button variant="default" size="sm" leftSection={<SlidersHorizontal size={16} aria-hidden="true" />}>
-          {hiddenCount > 0 ? `Panels (${hiddenCount} hidden)` : "Panels"}
-        </Button>
-      </Menu.Target>
-      <Menu.Dropdown>
-        <Box p="sm" miw={240} mah={360} style={{ overflowY: "auto" }}>
-          <Stack gap="sm">
-            <Group justify="space-between" gap="sm">
-              <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-                Visible panels
-              </Text>
-              <Button
-                size="compact-xs"
-                variant="subtle"
-                disabled={hiddenCount === 0}
-                onClick={() => onChange(optionalDashboardPanelDefinitions.map((definition) => definition.id))}
-              >
-                Show all
-              </Button>
-            </Group>
-            {optionalDashboardPanelDefinitions.map((definition) => (
-              <Checkbox
-                key={definition.id}
-                size="sm"
-                label={definition.label}
-                aria-label={definition.label}
-                checked={visiblePanelIds.includes(definition.id)}
-                onChange={(event) => togglePanel(definition.id, event.currentTarget.checked)}
-              />
-            ))}
-          </Stack>
-        </Box>
-      </Menu.Dropdown>
-    </Menu>
-  );
-}
-
-function DashboardSignalFiltersPanel({
-  filters,
-  filtersActive,
-  savedViews,
-  pending,
-  onChange,
-  onCreate,
-  onUpdate,
-  onDelete,
-}: {
-  filters: DashboardSignalFilters;
-  filtersActive: boolean;
-  savedViews: DashboardSavedView[];
-  pending: boolean;
-  onChange: (filters: DashboardSignalFilters) => void;
-  onCreate?: (draft: DashboardSavedViewDraft) => void;
-  onUpdate?: (view: DashboardSavedView, filters: DashboardSignalFilters) => void;
-  onDelete?: (view: DashboardSavedView) => void;
-}) {
-  const [selectedViewId, setSelectedViewId] = useState("");
-  const [name, setName] = useState("");
-  const selectedView = savedViews.find((view) => view.id === selectedViewId) ?? null;
-  const canCreate = Boolean(name.trim()) && Boolean(onCreate) && !pending;
-  const canUpdate = Boolean(selectedView) && Boolean(onUpdate) && !pending;
-  const canDelete = Boolean(selectedView) && Boolean(onDelete) && !pending;
-
-  function applySavedView(viewId: string | null) {
-    const nextView = savedViews.find((view) => view.id === viewId) ?? null;
-    if (!nextView) {
-      setSelectedViewId("");
-      return;
-    }
-    setSelectedViewId(nextView.id);
-    onChange(nextView.filters);
-    setName(nextView.name);
-  }
-
-  function updateFilters(patch: Partial<DashboardSignalFilters>) {
-    onChange({ ...filters, ...patch });
-  }
-
-  return (
-    <Card>
-      <Stack gap="md">
-        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
-          <MultiSelect
-            label="Signal type"
-            aria-label="Signal type"
-            data={dashboardSignalTypes.map((type) => ({ value: type, label: formatSignalType(type) }))}
-            value={filters.signalTypes}
-            onChange={(value) => updateFilters({ signalTypes: value as DashboardSignalType[] })}
-            clearable
-          />
-          <MultiSelect
-            label="Severity"
-            aria-label="Severity"
-            data={dashboardSignalSeverities.map((severity) => ({ value: severity, label: formatSeverity(severity) }))}
-            value={filters.severities}
-            onChange={(value) => updateFilters({ severities: value as DashboardSignalSeverity[] })}
-            clearable
-          />
-          <NativeSelect
-            label="Date range"
-            aria-label="Signal date range"
-            value={filters.dateRange}
-            data={dashboardDateRanges.map((range) => ({ value: range, label: formatDashboardDateRange(range) }))}
-            onChange={(event) => updateFilters({ dateRange: event.currentTarget.value as DashboardSignalFilters["dateRange"] })}
-          />
-        </SimpleGrid>
-
-        <Group gap="lg">
-          <Switch
-            label="Watch hits"
-            aria-label="Watch hits"
-            checked={filters.watchHitsOnly}
-            onChange={(event) => updateFilters({ watchHitsOnly: event.currentTarget.checked })}
-          />
-          <Switch
-            label="Low stock"
-            aria-label="Low stock"
-            checked={filters.lowStockOnly}
-            onChange={(event) => updateFilters({ lowStockOnly: event.currentTarget.checked })}
-          />
-          <Switch
-            label="Movement"
-            aria-label="Movement"
-            checked={filters.movementOnly}
-            onChange={(event) => updateFilters({ movementOnly: event.currentTarget.checked })}
-          />
-          <Button variant="light" disabled={!filtersActive} onClick={() => onChange(defaultDashboardSignalFilters)}>
-            Reset
-          </Button>
-        </Group>
-
-        <Divider />
-
-        <SimpleGrid cols={{ base: 1, md: 3 }} spacing="sm">
-          <Select
-            label="Saved view"
-            aria-label="Saved view"
-            placeholder="Select saved view"
-            data={savedViews.map((view) => ({ value: view.id, label: view.name }))}
-            value={selectedViewId || null}
-            onChange={applySavedView}
-            clearable
-            clearButtonProps={{ "aria-label": "Clear saved view" }}
-          />
-          <TextInput
-            label="View name"
-            placeholder="Ops review"
-            value={name}
-            onChange={(event) => setName(event.currentTarget.value)}
-          />
-          <Group align="flex-end" gap="xs">
-            <Button
-              leftSection={<Plus size={16} aria-hidden="true" />}
-              disabled={!canCreate}
-              loading={pending}
-              onClick={() => {
-                onCreate?.({ name: name.trim(), filters });
-              }}
-            >
-              Save
-            </Button>
-            <Button variant="light" disabled={!canUpdate} loading={pending} onClick={() => selectedView && onUpdate?.(selectedView, filters)}>
-              Update
-            </Button>
-            <Tooltip label="Delete saved view">
-              <ActionIcon
-                aria-label="Delete saved view"
-                color="red"
-                variant="light"
-                disabled={!canDelete}
-                loading={pending}
-                onClick={() => selectedView && onDelete?.(selectedView)}
-              >
-                <Trash2 size={16} aria-hidden="true" />
-              </ActionIcon>
-            </Tooltip>
-          </Group>
-        </SimpleGrid>
-      </Stack>
-    </Card>
   );
 }
 
@@ -738,7 +528,7 @@ function CatalogTrendsPanel({ trends }: { trends?: CatalogTrendSummary | null })
   );
 }
 
-function NotificationCenterPanel({ deliveries }: { deliveries?: NotificationDelivery[] | null }) {
+function NotificationCenterPanel({ deliveries, filtersActive }: { deliveries?: NotificationDelivery[] | null; filtersActive: boolean }) {
   if (!deliveries) {
     return (
       <Card>
@@ -753,7 +543,7 @@ function NotificationCenterPanel({ deliveries }: { deliveries?: NotificationDeli
   if (deliveries.length === 0) {
     return (
       <Card>
-        <Text fw={700}>No read-only alerts queued</Text>
+        <Text fw={700}>{filtersActive ? "No read-only alerts match filters" : "No read-only alerts queued"}</Text>
         <Text size="sm" c="dimmed" mt={4}>
           Queued signal and operator digest alerts will appear here after notification refresh runs.
         </Text>

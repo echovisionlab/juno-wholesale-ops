@@ -32,6 +32,12 @@ export type FilterableDashboardSignal = {
   };
 };
 
+export type FilterableDashboardNotificationDelivery = {
+  signalType: DashboardSignalType | null;
+  severity: DashboardSignalSeverity | null;
+  queuedAt: string;
+};
+
 export const dashboardSignalTypes: DashboardSignalType[] = [
   "new_arrival",
   "watch_hit",
@@ -121,6 +127,41 @@ export function filterDashboardSignals<T extends FilterableDashboardSignal>(
   });
 }
 
+export function filterDashboardNotificationDeliveries<T extends FilterableDashboardNotificationDelivery>(
+  deliveries: T[],
+  filters: DashboardSignalFilters,
+  now: Date = new Date(),
+): T[] {
+  const normalized = normalizeDashboardSignalFilters(filters);
+  const fromDate = getDateRangeStart(normalized.dateRange, now);
+  const signalSpecificFilterActive = hasSignalSpecificDashboardFilters(normalized);
+
+  return deliveries.filter((delivery) => {
+    if (fromDate && !isSignalOnOrAfter(delivery.queuedAt, fromDate)) {
+      return false;
+    }
+    if (!delivery.signalType || !delivery.severity) {
+      return !signalSpecificFilterActive;
+    }
+    if (normalized.signalTypes.length > 0 && !normalized.signalTypes.includes(delivery.signalType)) {
+      return false;
+    }
+    if (normalized.severities.length > 0 && !normalized.severities.includes(delivery.severity)) {
+      return false;
+    }
+    if (normalized.watchHitsOnly && delivery.signalType !== "watch_hit") {
+      return false;
+    }
+    if (normalized.lowStockOnly && !isLowStockSignalType(delivery.signalType)) {
+      return false;
+    }
+    if (normalized.movementOnly && !movementSignalTypeSet.has(delivery.signalType)) {
+      return false;
+    }
+    return true;
+  });
+}
+
 export function hasActiveDashboardSignalFilters(filters: DashboardSignalFilters): boolean {
   const normalized = normalizeDashboardSignalFilters(filters);
   return (
@@ -155,9 +196,22 @@ function uniqueKnownValues<T extends string>(value: unknown, allowed: Set<T>): T
 
 function isLowStockSignal(signal: FilterableDashboardSignal): boolean {
   return (
-    signal.type === "low_catalog_stock" ||
-    signal.type === "observed_live_low_stock" ||
+    isLowStockSignalType(signal.type) ||
     (signal.item.stock !== null && signal.item.stock <= 3)
+  );
+}
+
+function isLowStockSignalType(type: DashboardSignalType): boolean {
+  return type === "low_catalog_stock" || type === "observed_live_low_stock";
+}
+
+function hasSignalSpecificDashboardFilters(filters: DashboardSignalFilters): boolean {
+  return (
+    filters.signalTypes.length > 0 ||
+    filters.severities.length > 0 ||
+    filters.watchHitsOnly ||
+    filters.lowStockOnly ||
+    filters.movementOnly
   );
 }
 
