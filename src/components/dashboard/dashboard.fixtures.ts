@@ -37,6 +37,9 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
     "pnpm notifications:refresh",
   ],
   ingestState: {
+    mailboxSourceId: "mail-source-gmail-workspace",
+    mailboxAddress: "catalog@example.invalid",
+    provider: "gmail",
     lastQuery: "has:attachment filename:xlsx newer_than:30d",
     lastQueryWindowFrom: "2026-06-16 00:00:00+00",
     lastQueryWindowTo: "2026-06-17 00:00:00+00",

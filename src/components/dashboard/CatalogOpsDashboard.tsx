@@ -1,17 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActionIcon,
   Alert,
   Box,
   Button,
   Card,
+  Checkbox,
   Code,
   Container,
   Divider,
   Grid,
   Group,
+  Menu,
   MultiSelect,
   NativeSelect,
   NumberInput,
@@ -62,6 +64,25 @@ import {
   type DashboardSignalSeverity,
   type DashboardSignalType,
 } from "@/lib/dashboard/signal-filters";
+import {
+  formatNotificationChannelType,
+  formatNotificationDeliveryStatus as formatDeliveryStatus,
+  formatSignalSeverity as formatSeverity,
+  formatSignalType,
+  formatWatchRuleType,
+  watchRuleTypeOptions,
+} from "@/lib/dashboard/presentation";
+import {
+  dashboardPanelLayoutStorageKey,
+  defaultDashboardPanelLayout,
+  getVisibleOptionalDashboardPanelIds,
+  isDashboardPanelVisible,
+  optionalDashboardPanelDefinitions,
+  readDashboardPanelLayout,
+  setVisibleOptionalDashboardPanels,
+  type DashboardPanelId,
+  type DashboardPanelLayout,
+} from "@/lib/dashboard/panel-layout";
 import type {
   AppSetupStatus,
   CatalogTrendSummary,
@@ -149,10 +170,36 @@ export function CatalogOpsDashboard({
 }: CatalogOpsDashboardProps) {
   const workerDisabledReason = getLiveWorkerDisabledReason(setupStatus);
   const [signalFilters, setSignalFilters] = useState<DashboardSignalFilters>(defaultDashboardSignalFilters);
+  const [panelLayout, setPanelLayout] = useState<DashboardPanelLayout>(defaultDashboardPanelLayout);
   const savedViewList = dashboardSavedViews ?? [];
   const filtersActive = hasActiveDashboardSignalFilters(signalFilters);
   const filteredTodaySignals = todaySignals ? filterDashboardSignals(todaySignals, signalFilters) : todaySignals;
   const filteredMovementSignals = movementSignals ? filterDashboardSignals(movementSignals, signalFilters) : movementSignals;
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      try {
+        setPanelLayout(readDashboardPanelLayout(window.localStorage.getItem(dashboardPanelLayoutStorageKey)));
+      } catch {
+        setPanelLayout(defaultDashboardPanelLayout);
+      }
+    }, 0);
+    return () => window.clearTimeout(timeoutId);
+  }, []);
+
+  function updateVisiblePanels(panelIds: DashboardPanelId[]) {
+    const nextLayout = setVisibleOptionalDashboardPanels(panelLayout, panelIds);
+    setPanelLayout(nextLayout);
+    try {
+      window.localStorage.setItem(dashboardPanelLayoutStorageKey, JSON.stringify(nextLayout));
+    } catch {
+      // Keeping the in-memory choice is still useful when storage is unavailable.
+    }
+  }
+
+  function panelVisible(panelId: DashboardPanelId): boolean {
+    return isDashboardPanelVisible(panelLayout, panelId);
+  }
 
   return (
     <Box component="main" bg="gray.0" mih="100vh">
@@ -184,9 +231,12 @@ export function CatalogOpsDashboard({
           <Grid.Col span={12}>
             <Group justify="space-between" align="center">
               <SectionHeader icon={ClipboardCheck}>Configuration</SectionHeader>
-              <Button component="a" href="/settings" variant="light" leftSection={<SlidersHorizontal size={16} aria-hidden="true" />}>
-                Open Settings Center
-              </Button>
+              <Group gap="sm" justify="flex-end">
+                <DashboardPanelVisibilityControl layout={panelLayout} onChange={updateVisiblePanels} />
+                <Button component="a" href="/settings" variant="light" leftSection={<SlidersHorizontal size={16} aria-hidden="true" />}>
+                  Open Settings Center
+                </Button>
+              </Group>
             </Group>
             <SetupChecklist setupStatus={setupStatus} />
           </Grid.Col>
@@ -197,23 +247,29 @@ export function CatalogOpsDashboard({
             </Grid.Col>
           ) : null}
 
-          <Grid.Col span={{ base: 12, lg: 8 }}>
-            <SectionHeader icon={PackageCheck}>Ingestion Pipeline</SectionHeader>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              {pipeline.map((item) => (
-                <PipelineCard key={item.title} {...item} />
-              ))}
-            </SimpleGrid>
-          </Grid.Col>
+          {panelVisible("ingestionPipeline") ? (
+            <Grid.Col span={{ base: 12, lg: 8 }}>
+              <SectionHeader icon={PackageCheck}>Ingestion Pipeline</SectionHeader>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                {pipeline.map((item) => (
+                  <PipelineCard key={item.title} {...item} />
+                ))}
+              </SimpleGrid>
+            </Grid.Col>
+          ) : null}
 
-          <Grid.Col span={{ base: 12, lg: 4 }}>
-            <CommandPanel commands={commands} />
-          </Grid.Col>
+          {panelVisible("commands") ? (
+            <Grid.Col span={{ base: 12, lg: 4 }}>
+              <CommandPanel commands={commands} />
+            </Grid.Col>
+          ) : null}
 
-          <Grid.Col span={12}>
-            <SectionHeader icon={MailSearch}>Mail Ingest State</SectionHeader>
-            <GmailIngestStatusPanel state={ingestState} />
-          </Grid.Col>
+          {panelVisible("mailIngest") ? (
+            <Grid.Col span={12}>
+              <SectionHeader icon={MailSearch}>Mail Ingest State</SectionHeader>
+              <GmailIngestStatusPanel state={ingestState} />
+            </Grid.Col>
+          ) : null}
 
           <Grid.Col span={12}>
             <SectionHeader icon={SlidersHorizontal}>Signal Filters</SectionHeader>
@@ -229,93 +285,170 @@ export function CatalogOpsDashboard({
             />
           </Grid.Col>
 
-          <Grid.Col span={{ base: 12, lg: 7 }}>
-            <SectionHeader icon={Signal}>Today Signals</SectionHeader>
-            <TodaySignalsPanel signals={filteredTodaySignals} filtersActive={filtersActive} />
-          </Grid.Col>
+          {panelVisible("todaySignals") ? (
+            <Grid.Col span={{ base: 12, lg: 7 }}>
+              <SectionHeader icon={Signal}>Today Signals</SectionHeader>
+              <TodaySignalsPanel signals={filteredTodaySignals} filtersActive={filtersActive} />
+            </Grid.Col>
+          ) : null}
 
-          <Grid.Col span={{ base: 12, lg: 5 }}>
-            <SectionHeader icon={SlidersHorizontal}>Watch Rules</SectionHeader>
-            <WatchRulesPanel
-              rules={watchRules}
-              pending={watchRuleActionPending}
-              onCreate={onCreateWatchRule}
-              onToggle={onToggleWatchRule}
-              onDelete={onDeleteWatchRule}
-            />
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, lg: 7 }}>
-            <SectionHeader icon={Activity}>Movement Signals</SectionHeader>
-            <MovementSignalsPanel signals={filteredMovementSignals} filtersActive={filtersActive} />
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, lg: 5 }}>
-            <SectionHeader icon={ClipboardCheck}>Operator Digest</SectionHeader>
-            <OperatorDigestPanel digest={operatorDigest} />
-          </Grid.Col>
-
-          <Grid.Col span={12}>
-            <SectionHeader icon={BarChart3}>Catalog Trends</SectionHeader>
-            <CatalogTrendsPanel trends={catalogTrends} />
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, lg: 7 }}>
-            <SectionHeader icon={Bell}>Notification Center</SectionHeader>
-            <NotificationCenterPanel deliveries={notificationDeliveries} />
-          </Grid.Col>
-
-          <Grid.Col span={{ base: 12, lg: 5 }}>
-            <SectionHeader icon={Send}>Notification Rules</SectionHeader>
-            <NotificationRulesPanel rules={notificationRules} />
-          </Grid.Col>
-
-          <Grid.Col span={12}>
-            <SectionHeader icon={Webhook}>Notification Channels</SectionHeader>
-            <NotificationChannelsPanel channels={notificationChannels} />
-          </Grid.Col>
-
-          <Grid.Col span={12}>
-            <SectionHeader icon={PackageSearch}>Live Stock Watch</SectionHeader>
-            <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
-              <StatCard
-                label="Queued / Running"
-                value={liveSummary ? `${liveSummary.queued} / ${liveSummary.running}` : "N/A"}
-                detail="browser worker job backlog"
-                icon={Boxes}
+          {panelVisible("watchRules") ? (
+            <Grid.Col span={{ base: 12, lg: 5 }}>
+              <SectionHeader icon={SlidersHorizontal}>Watch Rules</SectionHeader>
+              <WatchRulesPanel
+                rules={watchRules}
+                pending={watchRuleActionPending}
+                onCreate={onCreateWatchRule}
+                onToggle={onToggleWatchRule}
+                onDelete={onDeleteWatchRule}
               />
-              <StatCard
-                label="Succeeded / Failed"
-                value={liveSummary ? `${liveSummary.succeeded} / ${liveSummary.failed}` : "N/A"}
-                detail="completed lookup jobs"
-                icon={CheckCircle2}
-              />
-              <StatCard
-                label="Blocked / Manual"
-                value={liveSummary ? `${liveSummary.blocked} / ${liveSummary.manualRequired}` : "N/A"}
-                detail="challenge or credential intervention"
-                icon={AlertTriangle}
-              />
-              <StatCard
-                label="Latest Live Stock"
-                value={liveSummary?.latestDisplayStock ?? "N/A"}
-                detail={formatObservedAt(liveSummary?.latestObservedAt)}
-                icon={PackageSearch}
-              />
-            </SimpleGrid>
-          </Grid.Col>
+            </Grid.Col>
+          ) : null}
 
-          <Grid.Col span={12}>
-            <WorkerControlPanel
-              status={workerStatus}
-              pending={workerActionPending}
-              disabledReason={workerDisabledReason}
-              onAction={onWorkerAction}
-            />
-          </Grid.Col>
+          {panelVisible("movementSignals") ? (
+            <Grid.Col span={{ base: 12, lg: 7 }}>
+              <SectionHeader icon={Activity}>Movement Signals</SectionHeader>
+              <MovementSignalsPanel signals={filteredMovementSignals} filtersActive={filtersActive} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("operatorDigest") ? (
+            <Grid.Col span={{ base: 12, lg: 5 }}>
+              <SectionHeader icon={ClipboardCheck}>Operator Digest</SectionHeader>
+              <OperatorDigestPanel digest={operatorDigest} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("catalogTrends") ? (
+            <Grid.Col span={12}>
+              <SectionHeader icon={BarChart3}>Catalog Trends</SectionHeader>
+              <CatalogTrendsPanel trends={catalogTrends} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("notificationCenter") ? (
+            <Grid.Col span={{ base: 12, lg: 7 }}>
+              <SectionHeader icon={Bell}>Notification Center</SectionHeader>
+              <NotificationCenterPanel deliveries={notificationDeliveries} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("notificationRules") ? (
+            <Grid.Col span={{ base: 12, lg: 5 }}>
+              <SectionHeader icon={Send}>Notification Rules</SectionHeader>
+              <NotificationRulesPanel rules={notificationRules} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("notificationChannels") ? (
+            <Grid.Col span={12}>
+              <SectionHeader icon={Webhook}>Notification Channels</SectionHeader>
+              <NotificationChannelsPanel channels={notificationChannels} />
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("liveStockWatch") ? (
+            <Grid.Col span={12}>
+              <SectionHeader icon={PackageSearch}>Live Stock Watch</SectionHeader>
+              <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="sm">
+                <StatCard
+                  label="Queued / Running"
+                  value={liveSummary ? `${liveSummary.queued} / ${liveSummary.running}` : "N/A"}
+                  detail="browser worker job backlog"
+                  icon={Boxes}
+                />
+                <StatCard
+                  label="Succeeded / Failed"
+                  value={liveSummary ? `${liveSummary.succeeded} / ${liveSummary.failed}` : "N/A"}
+                  detail="completed lookup jobs"
+                  icon={CheckCircle2}
+                />
+                <StatCard
+                  label="Blocked / Manual"
+                  value={liveSummary ? `${liveSummary.blocked} / ${liveSummary.manualRequired}` : "N/A"}
+                  detail="challenge or credential intervention"
+                  icon={AlertTriangle}
+                />
+                <StatCard
+                  label="Latest Live Stock"
+                  value={liveSummary?.latestDisplayStock ?? "N/A"}
+                  detail={formatObservedAt(liveSummary?.latestObservedAt)}
+                  icon={PackageSearch}
+                />
+              </SimpleGrid>
+            </Grid.Col>
+          ) : null}
+
+          {panelVisible("workerControls") ? (
+            <Grid.Col span={12}>
+              <WorkerControlPanel
+                status={workerStatus}
+                pending={workerActionPending}
+                disabledReason={workerDisabledReason}
+                onAction={onWorkerAction}
+              />
+            </Grid.Col>
+          ) : null}
         </Grid>
       </Container>
     </Box>
+  );
+}
+
+function DashboardPanelVisibilityControl({
+  layout,
+  onChange,
+}: {
+  layout: DashboardPanelLayout;
+  onChange: (panelIds: DashboardPanelId[]) => void;
+}) {
+  const visiblePanelIds = getVisibleOptionalDashboardPanelIds(layout);
+  const hiddenCount = optionalDashboardPanelDefinitions.length - visiblePanelIds.length;
+
+  function togglePanel(panelId: DashboardPanelId, checked: boolean) {
+    const nextPanelIds = checked
+      ? [...visiblePanelIds, panelId]
+      : visiblePanelIds.filter((visiblePanelId) => visiblePanelId !== panelId);
+    onChange(nextPanelIds);
+  }
+
+  return (
+    <Menu position="bottom-end" closeOnItemClick={false} withinPortal>
+      <Menu.Target>
+        <Button variant="default" size="sm" leftSection={<SlidersHorizontal size={16} aria-hidden="true" />}>
+          {hiddenCount > 0 ? `Panels (${hiddenCount} hidden)` : "Panels"}
+        </Button>
+      </Menu.Target>
+      <Menu.Dropdown>
+        <Box p="sm" miw={240} mah={360} style={{ overflowY: "auto" }}>
+          <Stack gap="sm">
+            <Group justify="space-between" gap="sm">
+              <Text size="xs" fw={700} tt="uppercase" c="dimmed">
+                Visible panels
+              </Text>
+              <Button
+                size="compact-xs"
+                variant="subtle"
+                disabled={hiddenCount === 0}
+                onClick={() => onChange(optionalDashboardPanelDefinitions.map((definition) => definition.id))}
+              >
+                Show all
+              </Button>
+            </Group>
+            {optionalDashboardPanelDefinitions.map((definition) => (
+              <Checkbox
+                key={definition.id}
+                size="sm"
+                label={definition.label}
+                aria-label={definition.label}
+                checked={visiblePanelIds.includes(definition.id)}
+                onChange={(event) => togglePanel(definition.id, event.currentTarget.checked)}
+              />
+            ))}
+          </Stack>
+        </Box>
+      </Menu.Dropdown>
+    </Menu>
   );
 }
 
@@ -346,7 +479,11 @@ function DashboardSignalFiltersPanel({
   const canDelete = Boolean(selectedView) && Boolean(onDelete) && !pending;
 
   function applySavedView(viewId: string | null) {
-    const nextView = savedViews.find((view) => view.id === viewId) as DashboardSavedView;
+    const nextView = savedViews.find((view) => view.id === viewId) ?? null;
+    if (!nextView) {
+      setSelectedViewId("");
+      return;
+    }
     setSelectedViewId(nextView.id);
     onChange(nextView.filters);
     setName(nextView.name);
@@ -419,6 +556,8 @@ function DashboardSignalFiltersPanel({
             data={savedViews.map((view) => ({ value: view.id, label: view.name }))}
             value={selectedViewId || null}
             onChange={applySavedView}
+            clearable
+            clearButtonProps={{ "aria-label": "Clear saved view" }}
           />
           <TextInput
             label="View name"
@@ -486,41 +625,7 @@ function TodaySignalsPanel({ signals, filtersActive }: { signals?: TodayInsight[
     <Card>
       <Stack gap="sm">
         {signals.map((signal) => (
-          <Box key={signal.signalId}>
-            <Group justify="space-between" align="flex-start" gap="sm">
-              <Stack gap={4}>
-                <Group gap="xs">
-                  <Text size="sm" c={signalSeverityColor(signal.severity)}>
-                    {formatSignalType(signal.type)}
-                  </Text>
-                  <Text size="sm" c="dimmed">
-                    score {signal.score}
-                  </Text>
-                </Group>
-                <Text fw={700}>{signal.title}</Text>
-                <Text size="sm" c="dimmed">
-                  {signal.detail}
-                </Text>
-              </Stack>
-              <Text size="sm" c="dimmed" ta="right">
-                {formatOptionalDate(signal.createdAt)}
-              </Text>
-            </Group>
-
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="xs" mt="sm">
-              <SignalFact label="Artist / Title" value={formatArtistTitle(signal)} />
-              <SignalFact label="Label / Genre" value={formatLabelGenre(signal)} />
-              <SignalFact label="Catalog stock" value={signal.item.stock === null ? "not reported" : String(signal.item.stock)} />
-              <SignalFact label="Juno ID" value={signal.item.junoId ?? "N/A"} />
-            </SimpleGrid>
-
-            {signal.reasons.length > 0 ? (
-              <Text size="sm" c="dimmed" mt="sm">
-                {signal.reasons.join(" ")}
-              </Text>
-            ) : null}
-            <Divider mt="sm" />
-          </Box>
+          <SignalRow key={signal.signalId} signal={signal} />
         ))}
       </Stack>
     </Card>
@@ -619,6 +724,9 @@ function CatalogTrendsPanel({ trends }: { trends?: CatalogTrendSummary | null })
       <Stack gap="md">
         <Text size="sm" c="dimmed">
           Current window {formatOptionalDate(trends.window.currentFrom)} to {formatOptionalDate(trends.window.currentTo)} compared with the previous observed window.
+        </Text>
+        <Text size="sm" c="dimmed">
+          Counts are catalog row observations; watch matches are rule-match rows. Treat them as supply and attention signals, not sales estimates.
         </Text>
         <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="md">
           <TrendBucketTable title="Top Genres" buckets={trends.genres} />
@@ -891,7 +999,7 @@ function TrendBucketTable({ title, buckets }: { title: string; buckets: TrendBuc
                 <Table.Th>Current</Table.Th>
                 <Table.Th>Previous</Table.Th>
                 <Table.Th>Delta</Table.Th>
-                <Table.Th>Watch hits</Table.Th>
+                <Table.Th>Watch matches</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -1172,53 +1280,6 @@ function signalSeverityColor(severity: TodayInsight["severity"]): string {
   return "gray";
 }
 
-function formatSignalType(type: TodayInsight["type"]): string {
-  if (type === "new_arrival") {
-    return "New arrival";
-  }
-  if (type === "watch_hit") {
-    return "Watch hit";
-  }
-  if (type === "low_catalog_stock") {
-    return "Low observed stock";
-  }
-  if (type === "exclude_match") {
-    return "Exclude match";
-  }
-  if (type === "observed_restock") {
-    return "Observed restock";
-  }
-  if (type === "observed_stock_drop") {
-    return "Observed stock change";
-  }
-  if (type === "observed_live_low_stock") {
-    return "Low live stock";
-  }
-  if (type === "observed_status_change") {
-    return "Observed status change";
-  }
-  if (type === "observed_price_change") {
-    return "Observed price change";
-  }
-  if (type === "fast_mover_candidate") {
-    return "Fast mover candidate";
-  }
-  return "Catalog trend spike";
-}
-
-function formatSeverity(severity: DashboardSignalSeverity): string {
-  if (severity === "info") {
-    return "Info";
-  }
-  if (severity === "watch") {
-    return "Watch";
-  }
-  if (severity === "warning") {
-    return "Warning";
-  }
-  return "Critical";
-}
-
 function deliveryStatusColor(status: NotificationDelivery["status"]): string {
   if (status === "sent") {
     return "green";
@@ -1232,29 +1293,6 @@ function deliveryStatusColor(status: NotificationDelivery["status"]): string {
   return "blue";
 }
 
-function formatDeliveryStatus(status: NotificationDelivery["status"]): string {
-  if (status === "sent") {
-    return "Sent";
-  }
-  if (status === "failed") {
-    return "Failed";
-  }
-  if (status === "skipped") {
-    return "Skipped";
-  }
-  return "Queued";
-}
-
-function formatNotificationChannelType(type: NotificationChannel["type"]): string {
-  if (type === "in_app") {
-    return "In-app";
-  }
-  if (type === "webhook") {
-    return "Generic webhook";
-  }
-  return "Logging";
-}
-
 function formatArtistTitle(signal: TodayInsight): string {
   return [signal.item.artist, signal.item.title].filter(Boolean).join(" - ") || "N/A";
 }
@@ -1263,29 +1301,9 @@ function formatLabelGenre(signal: TodayInsight): string {
   return [signal.item.label, signal.item.genre].filter(Boolean).join(" / ") || "N/A";
 }
 
-const watchRuleTypeOptions: Array<{ value: WatchRuleType; label: string }> = [
-  { value: "artist", label: "Artist" },
-  { value: "label", label: "Label" },
-  { value: "genre", label: "Genre" },
-  { value: "keyword", label: "Keyword" },
-  { value: "exclude_keyword", label: "Exclude keyword" },
-];
-
-const watchRuleTypeLabels: Record<WatchRuleType, string> = {
-  artist: "Artist",
-  label: "Label",
-  genre: "Genre",
-  keyword: "Keyword",
-  exclude_keyword: "Exclude keyword",
-};
-
 function normalizeDraftWeight(value: number | string): number | null {
   const parsed = value === "" ? Number.NaN : Number(value);
   return Number.isInteger(parsed) ? parsed : null;
-}
-
-function formatWatchRuleType(type: WatchRuleType): string {
-  return watchRuleTypeLabels[type];
 }
 
 function formatDelta(value: number): string {

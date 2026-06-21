@@ -1,5 +1,9 @@
 import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
 import type { SsoProviderInput, SsoProviderPatch } from "@/lib/auth/sso-provider-repository";
+import {
+  formatNotificationChannelType as formatSharedNotificationChannelType,
+  formatSignalType as formatSharedSignalType,
+} from "@/lib/dashboard/presentation";
 import type { MailAuthType, MailCredentialType, MailProvider, MailboxSourceInput, MailboxSourcePatch, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailSourceConnectionTestResult } from "@/lib/ingest/mail-source-test";
@@ -23,7 +27,6 @@ import {
   attachmentStorageBackendOptions,
   mailAuthTypeOptions,
   mailCredentialTypeOptions,
-  notificationSignalTypeOptions,
   ssoProviderPresetOptions,
 } from "./settings-options";
 
@@ -204,13 +207,7 @@ export function mailSourcePayload(draft: MailSourceDraft, editing: boolean): Mai
 }
 
 export function formatNotificationChannelType(type: NotificationChannelType): string {
-  if (type === "in_app") {
-    return "In-app";
-  }
-  if (type === "webhook") {
-    return "Webhook";
-  }
-  return "Logging";
+  return formatSharedNotificationChannelType(type);
 }
 
 export function formatNotificationChannelProvider(channel: NotificationChannel): string {
@@ -221,7 +218,7 @@ export function formatNotificationChannelProvider(channel: NotificationChannel):
 }
 
 export function formatSignalType(type: SignalEventType): string {
-  return notificationSignalTypeOptions.find((option) => option.value === type)?.label ?? type;
+  return formatSharedSignalType(type);
 }
 
 const junoSessionStatusMessages: Record<string, string> = {
