@@ -7,6 +7,7 @@ import { countAdminUsers, ensureServiceSettingsRow } from "@/lib/settings/reposi
 import { buildSettingsResponse } from "@/lib/settings/response";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { getRequestOrigin } from "@/lib/http/request-origin";
 
 export const dynamic = "force-dynamic";
@@ -71,6 +72,9 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
   const requestHeaders = await headers();
   const authorization = await requireAdmin(new Request("http://localhost/settings", { headers: requestHeaders }));
   if (!authorization.authorized) {
+    if (authorization.response.status === 401) {
+      redirect(buildLoginRedirectPath(new Request("http://localhost/settings", { headers: requestHeaders })));
+    }
     return { settings: null, error: await describeAuthorizationFailure(authorization.response) };
   }
 
@@ -98,6 +102,13 @@ async function loadInitialSettings(): Promise<{ settings: SettingsResponse | nul
   } catch (error: unknown) {
     return { settings: null, error: safeInitialSettingsError(error) };
   }
+}
+
+function buildLoginRedirectPath(request: Request): string {
+  const targetUrl = new URL("/settings", getRequestOrigin(request));
+  const loginUrl = new URL("/login", targetUrl);
+  loginUrl.searchParams.set("redirect", targetUrl.toString());
+  return `${loginUrl.pathname}${loginUrl.search}`;
 }
 
 async function describeAuthorizationFailure(response: Response): Promise<string> {
