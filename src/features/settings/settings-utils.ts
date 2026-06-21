@@ -398,47 +398,6 @@ export function severityColor(severity: SettingsWarning["severity"]): string {
   return "blue";
 }
 
-export function buildOverviewUnits(settings: SettingsResponse): Array<{
-  label: string;
-  status: "Ready" | "Needs attention" | "Not enabled";
-  detail: string;
-}> {
-  const authGroup = settings.groups.find((group) => group.id === "auth");
-  const authNeedsAttention = settings.security.authBootstrap.status !== "ready" || authGroup?.state === "missing" || authGroup?.state === "warning";
-  return [
-    {
-      label: "Auth & Admin Access",
-      status: authNeedsAttention ? "Needs attention" : "Ready",
-      detail: authNeedsAttention ? "Review Auth tab." : "Ready.",
-    },
-    {
-      label: "Mail Ingest",
-      status: unitOverviewStatus(settings.units.mail.status),
-      detail: settings.units.mail.status === "ready" ? "Ready." : "Add a mail source.",
-    },
-    {
-      label: "Juno Live",
-      status: unitOverviewStatus(settings.units.junoLive.status),
-      detail: settings.units.junoLive.status === "disabled" ? "Not enabled." : settings.units.junoLive.status === "ready" ? "Ready." : "Review Juno Live tab.",
-    },
-    {
-      label: "Notifications",
-      status: unitOverviewStatus(settings.units.notifications.status),
-      detail: settings.units.notifications.status === "ready" ? "Ready." : "Review Notifications tab.",
-    },
-  ];
-}
-
-function unitOverviewStatus(status: SettingsResponse["units"]["mail"]["status"]): "Ready" | "Needs attention" | "Not enabled" {
-  if (status === "ready") {
-    return "Ready";
-  }
-  if (status === "disabled") {
-    return "Not enabled";
-  }
-  return "Needs attention";
-}
-
 export function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {
   return settings.groups.flatMap((group) => group.settings).find((setting) => setting.key === key);
 }

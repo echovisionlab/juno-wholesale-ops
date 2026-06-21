@@ -45,17 +45,9 @@ export const emptyMailSourceDraft: MailSourceDraft = {
 
 export const mailProviderOptions: Array<{ value: MailProvider; label: string; disabled?: boolean }> = mailProviderRegistry.map((provider) => ({
   value: provider.provider,
-  label: `${provider.label} (${provider.implemented ? "implemented" : "planned"})`,
+  label: provider.implemented ? provider.label : `${provider.label} (planned)`,
   disabled: !provider.implemented,
 }));
-
-export const implementedMailProviderOptions = mailProviderRegistry
-  .filter((provider) => provider.implemented)
-  .map((provider) => `${provider.label} (implemented)`);
-
-export const plannedMailProviderOptions = mailProviderRegistry
-  .filter((provider) => !provider.implemented)
-  .map((provider) => `${provider.label} (planned/disabled)`);
 
 export const mailAuthTypeOptions: Array<{ value: MailAuthType; label: string }> = [
   { value: "google_workspace_delegation", label: "Google Workspace delegation" },

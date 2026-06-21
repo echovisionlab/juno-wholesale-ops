@@ -20,14 +20,14 @@ export default meta;
 
 type Story = StoryObj<typeof meta>;
 
-export const Configured: Story = {
+export const Default: Story = {
   args: {
     initialSettings: settingsFixture(),
     initialError: null,
   },
 };
 
-export const MissingMailSource: Story = {
+export const NeedsMailSource: Story = {
   args: {
     initialSettings: settingsMissingMailSourceFixture(),
     initialError: null,
@@ -43,7 +43,7 @@ export const SsoProviderNeedsSecret: Story = {
   },
 };
 
-export const NotificationsConfigured: Story = {
+export const Notifications: Story = {
   args: {
     initialSettings: settingsFixture(),
     initialError: null,

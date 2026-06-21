@@ -7,7 +7,6 @@ const meta = {
   args: {
     title: "Normalize",
     body: "Extract source fields, pricing, stock, release dates, and deterministic hashes.",
-    status: "Ready",
   },
 } satisfies Meta<typeof PipelineCard>;
 

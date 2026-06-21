@@ -79,7 +79,6 @@ import type {
   NotificationRule,
   PipelineItem,
   SetupGuardrail,
-  SetupSetting,
   SetupStep,
   StatCardData,
   TodayInsight,
@@ -1443,15 +1442,6 @@ function SetupStepCard({ step }: { step: SetupStep }) {
           {step.action}
         </Text>
       ) : null}
-      <Divider my="md" />
-      <Stack gap="xs">
-        <Text size="xs" fw={700} tt="uppercase" c="dimmed">
-          Resolved settings
-        </Text>
-        {step.settings.map((setting) => (
-          <SetupSettingRow key={setting.key} setting={setting} />
-        ))}
-      </Stack>
       {step.guardrails.length > 0 ? (
         <>
           <Divider my="md" />
@@ -1466,21 +1456,6 @@ function SetupStepCard({ step }: { step: SetupStep }) {
         </>
       ) : null}
     </Card>
-  );
-}
-
-function SetupSettingRow({ setting }: { setting: SetupSetting }) {
-  return (
-    <Box>
-      <Group justify="space-between" gap="xs" align="flex-start">
-        <Text size="sm" fw={600}>
-          {setting.label}
-        </Text>
-        <Text size="sm" ta="right" c={setting.state === "missing" ? "red.7" : "gray.8"} lineClamp={2}>
-          {setting.value}
-        </Text>
-      </Group>
-    </Box>
   );
 }
 
@@ -1580,7 +1555,7 @@ function WorkerControlPanel({
       </Group>
 
       {disabledReason ? (
-        <Alert color="yellow" mt="md" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Start disabled">
+        <Alert color="yellow" mt="md" icon={<AlertTriangle size={18} aria-hidden="true" />} title="Cannot start yet">
           {disabledReason}
         </Alert>
       ) : null}
@@ -1596,25 +1571,25 @@ function WorkerControlPanel({
 
 function getLiveWorkerDisabledReason(setupStatus?: AppSetupStatus | null): string | null {
   if (!setupStatus?.steps.length) {
-    return "Start disabled until setup status is available. Open Settings Center to review database and Juno live lookup settings.";
+    return "Setup status is unavailable. Open Settings Center to review database and Juno live lookup settings.";
   }
   const databaseStep = setupStatus.steps.find((step) => step.id === "database");
   if (!databaseStep || databaseStep.state === "missing") {
-    return "Start disabled because the database connection or saved settings are unavailable.";
+    return "Database connection or saved settings are unavailable.";
   }
   const junoStep = setupStatus.steps.find((step) => step.id === "juno");
   if (!junoStep) {
-    return "Start disabled until Juno read-only login credentials and delay guardrails are configured.";
+    return "Set Juno read-only login credentials and delay guardrails.";
   }
   const missingCredentials = junoStep.settings.some((setting) =>
     (setting.key === "juno_login_email" || setting.key === "juno_login_password") && setting.state !== "configured",
   ) || junoStep.missing.some((key) => key === "juno_login_email" || key === "juno_login_password");
   if (missingCredentials) {
-    return "Start disabled until Juno read-only login credentials are configured.";
+    return "Set Juno read-only login credentials.";
   }
   const blockedGuardrail = junoStep.guardrails.find((guardrail) => guardrail.state === "blocked");
   if (blockedGuardrail) {
-    return `Start disabled: ${blockedGuardrail.detail}`;
+    return blockedGuardrail.detail;
   }
   return null;
 }

@@ -36,7 +36,7 @@ describe("settings response and validation", () => {
     });
     expect(descriptor(response, "juno_login_password")).toMatchObject({
       source: "database",
-      displayValue: "Configured",
+      displayValue: "Saved",
       value: null,
       secret: true,
     });
@@ -49,7 +49,6 @@ describe("settings response and validation", () => {
     expect(JSON.stringify(response)).not.toContain("db-password");
     expect(JSON.stringify(response)).not.toContain("AUTH_SECRET");
     expect(JSON.stringify(response)).not.toContain("auth_secret");
-    expect(response.nextActions.map((action) => action.id)).toContain("review-read-only-boundary");
   });
 
   it("derives the auth provider callback URL from the configured site address and masks provider secrets", () => {

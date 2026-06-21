@@ -7,8 +7,8 @@ const meta = {
   component: StatCard,
   args: {
     label: "Mailbox",
-    value: "Configured",
-    detail: "configured mail source access",
+    value: "Mail query",
+    detail: "mail source access",
     icon: MailSearch,
   },
 } satisfies Meta<typeof StatCard>;

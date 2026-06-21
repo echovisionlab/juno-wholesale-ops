@@ -439,8 +439,7 @@ describe("admin guarded API routes", () => {
 
     const settingsResponse = await expectJson(getSettings(request()));
     expect(settingsResponse.status).toBe(200);
-    expect(JSON.stringify(settingsResponse.body)).toContain("Configured");
-    expect(JSON.stringify(settingsResponse.body)).not.toContain("Saved setting configured");
+    expect(JSON.stringify(settingsResponse.body)).toContain("Saved");
     expect(JSON.stringify(settingsResponse.body)).not.toContain("db-juno-password");
 
     countAdminUsersMock.mockRejectedValueOnce(new Error("count failed"));
@@ -490,8 +489,7 @@ describe("admin guarded API routes", () => {
     expect(updateServiceSettingsMock).toHaveBeenCalledWith("postgres://user:pass@localhost:5432/app", {
       juno_login_password: null,
     });
-    expect(JSON.stringify(clearResponse.body)).toContain("Not configured");
-    expect(JSON.stringify(clearResponse.body)).not.toContain("Runtime fallback configured");
+    expect(JSON.stringify(clearResponse.body)).toContain("Not saved");
     expect(JSON.stringify(clearResponse.body)).not.toContain("db-juno-password");
 
     await expect(

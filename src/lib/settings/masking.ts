@@ -62,9 +62,9 @@ export function hasSettingValue(value: unknown): boolean {
 
 function maskSecret(value: unknown): string {
   if (!hasSettingValue(value)) {
-    return "Not configured";
+    return "Not saved";
   }
-  return "Configured";
+  return "Saved";
 }
 
 function resolveSettingSource(options: {

@@ -71,15 +71,6 @@ export type SettingsGroup = {
   settings: SettingDescriptor[];
 };
 
-export type NextAction = {
-  id: string;
-  label: string;
-  detail: string;
-  href?: string;
-  action?: string;
-  severity: "info" | "warning" | "critical";
-};
-
 export type SettingsWarning = {
   id: string;
   severity: "info" | "warning" | "critical";
@@ -167,7 +158,6 @@ export type SettingsResponse = {
   };
   mailSources: PublicMailboxSource[];
   groups: SettingsGroup[];
-  nextActions: NextAction[];
   warnings: SettingsWarning[];
 };
 

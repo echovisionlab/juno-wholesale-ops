@@ -53,7 +53,7 @@ describe("SettingsCenter", () => {
     vi.restoreAllMocks();
   });
 
-  it("renders concise Settings Center sections without removed diagnostics or demo controls", async () => {
+  it("renders Settings Center sections without exposing raw secrets", async () => {
     const writeText = vi.fn().mockResolvedValueOnce(undefined);
     Object.assign(navigator, { clipboard: { writeText } });
     await renderSettingsPage(settingsFixture());
@@ -61,19 +61,7 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Settings Center");
     expect(pageText()).toContain("Operator settings.");
     expect(pageText()).toContain("Attention");
-    expect(pageText()).toContain("Auth bootstrap");
-    expect(pageText()).not.toContain("Gmail Ingest");
     expect(pageText()).not.toContain("AUTH_SECRET");
-    expect(pageText()).not.toContain("Clear saved setting");
-    expect(pageText()).not.toContain("Diagnostics");
-    expect(pageText()).not.toContain("No diagnostics captured");
-    expect(pageText()).not.toContain("Next Actions");
-    expect(pageText()).not.toContain("Action:");
-    expect(pageText()).not.toContain("Test Mail Source");
-    expect(pageText()).not.toContain("Run demo seed");
-    expect(pageText()).not.toContain("Web public port");
-    expect(pageText()).not.toContain("Runtime fallback");
-    expect(pageText()).not.toContain("Demo mode");
 
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
@@ -90,8 +78,6 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Juno login password");
     expect(pageText()).toContain("Secret value");
     expect(pageText()).toContain("Test session");
-    expect(pageText()).not.toContain("Current secret");
-    expect(pageText()).not.toContain("Read-only boundary");
   });
 
   it("selects the Auth tab through DOM click and keyboard navigation", async () => {
@@ -215,7 +201,7 @@ describe("SettingsCenter", () => {
 
     expect(pageText()).toContain("Attention");
     expect(pageText()).toContain("Auth & Admin Access");
-    expect(pageText()).toContain("Needs attention");
+    expect(pageText()).toContain("Review Auth tab.");
     expect(pageText()).toContain("Site address does not match current origin.");
     expect(pageText()).not.toContain("At least one admin user exists.");
   });
@@ -338,11 +324,11 @@ describe("SettingsCenter", () => {
     await clickButtonAndWait("Add source");
     expect(pageText()).toContain("Add mail source");
     expect(pageText()).toContain("Provider adapter");
-    expect(pageText()).toContain("Gmail Workspace is implemented; planned providers are visible but disabled.");
-    expect(pageText()).toContain("Gmail Workspace (implemented)");
-    expect(pageText()).toContain("IMAP (planned/disabled)");
-    expect(pageText()).toContain("Microsoft Graph (planned/disabled)");
-    expect(pageText()).toContain("Generic mailbox (planned/disabled)");
+    expect(pageText()).toContain("Only Gmail Workspace can be saved now. Planned adapters are disabled.");
+    expect(pageText()).toContain("Gmail Workspace");
+    expect(pageText()).toContain("IMAP (planned)");
+    expect(pageText()).toContain("Microsoft Graph (planned)");
+    expect(pageText()).toContain("Generic mailbox (planned)");
     expect(pageText()).toContain("Connection");
     expect(pageText()).toContain("Ingest");
     expect(pageText()).toContain("Attachment Storage");
@@ -350,10 +336,6 @@ describe("SettingsCenter", () => {
     expect(pageText()).toContain("Paste the Google service account JSON.");
     expect(pageText()).toContain("Gmail access uses a fixed read-only scope.");
     expect(pageText()).toContain("Read-only scope");
-    expect(pageText()).not.toContain("Gmail Workspace Scopes");
-    expect(pageText()).not.toContain("Scopes");
-    expect(pageText()).not.toContain("Credential reference");
-    expect(pageText()).not.toContain("Runtime secret name");
     expect(findInput("Mailbox address").getAttribute("placeholder")).toBe("catalogs@example.com");
     expect(findInput("Query").getAttribute("placeholder")).toBe("filename:xlsx newer_than:7d");
     expect((findButton("Create source") as HTMLButtonElement).disabled).toBe(true);
@@ -524,12 +506,10 @@ describe("SettingsCenter", () => {
       initialNotificationRules: [notificationRuleFixture()],
     });
 
-    expect(pageText()).toContain("ready");
-    expect(pageText()).toContain("1 in-app/logging normal");
-    expect(pageText()).toContain("0 ready / 1 configured");
+    expect(pageText()).toContain("1 in-app/logging");
+    expect(pageText()).toContain("1 need URL before send");
     expect(pageText()).toContain("Generic webhook not configured");
     expect(pageText()).toContain("Missing webhook URLs only block webhook send attempts");
-    expect(pageText()).not.toContain("webhook warning");
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });

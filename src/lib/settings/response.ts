@@ -4,7 +4,7 @@ import { resolveSsoProviderClientSecret } from "@/lib/auth/settings";
 import { settingDefinitions, type SettingsGroup, type SettingsResponse, type IntegrationUnitStatus } from "./descriptors";
 import { resolveSettingDescriptor, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
-import type { ServiceSettingsRow, SettingsGroupId, NextAction } from "./descriptors";
+import type { ServiceSettingsRow, SettingsGroupId } from "./descriptors";
 import type { PublicMailboxSource } from "@/lib/ingest/mail-source";
 
 const groupOrder: SettingsGroupId[] = ["auth", "mail", "juno", "notifications"];
@@ -94,7 +94,6 @@ export function buildSettingsResponse(options: {
     },
     mailSources,
     groups,
-    nextActions: buildNextActions(groups, warnings),
     warnings,
   };
 }
@@ -131,69 +130,6 @@ function groupState(settings: SettingsGroup["settings"], warning: boolean): Sett
     return "disabled";
   }
   return "complete";
-}
-
-function buildNextActions(groups: SettingsGroup[], warnings: SettingsResponse["warnings"]): NextAction[] {
-  const actions: NextAction[] = [];
-  const missingGroups = groups.filter((group) => group.state === "missing");
-
-  if (missingGroups.length > 0) {
-    actions.push({
-      id: "open-settings-center",
-      label: "Open Settings Center",
-      detail: `Complete ${missingGroups.map((group) => group.label).join(", ")} before enabling ingest or live lookup actions.`,
-      href: "/settings",
-      severity: "critical",
-    });
-  }
-
-  if (groups.find((group) => group.id === "mail")?.state === "missing") {
-    actions.push({
-      id: "configure-mail-source",
-      label: "Configure a mail source",
-      detail: "Create an active mail source with a configured read-only credential.",
-      href: "/settings",
-      action: "test-gmail",
-      severity: "warning",
-    });
-  }
-
-  if (settingsInGroup(groups, "juno").some((setting) => setting.state === "missing")) {
-    actions.push({
-      id: "configure-juno",
-      label: "Configure read-only Juno live lookup",
-      detail: "Set login credentials and safe delay bounds before starting the browser worker.",
-      href: "/settings",
-      action: "test-juno-session",
-      severity: "warning",
-    });
-  }
-
-  for (const warning of warnings.filter((entry) => entry.severity === "critical")) {
-    actions.push({
-      id: `warning-${warning.id}`,
-      label: "Resolve critical setting warning",
-      detail: warning.message,
-      href: "/settings",
-      severity: "critical",
-    });
-  }
-
-  if (actions.length === 0) {
-    actions.push({
-      id: "review-read-only-boundary",
-      label: "Review read-only operating boundary",
-      detail: "Settings are usable. Keep live lookup and notification delivery observation-only.",
-      href: "/settings",
-      severity: "info",
-    });
-  }
-
-  return actions;
-}
-
-function settingsInGroup(groups: SettingsGroup[], id: SettingsGroupId): SettingsGroup["settings"] {
-  return groups.find((group) => group.id === id)?.settings ?? [];
 }
 
 function resolveAppBaseUrl(row: ServiceSettingsRow | null): string | null {

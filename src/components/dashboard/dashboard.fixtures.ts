@@ -12,22 +12,18 @@ export const dashboardFixture: CatalogOpsDashboardProps = {
     {
       title: "Fetch",
       body: "Query active Gmail mail sources for Juno XLSX messages using configured mail source records.",
-      status: "Ready",
     },
     {
       title: "Normalize",
       body: "Extract source fields, pricing, stock, release dates, and deterministic hashes.",
-      status: "Ready",
     },
     {
       title: "Persist",
       body: "Store source mail, attachment hash, catalog snapshot, and raw item rows in Postgres.",
-      status: "Migration added",
     },
     {
       title: "Live lookup",
       body: "Queue selected Juno IDs for read-only browser stock checks through a managed background process.",
-      status: "Managed",
     },
   ],
   commands: [

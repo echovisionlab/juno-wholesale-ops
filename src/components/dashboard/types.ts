@@ -31,7 +31,6 @@ export type StatCardData = {
 export type PipelineItem = {
   title: string;
   body: string;
-  status: string;
 };
 
 export type GmailIngestState = {
