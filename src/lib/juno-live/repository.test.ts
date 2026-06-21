@@ -27,7 +27,7 @@ describe("JunoLiveRepository", () => {
   });
 
   it("applies migrations idempotently with a hash ledger", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(22);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(23);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({ version: 1, filename: "0001_init.sql" }),
       expect.objectContaining({ version: 2, filename: "0002_juno_live_lookup.sql" }),
@@ -51,6 +51,7 @@ describe("JunoLiveRepository", () => {
       expect.objectContaining({ version: 20, filename: "0020_attachment_storage_backends.sql" }),
       expect.objectContaining({ version: 21, filename: "0021_dashboard_saved_views.sql" }),
       expect.objectContaining({ version: 22, filename: "0022_sso_client_secret_ref.sql" }),
+      expect.objectContaining({ version: 23, filename: "0023_drop_sso_raw_client_secret.sql" }),
     ]);
   });
 

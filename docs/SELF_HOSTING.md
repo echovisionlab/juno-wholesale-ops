@@ -58,21 +58,19 @@ always enabled before the service is exposed beyond trusted local access.
 ## Secret Storage, Rotation, and Backup
 
 Warning: Postgres backups are secret-bearing backups. They include saved auth
-settings, legacy SSO `client_secret` values that have not moved to
-`client_secret_ref`, mail source credentials, Juno passwords, and notification
-secrets unless every credential has already moved to an external reference.
-Treat each backup like production credentials.
+settings, mail source credentials, Juno passwords, and notification secrets
+unless every credential has already moved to an external reference. Treat each
+backup like production credentials.
 
 Current storage policy:
 
 - The internal Better Auth secret is generated during startup when missing and
   stored in Postgres as a masked, non-editable service setting.
-- New SSO provider saves store `auth_sso_provider.client_secret_ref` only. The
-  runtime supports `env:NAME` and `file:/absolute/path` references; unsupported or
-  unavailable references leave that SSO provider unavailable.
-- Existing legacy `auth_sso_provider.client_secret` values remain masked and
-  runtime-compatible until migrated. Saving a `client_secret_ref` for that
-  provider clears the raw database secret.
+- SSO provider saves store `auth_sso_provider.client_secret_ref` only. The
+  runtime supports `env:NAME` and `file:/absolute/path` references; unsupported
+  or unavailable references leave that SSO provider unavailable. Raw SSO client
+  secret values are not accepted by the settings API, and migration
+  `0023_drop_sso_raw_client_secret.sql` removes the legacy raw storage column.
 - Mail source credentials, Juno passwords, and local webhook URLs are also
   write-only saved secret values unless a provider-specific `secret_ref` path is
   available.
@@ -95,7 +93,8 @@ Rotation policy:
 Backup policy:
 
 - Treat Postgres backups as secret-bearing artifacts because they include saved
-  auth settings and any legacy or non-migrated saved secret values.
+  auth settings and saved secret values that have not moved to an external
+  reference.
 - Encrypt backups at rest, restrict restore access, and keep them out of git,
   public issue text, CI logs, and screenshots.
 - Back up attachment storage and browser profile storage separately from
@@ -103,10 +102,11 @@ Backup policy:
 - If `secret_ref` values point to an external secret manager or deployment
   platform, back up that secret inventory and restore it before starting the app.
 
-SSO hardening status: new SSO provider saves use `client_secret_ref`, so
-Postgres backups no longer contain that provider's SSO client secret after it is
-migrated. Legacy raw SSO rows remain secret-bearing until each provider is
-updated to a reference.
+SSO hardening status: SSO provider saves use `client_secret_ref`, and migration
+`0023_drop_sso_raw_client_secret.sql` drops the legacy raw SSO client secret
+column. Postgres backups taken after that migration no longer contain SSO client
+secret values from `auth_sso_provider`; backups can still contain other saved
+credentials until those values move to external references.
 
 ## Docker
 

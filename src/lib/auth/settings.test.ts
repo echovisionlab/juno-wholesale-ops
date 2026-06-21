@@ -40,7 +40,10 @@ describe("resolveAppAuthSettings", () => {
         auth_base_url: "https://db.example.com",
         auth_trusted_origins: "https://db.example.com\nhttps://admin.example.com",
       },
-      { ssoProviders: [ssoProvider()] },
+      {
+        rawEnv: { WORKSPACE_CLIENT_SECRET: "client-secret" },
+        ssoProviders: [ssoProvider()],
+      },
     );
 
     expect(settings).toMatchObject({
@@ -61,6 +64,7 @@ describe("resolveAppAuthSettings", () => {
           userInfoUrl: "",
           clientId: "client-id",
           clientSecret: "client-secret",
+          clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
           scopes: ["openid", "email", "profile", "groups"],
         }),
       ],
@@ -105,7 +109,6 @@ describe("resolveAppAuthSettings", () => {
         rawEnv: { WORKSPACE_CLIENT_SECRET: "resolved-client-secret" },
         ssoProviders: [
           ssoProvider({
-            clientSecret: null,
             clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
             clientSecretConfigured: true,
           }),
@@ -119,7 +122,7 @@ describe("resolveAppAuthSettings", () => {
     });
   });
 
-  it("does not fall back to a legacy raw secret when a configured reference cannot be resolved", () => {
+  it("leaves the runtime SSO secret empty when a configured reference cannot be resolved", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv(),
       { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
@@ -127,7 +130,6 @@ describe("resolveAppAuthSettings", () => {
         rawEnv: {},
         ssoProviders: [
           ssoProvider({
-            clientSecret: "legacy-client-secret",
             clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
             clientSecretConfigured: true,
           }),
@@ -151,7 +153,7 @@ describe("resolveAppAuthSettings", () => {
             logoUrl: null,
             discoveryUrl: null,
             clientId: null,
-            clientSecret: null,
+            clientSecretRef: null,
             clientSecretConfigured: false,
           }),
         ],
@@ -178,7 +180,10 @@ describe("resolveAppAuthSettings", () => {
     const base = resolveAppAuthSettings(
       runtimeEnv(),
       { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
-      { ssoProviders: [ssoProvider()] },
+      {
+        rawEnv: { WORKSPACE_CLIENT_SECRET: "client-secret" },
+        ssoProviders: [ssoProvider()],
+      },
     );
 
     expect(resolveExternalProfileRole({ email: "other@example.com", groups: ["ops"] }, base, "workspace")).toBe("admin");
@@ -221,8 +226,7 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     tokenUrl: null,
     userInfoUrl: null,
     clientId: "client-id",
-    clientSecret: "client-secret",
-    clientSecretRef: null,
+    clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
     clientSecretConfigured: true,
     scopes: ["openid", "email", "profile", "groups"],
     enabled: true,

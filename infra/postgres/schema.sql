@@ -1,4 +1,4 @@
--- migration-manifest-sha256: dbaac548ca9f744e94043b58e09c2bb1427c5840be4a74f48104cab92d3240d6
+-- migration-manifest-sha256: 7918a1940fe7ec808d4bc55ac766128f40fab8f31cea06f1a809a19a09859d30
 --
 -- PostgreSQL database dump
 --
@@ -94,7 +94,6 @@ CREATE TABLE public.auth_sso_provider (
     logo_url text,
     discovery_url text,
     client_id text,
-    client_secret text,
     scopes text DEFAULT 'openid email profile'::text NOT NULL,
     enabled boolean DEFAULT false NOT NULL,
     sort_order integer DEFAULT 0 NOT NULL,
