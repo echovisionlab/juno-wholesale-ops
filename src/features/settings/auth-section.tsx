@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { Badge, Box, Button, Card, Code, Group, Modal, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
+import { Box, Button, Card, Code, Group, Modal, NativeSelect, NumberInput, PasswordInput, Stack, Switch, Text, Textarea, TextInput, Tooltip } from "@mantine/core";
 import { Copy, Plus, Save, Trash2 } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import type { SsoProviderDraft, SsoProviderPreset } from "./settings-types";
 import { ssoProviderPresetOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
-import { applyProviderPreset, findSetting, formatAdminCount, normalizeOrigin, presetLabel, providerToDraft, unitStatusColor } from "./settings-utils";
+import { applyProviderPreset, findSetting, formatAdminCount, normalizeOrigin, presetLabel, providerToDraft } from "./settings-utils";
 
 export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
   const siteAddress = findSetting(settings, "auth_base_url");
@@ -20,13 +20,8 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
     <ResponsiveGrid minWidth={280} gap="md">
       <Card>
         <Stack gap="xs">
-          <Group justify="space-between">
-            <Text fw={700}>Admin Gate</Text>
-            <Badge color={settings.warnings.some((warning) => warning.id.startsWith("auth_") && warning.severity === "critical") ? "red" : "green"} variant="light">
-              {settings.warnings.some((warning) => warning.id.startsWith("auth_") && warning.severity === "critical") ? "Needs attention" : "Ready"}
-            </Badge>
-          </Group>
-          <SignalFact label="Admin access protection" value="Enabled" />
+          <Text fw={700}>Admin Gate</Text>
+          <SignalFact label="Admin access protection" value="On" />
           <SignalFact label="Site address" value={siteAddress?.displayValue ?? settings.environment.appBaseUrl ?? "Not set"} />
           <SignalFact label="Current origin match" value={currentOriginMatches ? "matches" : "review required"} />
           <SignalFact label="Trusted origins" value={trustedOrigins?.state === "configured" ? "configured" : "not configured"} />
@@ -35,12 +30,7 @@ export function AuthAccessCards({ settings }: { settings: SettingsResponse }) {
 
       <Card>
         <Stack gap="xs">
-          <Group justify="space-between">
-            <Text fw={700}>Admin Access</Text>
-            <Badge color={settings.security.authBootstrap.status === "ready" ? "green" : "red"} variant="light">
-              {settings.security.authBootstrap.status === "ready" ? "Ready" : "Blocked"}
-            </Badge>
-          </Group>
+          <Text fw={700}>Admin Access</Text>
           <SignalFact label="Admin users" value={formatAdminCount(settings.security.authBootstrap.adminUserCount)} />
           <SignalFact label="Initial admin seed" value={settings.security.authBootstrap.hasInitialAdminEnv ? "configured" : "not configured"} />
           <SignalFact label="External admin mapping" value={settings.security.authBootstrap.hasExternalAdminMapping ? "configured" : "not configured"} />
@@ -62,12 +52,7 @@ export function AuthSecretPolicyCard() {
   return (
     <Card>
       <Stack gap="xs">
-        <Group justify="space-between" align="flex-start">
-          <Text fw={700}>Auth Secret Policy</Text>
-          <Badge color="blue" variant="light">
-            database-managed
-          </Badge>
-        </Group>
+        <Text fw={700}>Auth Secret Policy</Text>
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Internal auth secret" value="Generated at startup and stored as a masked, non-editable database value" />
           <SignalFact label="Rotation" value="Maintenance action; rotate alongside a planned session invalidation window" />
@@ -130,12 +115,7 @@ export function AuthProviderCard({
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Group gap="xs">
-            <Text fw={700}>External SSO Providers</Text>
-            <Badge color={unitStatusColor(providerUnit.status)} variant="light">
-              {providerUnit.status}
-            </Badge>
-          </Group>
+          <Text fw={700}>External SSO Providers</Text>
           <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAdd}>
             Add provider
           </Button>
@@ -150,12 +130,9 @@ export function AuthProviderCard({
                 <Stack gap="xs">
                   <Group justify="space-between" align="flex-start">
                     <Stack gap={2}>
-                      <Group gap="xs">
-                        <Text fw={700}>{provider.displayName}</Text>
-                        <Badge color="blue" variant="light">{presetLabel(provider.preset)}</Badge>
-                        <Badge color={unitStatusColor(provider.status)} variant="light">{provider.status}</Badge>
-                      </Group>
+                      <Text fw={700}>{provider.displayName}</Text>
                       <Text size="sm" c="dimmed">{provider.providerId}</Text>
+                      <Text size="xs" c="dimmed">{presetLabel(provider.preset)}</Text>
                     </Stack>
                     <Group gap="xs">
                       <Tooltip label={provider.enabled ? "Disable provider" : "Enable provider"}>
@@ -295,7 +272,7 @@ export function AuthProviderCard({
                 onChange={(value) => onDraftChange({ ...draft, sortOrder: typeof value === "number" ? value : 0 })}
               />
               <Switch
-                label="Enabled"
+                label="Active"
                 checked={draft.enabled}
                 onChange={(event) => onDraftChange({ ...draft, enabled: event.currentTarget.checked })}
               />

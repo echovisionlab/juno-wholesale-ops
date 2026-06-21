@@ -1,4 +1,4 @@
-import { Alert, Badge, Button, Card, Divider, Group, Modal, NumberInput, PasswordInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { Alert, Button, Card, Divider, Group, Modal, NumberInput, PasswordInput, Select, Stack, Switch, Table, Text, TextInput, Tooltip } from "@mantine/core";
 import { Plus, Save } from "lucide-react";
 import type { SettingsResponse } from "@/lib/settings/descriptors";
 import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
@@ -7,7 +7,7 @@ import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage"
 import type { MailSourceDraft, MailSourceTestState } from "./settings-types";
 import { attachmentStorageBackendOptions, gmailReadonlyScope, implementedMailProviderOptions, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
-import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend, unitStatusColor } from "./settings-utils";
+import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend } from "./settings-utils";
 
 export function MailSourcesCard({
   settings,
@@ -49,12 +49,7 @@ export function MailSourcesCard({
     <Card>
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
-          <Group gap="xs">
-            <Text fw={700}>Mail Sources</Text>
-            <Badge color={unitStatusColor(settings.units.mail.status)} variant="light">
-              {settings.units.mail.status}
-            </Badge>
-          </Group>
+          <Text fw={700}>Mail Sources</Text>
           <Button size="xs" leftSection={<Plus size={14} aria-hidden="true" />} onClick={onAdd}>
             Add source
           </Button>
@@ -92,16 +87,16 @@ export function MailSourcesCard({
                     <Table.Td>
                       <Stack gap={4}>
                         <Text size="sm">{formatMailProvider(source.provider)}</Text>
-                        <Badge color={getMailProviderDescriptor(source.provider).implemented ? "green" : "gray"} variant="light" size="xs">
+                        <Text size="xs" c="dimmed">
                           {getMailProviderDescriptor(source.provider).implemented ? "implemented" : "planned"}
-                        </Badge>
+                        </Text>
                       </Stack>
                     </Table.Td>
                     <Table.Td>{formatMailAuthType(source.authType)}</Table.Td>
                     <Table.Td>
-                      <Badge color={source.credentialConfigured ? "green" : "red"} variant="light" size="xs">
+                      <Text size="sm" c={source.credentialConfigured ? "gray.8" : "red.7"}>
                         {source.credentialConfigured ? "configured" : "missing"}
-                      </Badge>
+                      </Text>
                     </Table.Td>
                     <Table.Td maw={260}>
                       <Text size="sm" lineClamp={2}>{source.query}</Text>
@@ -111,9 +106,9 @@ export function MailSourcesCard({
                       <Text size="xs" c="dimmed" lineClamp={1}>{formatMailSourceStorageTarget(source)}</Text>
                     </Table.Td>
                     <Table.Td>
-                      <Badge color={source.isActive ? "green" : "gray"} variant="light" size="xs">
+                      <Text size="sm" c="gray.8">
                         {source.isActive ? "active" : "inactive"}
-                      </Badge>
+                      </Text>
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
@@ -163,22 +158,12 @@ export function MailSourcesCard({
                   onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
                 />
               </ResponsiveGrid>
-              <Group gap="xs">
-                <Text size="xs" c="dimmed">Implemented</Text>
-                {implementedMailProviderOptions.map((provider) => (
-                  <Badge key={provider} color="green" variant="light" size="xs">
-                    {provider}
-                  </Badge>
-                ))}
-              </Group>
-              <Group gap="xs">
-                <Text size="xs" c="dimmed">Planned</Text>
-                {plannedMailProviderOptions.map((provider) => (
-                  <Badge key={provider} color="gray" variant="light" size="xs">
-                    {provider}
-                  </Badge>
-                ))}
-              </Group>
+              <Text size="xs" c="dimmed">
+                Implemented: {implementedMailProviderOptions.join(", ")}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Planned, disabled: {plannedMailProviderOptions.join(", ")}
+              </Text>
               {!providerImplemented ? (
                 <Alert color="yellow" title="Adapter pending">
                   This provider is planned and cannot be saved yet.

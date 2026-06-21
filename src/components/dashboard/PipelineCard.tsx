@@ -1,6 +1,6 @@
 "use client";
 
-import { Badge, Card, Group, Text } from "@mantine/core";
+import { Card, Group, Text } from "@mantine/core";
 import type { PipelineItem } from "./types";
 
 export function PipelineCard({ title, body, status }: PipelineItem) {
@@ -8,9 +8,9 @@ export function PipelineCard({ title, body, status }: PipelineItem) {
     <Card component="article">
       <Group justify="space-between" align="flex-start">
         <Text fw={600}>{title}</Text>
-        <Badge color="sage" variant="light">
+        <Text size="sm" c="dimmed">
           {status}
-        </Badge>
+        </Text>
       </Group>
       <Text mt="md" size="sm" c="dimmed">
         {body}

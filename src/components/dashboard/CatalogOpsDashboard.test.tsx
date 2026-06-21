@@ -287,7 +287,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Observed price change");
     expect(pageText()).toContain("Catalog trend spike");
     expect(pageText()).toContain("Warehouse Find");
-    expect(pageText()).toContain("Disabled");
+    expect(pageText()).toContain("Off");
     expect(pageText()).toContain("Failed");
     expect(pageText()).toContain("Skipped");
     expect(pageText()).toContain("Operator digest");
@@ -331,7 +331,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("no recorded mail ingest run");
   });
 
-  it("renders setup warning, configured, secret, and optional setting states", () => {
+  it("renders setup warning, configured, secret, and optional setting values", () => {
     renderDashboard({
       ...dashboardFixture,
       setupStatus: {
@@ -410,8 +410,10 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Blocked");
     expect(pageText()).toContain("Stored value");
     expect(pageText()).not.toContain("Runtime fallback");
-    expect(pageText()).toContain("Secret set");
+    expect(pageText()).toContain("Secret");
+    expect(pageText()).toContain("configured");
     expect(pageText()).toContain("Optional");
+    expect(pageText()).toContain("manual only");
     expect(pageText()).toContain("last observed");
 
     renderDashboard({

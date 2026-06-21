@@ -348,32 +348,6 @@ export function notificationRulePayload(draft: NotificationRuleDraft): Notificat
   };
 }
 
-export function groupStateColor(state: SettingsGroup["state"]): string {
-  if (state === "complete") {
-    return "green";
-  }
-  if (state === "warning") {
-    return "yellow";
-  }
-  if (state === "missing") {
-    return "red";
-  }
-  return "gray";
-}
-
-export function unitStatusColor(status: SettingsResponse["units"]["authProvider"]["status"]): string {
-  if (status === "ready") {
-    return "green";
-  }
-  if (status === "missing" || status === "blocked" || status === "invalid") {
-    return "red";
-  }
-  if (status === "warning") {
-    return "yellow";
-  }
-  return "gray";
-}
-
 export function severityColor(severity: SettingsWarning["severity"]): string {
   if (severity === "critical") {
     return "red";
@@ -386,7 +360,7 @@ export function severityColor(severity: SettingsWarning["severity"]): string {
 
 export function buildOverviewUnits(settings: SettingsResponse): Array<{
   label: string;
-  status: "Ready" | "Needs attention" | "Disabled";
+  status: "Ready" | "Needs attention" | "Not enabled";
   detail: string;
 }> {
   const authGroup = settings.groups.find((group) => group.id === "auth");
@@ -405,7 +379,7 @@ export function buildOverviewUnits(settings: SettingsResponse): Array<{
     {
       label: "Juno Live",
       status: unitOverviewStatus(settings.units.junoLive.status),
-      detail: settings.units.junoLive.status === "disabled" ? "Disabled." : settings.units.junoLive.status === "ready" ? "Ready." : "Review Juno Live tab.",
+      detail: settings.units.junoLive.status === "disabled" ? "Not enabled." : settings.units.junoLive.status === "ready" ? "Ready." : "Review Juno Live tab.",
     },
     {
       label: "Notifications",
@@ -415,24 +389,14 @@ export function buildOverviewUnits(settings: SettingsResponse): Array<{
   ];
 }
 
-function unitOverviewStatus(status: SettingsResponse["units"]["mail"]["status"]): "Ready" | "Needs attention" | "Disabled" {
+function unitOverviewStatus(status: SettingsResponse["units"]["mail"]["status"]): "Ready" | "Needs attention" | "Not enabled" {
   if (status === "ready") {
     return "Ready";
   }
   if (status === "disabled") {
-    return "Disabled";
+    return "Not enabled";
   }
   return "Needs attention";
-}
-
-export function overviewStatusColor(status: "Ready" | "Needs attention" | "Disabled"): string {
-  if (status === "Ready") {
-    return "green";
-  }
-  if (status === "Needs attention") {
-    return "yellow";
-  }
-  return "gray";
 }
 
 export function findSetting(settings: SettingsResponse, key: string): SettingDescriptor | undefined {

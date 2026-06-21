@@ -1,7 +1,6 @@
 import type { ReactNode } from "react";
 import {
   Alert,
-  Badge,
   Box,
   Button,
   Card,
@@ -20,7 +19,7 @@ import {
 import { AlertTriangle, Database, Globe2, Save, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
 import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
 import type { DraftValues, PatchValue } from "./settings-types";
-import { buildOverviewUnits, groupStateColor, overviewStatusColor, severityColor } from "./settings-utils";
+import { buildOverviewUnits, severityColor } from "./settings-utils";
 
 export function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
   if (warnings.length === 0) {
@@ -109,9 +108,9 @@ export function OverviewAttentionPanel({ settings }: { settings: SettingsRespons
       <Stack gap="sm">
         <Group justify="space-between" align="flex-start">
           <Text fw={700}>Attention</Text>
-          <Badge color={attentionCount > 0 ? "yellow" : "green"} variant="light">
-            {attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"}` : "clear"}
-          </Badge>
+          <Text size="sm" c="dimmed">
+            {attentionCount > 0 ? `${attentionCount} item${attentionCount === 1 ? "" : "s"}` : "Clear"}
+          </Text>
         </Group>
         {attentionCount === 0 ? (
           <Text size="sm" c="dimmed">No setup blockers.</Text>
@@ -129,22 +128,14 @@ export function OverviewAttentionPanel({ settings }: { settings: SettingsRespons
                 {attentionUnits.map((unit) => (
                   <Table.Tr key={unit.label}>
                     <Table.Td>{unit.label}</Table.Td>
-                    <Table.Td>
-                      <Badge color={overviewStatusColor(unit.status)} variant="light" size="xs">
-                        {unit.status}
-                      </Badge>
-                    </Table.Td>
+                    <Table.Td>{unit.status}</Table.Td>
                     <Table.Td>{unit.detail}</Table.Td>
                   </Table.Tr>
                 ))}
                 {settings.warnings.map((warning) => (
                   <Table.Tr key={warning.id}>
                     <Table.Td>Settings</Table.Td>
-                    <Table.Td>
-                      <Badge color={severityColor(warning.severity)} variant="light" size="xs">
-                        {warning.severity}
-                      </Badge>
-                    </Table.Td>
+                    <Table.Td>{warning.severity}</Table.Td>
                     <Table.Td>{warning.message}</Table.Td>
                   </Table.Tr>
                 ))}
@@ -185,14 +176,7 @@ export function SettingsGroupCard({
   const editableSettings = visibleSettings.filter((setting) => setting.editable);
   return (
     <Card>
-      <Group justify="space-between" align="flex-start">
-        <Stack gap={4}>
-          <Text fw={700}>{group.label}</Text>
-        </Stack>
-        <Badge color={groupStateColor(group.state)} variant="light">
-          {group.state}
-        </Badge>
-      </Group>
+      <Text fw={700}>{group.label}</Text>
 
       <Stack gap="md" mt="md">
         {visibleSettings.map((setting) => (
@@ -232,10 +216,7 @@ function SettingEditor({
     <Box>
       <Group justify="space-between" gap="xs" align="flex-start">
         <Stack gap={4} maw={520}>
-          <Group gap={6}>
-            <Text fw={700}>{setting.label}</Text>
-            <StateBadge setting={setting} />
-          </Group>
+          <Text fw={700}>{setting.label}</Text>
           {!setting.editable ? (
             <Text size="sm" c={setting.state === "missing" ? "red.7" : "gray.8"}>
               {pendingClear ? "Will clear saved value" : setting.displayValue}
@@ -314,19 +295,5 @@ function renderInput(
       value={typeof value === "string" || typeof value === "number" ? String(value) : ""}
       onChange={(event) => onChange(event.currentTarget.value)}
     />
-  );
-}
-
-function StateBadge({ setting }: { setting: SettingDescriptor }) {
-  const colors = {
-    configured: "green",
-    missing: "red",
-    disabled: "gray",
-    invalid: "red",
-  } satisfies Record<SettingDescriptor["state"], string>;
-  return (
-    <Badge color={colors[setting.state]} variant="light" size="xs">
-      {setting.secret && setting.state === "configured" ? "secret configured" : setting.state}
-    </Badge>
   );
 }
