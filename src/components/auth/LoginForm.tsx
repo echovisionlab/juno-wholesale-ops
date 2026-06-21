@@ -38,7 +38,7 @@ export function LoginForm({
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [externalPending, setExternalPending] = useState(false);
+  const [externalPendingProviderId, setExternalPendingProviderId] = useState<string | null>(null);
   const hasExternalProviders = externalProviders.length > 0;
   const loginUnavailable = !emailPasswordLoginEnabled && !hasExternalProviders;
 
@@ -72,7 +72,7 @@ export function LoginForm({
   }
 
   async function startExternalSignIn(externalProvider: LoginExternalProvider) {
-    setExternalPending(true);
+    setExternalPendingProviderId(externalProvider.providerId);
     setError(null);
 
     try {
@@ -95,7 +95,7 @@ export function LoginForm({
     } catch {
       setError("External sign-in is unavailable.");
     } finally {
-      setExternalPending(false);
+      setExternalPendingProviderId(null);
     }
   }
 
@@ -134,7 +134,8 @@ export function LoginForm({
                 key={externalProvider.providerId}
                 type="button"
                 variant="light"
-                loading={externalPending}
+                loading={externalPendingProviderId === externalProvider.providerId}
+                disabled={externalPendingProviderId !== null && externalPendingProviderId !== externalProvider.providerId}
                 leftSection={externalProvider.logoUrl ? <Image src={externalProvider.logoUrl} alt="" fit="contain" w={18} h={18} /> : <LogIn size={16} aria-hidden="true" />}
                 onClick={() => void startExternalSignIn(externalProvider)}
               >
