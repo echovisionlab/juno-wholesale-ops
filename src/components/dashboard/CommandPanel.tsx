@@ -6,7 +6,7 @@ export function CommandPanel({ commands }: { commands: string[] }) {
   return (
     <Card bg="dark.9" c="white" withBorder={false}>
       <Stack gap="md">
-        <Text fw={700}>Next Actions</Text>
+        <Text fw={700}>Operator Commands</Text>
         <Code block c="sage.0" bg="dark.7">
           {commands.join("\n")}
         </Code>

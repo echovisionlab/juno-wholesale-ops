@@ -1,17 +1,12 @@
 "use client";
 
-import { Card, Group, Text } from "@mantine/core";
+import { Card, Text } from "@mantine/core";
 import type { PipelineItem } from "./types";
 
-export function PipelineCard({ title, body, status }: PipelineItem) {
+export function PipelineCard({ title, body }: PipelineItem) {
   return (
     <Card component="article">
-      <Group justify="space-between" align="flex-start">
-        <Text fw={600}>{title}</Text>
-        <Text size="sm" c="dimmed">
-          {status}
-        </Text>
-      </Group>
+      <Text fw={600}>{title}</Text>
       <Text mt="md" size="sm" c="dimmed">
         {body}
       </Text>

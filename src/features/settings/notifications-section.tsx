@@ -85,6 +85,7 @@ export function NotificationsSettingsCard({
   const localChannelCount = safeChannels.filter((channel) => channel.type === "in_app" || channel.type === "logging").length;
   const webhookChannels = safeChannels.filter((channel) => channel.type === "webhook");
   const readyWebhookCount = webhookChannels.filter(hasWebhookDestination).length;
+  const webhookNeedsDestinationCount = webhookChannels.length - readyWebhookCount;
 
   return (
     <Card>
@@ -107,9 +108,9 @@ export function NotificationsSettingsCard({
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Channels" value={loading && !channels ? "loading" : String(safeChannels.length)} />
           <SignalFact label="Active rules" value={loading && !rules ? "loading" : String(safeRules.filter((rule) => rule.enabled).length)} />
-          <SignalFact label="Local delivery" value={`${localChannelCount} in-app/logging normal`} />
-          <SignalFact label="External webhooks" value={`${readyWebhookCount} ready / ${webhookChannels.length} configured`} />
-          <SignalFact label="External send" value="send button only" />
+          <SignalFact label="Local delivery" value={`${localChannelCount} in-app/logging`} />
+          <SignalFact label="External webhooks" value={formatWebhookSendReadiness(webhookChannels.length, webhookNeedsDestinationCount)} />
+          <SignalFact label="External send" value="Manual send action" />
         </ResponsiveGrid>
 
         <Group gap="xs">
@@ -155,7 +156,6 @@ export function NotificationsSettingsCard({
                     <Table.Th>Channel</Table.Th>
                     <Table.Th>Provider</Table.Th>
                     <Table.Th>Config</Table.Th>
-                    <Table.Th>Status</Table.Th>
                     <Table.Th>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
@@ -164,15 +164,9 @@ export function NotificationsSettingsCard({
                     <Table.Tr key={channel.id}>
                       <Table.Td>
                         <Text fw={700}>{channel.name}</Text>
-                        <Text size="xs" c="dimmed">{channel.secretRef ? "secret ref configured" : "no secret ref"}</Text>
                       </Table.Td>
                       <Table.Td>{formatNotificationChannelProvider(channel)}</Table.Td>
                       <Table.Td>{channel.configSummary}</Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="gray.8">
-                          {channel.enabled ? "on" : "off"}
-                        </Text>
-                      </Table.Td>
                       <Table.Td>
                         <Group gap="xs" wrap="nowrap">
                           <Tooltip label={channel.enabled ? "Disable channel" : "Enable channel"}>
@@ -222,7 +216,6 @@ export function NotificationsSettingsCard({
                     <Table.Th>Signals</Table.Th>
                     <Table.Th>Severities</Table.Th>
                     <Table.Th>Threshold</Table.Th>
-                    <Table.Th>Status</Table.Th>
                     <Table.Th>Actions</Table.Th>
                   </Table.Tr>
                 </Table.Thead>
@@ -231,7 +224,7 @@ export function NotificationsSettingsCard({
                     <Table.Tr key={rule.id}>
                       <Table.Td>
                         <Text fw={700}>{rule.name}</Text>
-                        <Text size="xs" c="dimmed">{rule.includeDigest ? "includes digest" : "signals only"}</Text>
+                        {rule.includeDigest ? <Text size="xs" c="dimmed">Includes digest</Text> : null}
                       </Table.Td>
                       <Table.Td>
                         <Text>{rule.channelName}</Text>
@@ -240,11 +233,6 @@ export function NotificationsSettingsCard({
                       <Table.Td>{rule.signalTypes.length > 0 ? rule.signalTypes.map(formatSignalType).join(", ") : "All"}</Table.Td>
                       <Table.Td>{rule.severities.length > 0 ? rule.severities.join(", ") : "All"}</Table.Td>
                       <Table.Td>{`score ${rule.minScore}, ${rule.cooldownMinutes} min`}</Table.Td>
-                      <Table.Td>
-                        <Text size="sm" c="gray.8">
-                          {rule.enabled ? "on" : "off"}
-                        </Text>
-                      </Table.Td>
                       <Table.Td>
                         <Group gap="xs" wrap="nowrap">
                           <Tooltip label={rule.enabled ? "Disable rule" : "Enable rule"}>
@@ -418,6 +406,16 @@ export function NotificationsSettingsCard({
       </Stack>
     </Card>
   );
+}
+
+function formatWebhookSendReadiness(total: number, missingDestinationCount: number): string {
+  if (total === 0) {
+    return "No webhook channels";
+  }
+  if (missingDestinationCount > 0) {
+    return `${missingDestinationCount} need URL before send`;
+  }
+  return `${total} available for send`;
 }
 
 function hasWebhookDestination(channel: NotificationChannel): boolean {

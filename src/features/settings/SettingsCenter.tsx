@@ -16,7 +16,7 @@ import {
   useSettingsResource,
   useSsoProviderController,
 } from "./settings-controllers";
-import { OverviewAttentionPanel, SettingsGroupCard, SettingsWarningsPanel, SystemStatusStrip } from "./settings-layout";
+import { OverviewAttentionPanel, SettingsGroupCard, SettingsWarningsPanel } from "./settings-layout";
 import type { SettingsTab } from "./settings-types";
 
 export { formatJunoSessionCheckStatus, formatMailSourceTestStatus, formatSettingsActionError } from "./settings-utils";
@@ -91,7 +91,6 @@ export function SettingsCenter({
             </Card>
           ) : (
             <>
-              <SystemStatusStrip settings={settings} />
               <SettingsWarningsPanel warnings={settings.warnings} />
               <Tabs defaultValue={initialTab} keepMounted={false}>
                 <Tabs.List>

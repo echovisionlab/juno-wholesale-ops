@@ -115,15 +115,6 @@ export function settingsFixture(): SettingsResponse {
         isActive: true,
       },
     ],
-    nextActions: [
-      {
-        id: "open-settings-center",
-        label: "Open Settings Center",
-        detail: "Complete Juno Live before starting the worker.",
-        href: "/settings",
-        severity: "warning",
-      },
-    ],
     groups: [
       {
         id: "auth",
@@ -147,7 +138,7 @@ export function settingsFixture(): SettingsResponse {
         state: "missing",
         settings: [
           setting("juno_login_email", "Juno login email", "unset", "missing", "Not configured", false, true, "email"),
-          setting("juno_login_password", "Juno login password", "database", "configured", "Configured", true, true),
+          setting("juno_login_password", "Juno login password", "database", "configured", "Saved", true, true),
         ],
       },
       { id: "notifications", label: "Notifications", state: "complete", settings: [] },

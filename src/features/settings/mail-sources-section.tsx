@@ -5,7 +5,7 @@ import { getMailProviderDescriptor } from "@/lib/ingest/mail-provider-registry";
 import type { MailProvider, PublicMailboxSource } from "@/lib/ingest/mail-source";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
 import type { MailSourceDraft, MailSourceTestState } from "./settings-types";
-import { attachmentStorageBackendOptions, gmailReadonlyScope, implementedMailProviderOptions, mailProviderOptions, plannedMailProviderOptions } from "./settings-options";
+import { attachmentStorageBackendOptions, gmailReadonlyScope, mailProviderOptions } from "./settings-options";
 import { ResponsiveGrid, SignalFact } from "./settings-layout";
 import { applyMailProviderPreset, formatMailAuthType, formatMailCredentialType, formatMailProvider, formatMailSourceStorageTarget, formatMailSourceTestStatus, formatStorageBackend } from "./settings-utils";
 
@@ -57,7 +57,6 @@ export function MailSourcesCard({
         <ResponsiveGrid minWidth={220} gap="xs">
           <SignalFact label="Active sources" value={String(sources.filter((source) => source.isActive).length)} />
           <SignalFact label="Runnable ingest" value={String(runnableCount)} />
-          <SignalFact label="Credentials" value={sources.some((source) => source.credentialConfigured) ? "configured" : "not configured"} />
         </ResponsiveGrid>
 
         {sources.length === 0 ? (
@@ -73,7 +72,6 @@ export function MailSourcesCard({
                   <Table.Th>Credential</Table.Th>
                   <Table.Th>Query</Table.Th>
                   <Table.Th>Storage</Table.Th>
-                  <Table.Th>Status</Table.Th>
                   <Table.Th>Actions</Table.Th>
                 </Table.Tr>
               </Table.Thead>
@@ -87,15 +85,15 @@ export function MailSourcesCard({
                     <Table.Td>
                       <Stack gap={4}>
                         <Text size="sm">{formatMailProvider(source.provider)}</Text>
-                        <Text size="xs" c="dimmed">
-                          {getMailProviderDescriptor(source.provider).implemented ? "implemented" : "planned"}
-                        </Text>
+                        {!getMailProviderDescriptor(source.provider).implemented ? (
+                          <Text size="xs" c="dimmed">Adapter planned</Text>
+                        ) : null}
                       </Stack>
                     </Table.Td>
                     <Table.Td>{formatMailAuthType(source.authType)}</Table.Td>
                     <Table.Td>
                       <Text size="sm" c={source.credentialConfigured ? "gray.8" : "red.7"}>
-                        {source.credentialConfigured ? "configured" : "missing"}
+                        {source.credentialConfigured ? "Saved secret" : "Add secret"}
                       </Text>
                     </Table.Td>
                     <Table.Td maw={260}>
@@ -104,11 +102,6 @@ export function MailSourcesCard({
                     <Table.Td>
                       <Text size="sm">{formatStorageBackend(source.storageBackend)}</Text>
                       <Text size="xs" c="dimmed" lineClamp={1}>{formatMailSourceStorageTarget(source)}</Text>
-                    </Table.Td>
-                    <Table.Td>
-                      <Text size="sm" c="gray.8">
-                        {source.isActive ? "active" : "inactive"}
-                      </Text>
                     </Table.Td>
                     <Table.Td>
                       <Group gap="xs" wrap="nowrap">
@@ -140,7 +133,7 @@ export function MailSourcesCard({
               <ResponsiveGrid minWidth={240} gap="sm">
                 <Select
                   label="Provider adapter"
-                  description="Gmail Workspace is implemented; planned providers are visible but disabled."
+                  description="Only Gmail Workspace can be saved now. Planned adapters are disabled."
                   value={draft.provider}
                   data={mailProviderOptions}
                   allowDeselect={false}
@@ -158,12 +151,6 @@ export function MailSourcesCard({
                   onChange={(event) => onDraftChange({ ...draft, isActive: event.currentTarget.checked })}
                 />
               </ResponsiveGrid>
-              <Text size="xs" c="dimmed">
-                Implemented: {implementedMailProviderOptions.join(", ")}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Planned, disabled: {plannedMailProviderOptions.join(", ")}
-              </Text>
               {!providerImplemented ? (
                 <Alert color="yellow" title="Adapter pending">
                   This provider is planned and cannot be saved yet.

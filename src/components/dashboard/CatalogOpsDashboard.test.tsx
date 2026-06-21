@@ -331,7 +331,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("no recorded mail ingest run");
   });
 
-  it("renders setup warning, configured, secret, and optional setting values", () => {
+  it("renders setup actions and guardrails without resolved setting values", () => {
     renderDashboard({
       ...dashboardFixture,
       setupStatus: {
@@ -408,12 +408,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Configuration is usable");
     expect(pageText()).toContain("Review");
     expect(pageText()).toContain("Blocked");
-    expect(pageText()).toContain("Stored value");
-    expect(pageText()).not.toContain("Runtime fallback");
-    expect(pageText()).toContain("Secret");
-    expect(pageText()).toContain("configured");
-    expect(pageText()).toContain("Optional");
-    expect(pageText()).toContain("manual only");
+    expect(pageText()).toContain("Configure a runnable mailbox source in Settings.");
     expect(pageText()).toContain("last observed");
 
     renderDashboard({
@@ -599,7 +594,7 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("admin required");
     expect(pageText()).toContain("worker route failed");
     expect(pageText()).toContain("digest unavailable");
-    expect(pageText()).toContain("Start disabled");
+    expect(pageText()).toContain("Cannot start yet");
     expect(pageText()).toContain("Juno read-only login credentials");
     clickButton("Start");
     expect(onWorkerAction).not.toHaveBeenCalled();
@@ -654,7 +649,7 @@ describe("CatalogOpsDashboard", () => {
       },
       onWorkerAction,
     });
-    expect(pageText()).toContain("Start disabled until Juno read-only login credentials are configured.");
+    expect(pageText()).toContain("Set Juno read-only login credentials.");
 
     renderDashboard({
       ...dashboardFixture,
@@ -704,7 +699,7 @@ describe("CatalogOpsDashboard", () => {
       onWorkerAction,
     });
 
-    expect(pageText()).toContain("Start disabled: Delay min must be less than or equal to delay max.");
+    expect(pageText()).toContain("Delay min must be less than or equal to delay max.");
   });
 
   it("filters signals and dispatches saved view actions", () => {

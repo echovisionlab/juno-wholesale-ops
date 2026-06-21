@@ -16,10 +16,10 @@ import {
   Textarea,
   TextInput,
 } from "@mantine/core";
-import { AlertTriangle, Database, Globe2, Save, Settings, ShieldCheck, type LucideIcon } from "lucide-react";
+import { AlertTriangle, Save } from "lucide-react";
 import type { SettingsGroup, SettingsResponse, SettingDescriptor, SettingsWarning } from "@/lib/settings/descriptors";
 import type { DraftValues, PatchValue } from "./settings-types";
-import { buildOverviewUnits, severityColor } from "./settings-utils";
+import { severityColor } from "./settings-utils";
 
 export function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[] }) {
   if (warnings.length === 0) {
@@ -33,24 +33,6 @@ export function SettingsWarningsPanel({ warnings }: { warnings: SettingsWarning[
         </Alert>
       ))}
     </Stack>
-  );
-}
-
-export function SystemStatusStrip({ settings }: { settings: SettingsResponse }) {
-  const editableSettings = settings.groups.flatMap((group) => group.settings).filter((setting) => setting.editable);
-  const missingSettings = editableSettings.filter((setting) => setting.state === "missing" || setting.state === "invalid");
-  return (
-    <ResponsiveGrid minWidth={180} gap="sm">
-      <StatusCard icon={Database} label="Database" value={settings.environment.lastUpdatedAt ? "Connected" : "Pending"} />
-      <StatusCard icon={ShieldCheck} label="Auth bootstrap" value={settings.security.authBootstrap.status} />
-      <StatusCard icon={Settings} label="Operator settings" value={missingSettings.length === 0 ? "Ready" : "Needs attention"} />
-      <StatusCard
-        icon={Globe2}
-        label="Site address"
-        value={settings.environment.appBaseUrl ? "Configured" : "Not set"}
-        detail={settings.environment.appBaseUrl ?? settings.environment.currentRequestOrigin ?? "No request origin"}
-      />
-    </ResponsiveGrid>
   );
 }
 
@@ -68,41 +50,9 @@ export function ResponsiveGrid({ children, minWidth, gap }: { children: ReactNod
   );
 }
 
-function StatusCard({
-  icon: Icon,
-  label,
-  value,
-  detail,
-}: {
-  icon: LucideIcon;
-  label: string;
-  value: string;
-  detail?: string;
-}) {
-  return (
-    <Card>
-      <Group gap="sm" align="flex-start">
-        <Icon size={20} aria-hidden="true" />
-        <Stack gap={2}>
-          <Text size="xs" tt="uppercase" fw={700} c="dimmed">
-            {label}
-          </Text>
-          <Text fw={700}>{value}</Text>
-          {detail ? (
-            <Text size="sm" c="dimmed">
-              {detail}
-            </Text>
-          ) : null}
-        </Stack>
-      </Group>
-    </Card>
-  );
-}
-
 export function OverviewAttentionPanel({ settings }: { settings: SettingsResponse }) {
-  const units = buildOverviewUnits(settings);
-  const attentionUnits = units.filter((unit) => unit.status !== "Ready");
-  const attentionCount = attentionUnits.length + settings.warnings.length;
+  const attentionRows = buildAttentionRows(settings);
+  const attentionCount = attentionRows.length + settings.warnings.length;
   return (
     <Card>
       <Stack gap="sm">
@@ -120,22 +70,19 @@ export function OverviewAttentionPanel({ settings }: { settings: SettingsRespons
               <Table.Thead>
                 <Table.Tr>
                   <Table.Th>Area</Table.Th>
-                  <Table.Th>Status</Table.Th>
                   <Table.Th>Note</Table.Th>
                 </Table.Tr>
               </Table.Thead>
               <Table.Tbody>
-                {attentionUnits.map((unit) => (
-                  <Table.Tr key={unit.label}>
-                    <Table.Td>{unit.label}</Table.Td>
-                    <Table.Td>{unit.status}</Table.Td>
-                    <Table.Td>{unit.detail}</Table.Td>
+                {attentionRows.map((row) => (
+                  <Table.Tr key={row.label}>
+                    <Table.Td>{row.label}</Table.Td>
+                    <Table.Td>{row.note}</Table.Td>
                   </Table.Tr>
                 ))}
                 {settings.warnings.map((warning) => (
                   <Table.Tr key={warning.id}>
                     <Table.Td>Settings</Table.Td>
-                    <Table.Td>{warning.severity}</Table.Td>
                     <Table.Td>{warning.message}</Table.Td>
                   </Table.Tr>
                 ))}
@@ -146,6 +93,24 @@ export function OverviewAttentionPanel({ settings }: { settings: SettingsRespons
       </Stack>
     </Card>
   );
+}
+
+function buildAttentionRows(settings: SettingsResponse): Array<{ label: string; note: string }> {
+  const rows: Array<{ label: string; note: string }> = [];
+  const authGroup = settings.groups.find((group) => group.id === "auth");
+  if (settings.security.authBootstrap.status !== "ready" || authGroup?.state === "missing" || authGroup?.state === "warning") {
+    rows.push({ label: "Auth & Admin Access", note: "Review Auth tab." });
+  }
+  if (settings.units.mail.status !== "ready") {
+    rows.push({ label: "Mail Ingest", note: settings.units.mail.detail });
+  }
+  if (settings.units.junoLive.status !== "ready" && settings.units.junoLive.status !== "disabled") {
+    rows.push({ label: "Juno Live", note: settings.units.junoLive.detail });
+  }
+  if (settings.units.notifications.status !== "ready") {
+    rows.push({ label: "Notifications", note: settings.units.notifications.detail });
+  }
+  return rows;
 }
 
 export function SignalFact({ label, value }: { label: string; value: string }) {
