@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import packageJson from "../../package.json";
 import { getPublicVersionInfo } from "./build-info";
 
 describe("getPublicVersionInfo", () => {
@@ -6,7 +7,7 @@ describe("getPublicVersionInfo", () => {
     const info = getPublicVersionInfo(process.cwd());
 
     expect(info.status).toBe("ok");
-    expect(info.version).toBe("0.6.0");
+    expect(info.version).toBe(packageJson.version);
     expect(Object.keys(info).sort()).toEqual(["gitSha", "status", "version"]);
     expect(info).not.toHaveProperty("buildTime");
     expect(info).not.toHaveProperty("environment");
@@ -34,7 +35,7 @@ describe("getPublicVersionInfo", () => {
     try {
       const info = getPublicVersionInfo("/missing-worktree");
 
-      expect(info).toEqual({ status: "ok", version: "0.6.0", gitSha: null });
+      expect(info).toEqual({ status: "ok", version: packageJson.version, gitSha: null });
       expect(JSON.stringify(info)).not.toContain("postgres://");
       expect(JSON.stringify(info)).not.toContain("not-public");
       expect(JSON.stringify(info)).not.toContain("2026-06-20");
