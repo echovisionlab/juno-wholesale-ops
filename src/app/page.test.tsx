@@ -3,7 +3,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import Home, { fetchDashboardJson } from "./page";
+import Home, { fetchDashboardJson } from "./dashboard-client";
 
 vi.mock("@/components/dashboard/CatalogOpsDashboard", () => ({
   CatalogOpsDashboard: (props: {
