@@ -97,6 +97,50 @@ describe("resolveAppAuthSettings", () => {
     expect(settings.externalProviders).toEqual([]);
   });
 
+  it("resolves SSO client secret references from the runtime environment", () => {
+    const settings = resolveAppAuthSettings(
+      runtimeEnv(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
+      {
+        rawEnv: { WORKSPACE_CLIENT_SECRET: "resolved-client-secret" },
+        ssoProviders: [
+          ssoProvider({
+            clientSecret: null,
+            clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
+            clientSecretConfigured: true,
+          }),
+        ],
+      },
+    );
+
+    expect(settings.externalProviders[0]).toMatchObject({
+      clientSecret: "resolved-client-secret",
+      clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
+    });
+  });
+
+  it("does not fall back to a legacy raw secret when a configured reference cannot be resolved", () => {
+    const settings = resolveAppAuthSettings(
+      runtimeEnv(),
+      { ...emptyRow(), auth_secret: "a".repeat(32), auth_base_url: "https://app.example.com" },
+      {
+        rawEnv: {},
+        ssoProviders: [
+          ssoProvider({
+            clientSecret: "legacy-client-secret",
+            clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+            clientSecretConfigured: true,
+          }),
+        ],
+      },
+    );
+
+    expect(settings.externalProviders[0]).toMatchObject({
+      clientSecret: "",
+      clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+    });
+  });
+
   it("normalizes enabled SSO providers with missing optional credentials to blank runtime config values", () => {
     const settings = resolveAppAuthSettings(
       runtimeEnv(),
@@ -178,6 +222,7 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "client-secret",
+    clientSecretRef: null,
     clientSecretConfigured: true,
     scopes: ["openid", "email", "profile", "groups"],
     enabled: true,

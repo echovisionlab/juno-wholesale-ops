@@ -20,7 +20,7 @@ describe("PostgreSQL migrations", () => {
   });
 
   it("applies every migration to a real PostgreSQL database and records hashes", async () => {
-    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(21);
+    await expect(applyMigrations(database.pool, database.migrationsDir)).resolves.toHaveLength(22);
     await expect(loadAppliedMigrations(database.pool)).resolves.toEqual([
       expect.objectContaining({
         version: 1,
@@ -125,6 +125,11 @@ describe("PostgreSQL migrations", () => {
       expect.objectContaining({
         version: 21,
         filename: "0021_dashboard_saved_views.sql",
+        sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
+      }),
+      expect.objectContaining({
+        version: 22,
+        filename: "0022_sso_client_secret_ref.sql",
         sha256: expect.stringMatching(/^[a-f0-9]{64}$/),
       }),
     ]);

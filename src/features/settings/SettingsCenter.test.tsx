@@ -77,8 +77,6 @@ describe("SettingsCenter", () => {
 
     clickButton("Auth");
     expect(pageText()).toContain("Login logo URL");
-    expect(pageText()).toContain("Auth Secret Policy");
-    expect(pageText()).toContain("target secret_ref or encrypted storage");
     expect(pageText()).not.toContain("AUTH_SECRET");
     expect(pageText()).toContain("Workspace");
     expect(pageText()).toContain("OpenID Connect");
@@ -104,7 +102,6 @@ describe("SettingsCenter", () => {
     await clickTabDom("Auth");
 
     expect(selectedTab()).toBe("Auth");
-    expect(pageText()).toContain("Auth Secret Policy");
     expect(pageText()).toContain("External SSO Providers");
 
     await clickTabDom("Overview");
@@ -113,7 +110,22 @@ describe("SettingsCenter", () => {
     await keyDownTab("Overview", "ArrowRight");
 
     expect(selectedTab()).toBe("Auth");
-    expect(pageText()).toContain("Auth Secret Policy");
+    expect(pageText()).toContain("External SSO Providers");
+  });
+
+  it("shows unresolved SSO secret references only as an actionable problem", async () => {
+    const settings = settingsFixture();
+    settings.units.authProvider.providers = settings.units.authProvider.providers.map((provider) => ({
+      ...provider,
+      status: "missing",
+      clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+      missing: ["client secret"],
+    }));
+
+    await renderSettingsPage(settings);
+    clickButton("Auth");
+
+    expect(pageText()).toContain("Client secret unavailable: env:MISSING_WORKSPACE_CLIENT_SECRET");
   });
 
   it("formats preflight and connection statuses without raw enum values", () => {
@@ -178,6 +190,12 @@ describe("SettingsCenter", () => {
 
     expect(formatSettingsActionError("mail_source_connection_test_required", "Save failed")).toBe("Run a successful connection test before saving.");
     expect(formatSettingsActionError("notification_channel_not_found", "Channel failed")).toBe("Notification channel was not found.");
+    expect(formatSettingsActionError("clientSecretRef must use env:NAME or file:/absolute/path", "Save failed")).toBe(
+      "Use env:NAME or file:/absolute/path for the client secret reference.",
+    );
+    expect(formatSettingsActionError("clientSecretRef is required when creating a provider", "Save failed")).toBe(
+      "Add a client secret reference before creating the provider.",
+    );
     expect(formatSettingsActionError("unknown_backend_code", "Action failed")).toBe("Action failed");
     expect(formatSettingsActionError("Readable backend message", "Action failed")).toBe("Readable backend message");
   });
@@ -262,11 +280,12 @@ describe("SettingsCenter", () => {
     changeInput("Token URL", "https://login.example.test/oauth/token");
     changeInput("User info URL", "https://login.example.test/oauth/userinfo");
     changeInput("Client ID", "client-id");
-    changeInput("Client secret", "client-secret");
+    changeInput("Client secret reference", "env:DEV_OIDC_CLIENT_SECRET");
     clickButton("Create provider");
     await act(async () => undefined);
     expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/settings/auth/sso-providers");
-    expect(JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body))).toMatchObject({
+    const createProviderPayload = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(createProviderPayload).toMatchObject({
       providerId: "dev-oidc",
       displayName: "Dev OIDC",
       protocol: "oauth2",
@@ -274,7 +293,9 @@ describe("SettingsCenter", () => {
       authorizationUrl: "https://login.example.test/oauth/authorize",
       tokenUrl: "https://login.example.test/oauth/token",
       userInfoUrl: "https://login.example.test/oauth/userinfo",
+      clientSecretRef: "env:DEV_OIDC_CLIENT_SECRET",
     });
+    expect(createProviderPayload).not.toHaveProperty("clientSecret");
     expect(pageText()).toContain("Provider created");
 
     const toggle = document.body.querySelector('input[aria-label="Workspace enabled"]') as HTMLInputElement;

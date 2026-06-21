@@ -1,4 +1,4 @@
--- migration-manifest-sha256: 8fd4374bc7ea44fa400c33fa648a603996d16643af366050cfd6163f72b3e9e5
+-- migration-manifest-sha256: dbaac548ca9f744e94043b58e09c2bb1427c5840be4a74f48104cab92d3240d6
 --
 -- PostgreSQL database dump
 --
@@ -105,6 +105,8 @@ CREATE TABLE public.auth_sso_provider (
     authorization_url text,
     token_url text,
     user_info_url text,
+    client_secret_ref text,
+    CONSTRAINT auth_sso_provider_client_secret_ref_not_blank_check CHECK (((client_secret_ref IS NULL) OR (btrim(client_secret_ref) <> ''::text))),
     CONSTRAINT auth_sso_provider_id_format_check CHECK ((provider_id ~ '^[a-z0-9][a-z0-9_-]{1,62}$'::text)),
     CONSTRAINT auth_sso_provider_preset_check CHECK ((preset = ANY (ARRAY['custom_oidc'::text, 'custom_oauth2'::text, 'google_oidc'::text, 'microsoft_entra_oidc'::text, 'auth0_oidc'::text, 'okta_oidc'::text]))),
     CONSTRAINT auth_sso_provider_preset_protocol_check CHECK ((((protocol = 'oidc'::text) AND (preset = ANY (ARRAY['custom_oidc'::text, 'google_oidc'::text, 'microsoft_entra_oidc'::text, 'auth0_oidc'::text, 'okta_oidc'::text]))) OR ((protocol = 'oauth2'::text) AND (preset = 'custom_oauth2'::text)))),

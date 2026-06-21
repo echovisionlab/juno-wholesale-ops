@@ -1,5 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import type { SsoProviderRecord, SsoAdminRule } from "./sso-provider-repository";
+import { resolveSecretRef } from "./secret-ref";
 
 export type AuthServiceSettingsRow = {
   auth_secret: string | null;
@@ -21,6 +22,7 @@ export type ExternalAuthProviderSettings = {
   userInfoUrl: string;
   clientId: string;
   clientSecret: string;
+  clientSecretRef: string | null;
   scopes: string[];
   adminRules: SsoAdminRule[];
 };
@@ -43,14 +45,14 @@ export type InitialAdminSettings = {
 export function resolveAppAuthSettings(
   env: RuntimeEnv,
   row: AuthServiceSettingsRow | null,
-  options: { ssoProviders?: SsoProviderRecord[] } = {},
+  options: { ssoProviders?: SsoProviderRecord[]; rawEnv?: Record<string, string | undefined> } = {},
 ): AppAuthSettings {
   return {
     secret: row?.auth_secret ?? undefined,
     baseUrl: row?.auth_base_url ?? undefined,
     trustedOrigins: splitList(row?.auth_trusted_origins),
     emailPasswordLoginEnabled: row?.auth_email_password_login_enabled ?? true,
-    externalProviders: resolveExternalProviders(options.ssoProviders ?? []),
+    externalProviders: resolveExternalProviders(options.ssoProviders ?? [], options.rawEnv),
     initialAdmin: resolveInitialAdmin(env),
   };
 }
@@ -96,25 +98,51 @@ export function resolveExternalProfileRole(profile: unknown, settings: AppAuthSe
   return "user";
 }
 
-function resolveExternalProviders(providers: SsoProviderRecord[]): ExternalAuthProviderSettings[] {
+function resolveExternalProviders(providers: SsoProviderRecord[], rawEnv: Record<string, string | undefined> = process.env): ExternalAuthProviderSettings[] {
   return providers
     .filter((provider) => provider.enabled)
-    .map((provider) => ({
-      id: provider.id,
-      providerId: provider.providerId,
-      name: provider.displayName,
-      buttonLabel: provider.buttonLabel,
-      logoUrl: provider.logoUrl ?? undefined,
-      protocol: provider.protocol,
-      discoveryUrl: provider.discoveryUrl ?? "",
-      authorizationUrl: provider.authorizationUrl ?? "",
-      tokenUrl: provider.tokenUrl ?? "",
-      userInfoUrl: provider.userInfoUrl ?? "",
-      clientId: provider.clientId ?? "",
-      clientSecret: provider.clientSecret ?? "",
-      scopes: provider.scopes,
-      adminRules: provider.adminRules,
-    }));
+    .map((provider) => {
+      const clientSecret = resolveSsoProviderClientSecret(provider, rawEnv);
+      return {
+        id: provider.id,
+        providerId: provider.providerId,
+        name: provider.displayName,
+        buttonLabel: provider.buttonLabel,
+        logoUrl: provider.logoUrl ?? undefined,
+        protocol: provider.protocol,
+        discoveryUrl: provider.discoveryUrl ?? "",
+        authorizationUrl: provider.authorizationUrl ?? "",
+        tokenUrl: provider.tokenUrl ?? "",
+        userInfoUrl: provider.userInfoUrl ?? "",
+        clientId: provider.clientId ?? "",
+        clientSecret,
+        clientSecretRef: provider.clientSecretRef,
+        scopes: provider.scopes,
+        adminRules: provider.adminRules,
+      };
+    });
+}
+
+export function resolveSsoProviderClientSecret(
+  provider: Pick<SsoProviderRecord, "clientSecret" | "clientSecretRef">,
+  rawEnv: Record<string, string | undefined> = process.env,
+): string {
+  if (provider.clientSecretRef) {
+    return resolveSecretRef(provider.clientSecretRef, { env: rawEnv }).value ?? "";
+  }
+  return provider.clientSecret ?? "";
+}
+
+export function isExternalAuthProviderReady(provider: ExternalAuthProviderSettings): boolean {
+  const endpointsReady = provider.protocol === "oauth2"
+    ? isUrl(provider.discoveryUrl) || (isUrl(provider.authorizationUrl) && isUrl(provider.tokenUrl) && isUrl(provider.userInfoUrl))
+    : isUrl(provider.discoveryUrl);
+  return Boolean(
+    provider.providerId.trim()
+      && endpointsReady
+      && provider.clientId.trim()
+      && provider.clientSecret.trim(),
+  );
 }
 
 function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
@@ -131,6 +159,15 @@ function resolveInitialAdmin(env: RuntimeEnv): InitialAdminSettings | null {
 
 function requiredSetting(name: string, value: string | undefined): string | null {
   return value?.trim() ? null : name;
+}
+
+function isUrl(value: string): boolean {
+  try {
+    new URL(value);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function splitScopeList(value: string | undefined | null): string[] {

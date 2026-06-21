@@ -38,7 +38,7 @@ async function resolveRuntimeAuth(options: RuntimeAuthOptions = {}): Promise<Res
     return row;
   });
   const ssoProviders = await listSsoProviders(env.DATABASE_URL);
-  const resolvedSettings = resolveAppAuthSettings(env, settingsRow, { ssoProviders });
+  const resolvedSettings = resolveAppAuthSettings(env, settingsRow, { ssoProviders, rawEnv: process.env });
   const requestOrigin = normalizeOrigin(options.requestOrigin);
   const settings = resolvedSettings.baseUrl || !requestOrigin
     ? resolvedSettings

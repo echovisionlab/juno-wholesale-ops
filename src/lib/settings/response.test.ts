@@ -79,11 +79,44 @@ describe("settings response and validation", () => {
       displayName: "Workspace",
       buttonLabel: "Sign in with Workspace",
       providerId: "workspace",
+      clientSecretRef: null,
       clientSecretConfigured: true,
       discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
       callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
     });
     expect(JSON.stringify(response)).not.toContain("db-client-secret");
+  });
+
+  it("marks unresolved SSO client secret references as unavailable", () => {
+    const response = buildSettingsResponse({
+      env: runtimeEnv(),
+      rawEnv: {},
+      settingsRow: {
+        ...emptySettingsRow(),
+        auth_base_url: "https://inventory-dev.example.test",
+      },
+      nodeEnv: "development",
+      currentRequestOrigin: "https://inventory-dev.example.test",
+      adminUserCount: 1,
+      ssoProviders: [
+        ssoProvider({
+          clientSecret: null,
+          clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+          clientSecretConfigured: true,
+        }),
+      ],
+    });
+
+    expect(response.units.authProvider).toMatchObject({
+      status: "missing",
+      readyProviderCount: 0,
+    });
+    expect(response.units.authProvider.providers[0]).toMatchObject({
+      status: "missing",
+      clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+      clientSecretConfigured: true,
+      missing: ["client secret"],
+    });
   });
 
   it("marks OAuth2 providers ready when endpoint URLs are configured without discovery", () => {
@@ -326,6 +359,47 @@ describe("settings response and validation", () => {
         "juno_live_poll_interval_ms must be null or a positive integer",
       ]),
     });
+
+    expect(
+      validateSettingsPatch({
+        input: { auth: { auth_email_password_login_enabled: false } },
+        currentRow: { ...emptySettingsRow(), auth_base_url: "https://inventory-dev.example.test" },
+        env,
+        rawEnv: {},
+        nodeEnv: "production",
+        ssoProviders: [
+          ssoProvider({
+            clientSecret: null,
+            clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
+            clientSecretConfigured: true,
+          }),
+        ],
+      }),
+    ).toMatchObject({
+      ok: false,
+      issues: ["auth_email_password_login_enabled cannot be disabled until at least one SSO provider is ready"],
+    });
+
+    expect(
+      validateSettingsPatch({
+        input: { auth: { auth_email_password_login_enabled: false } },
+        currentRow: { ...emptySettingsRow(), auth_base_url: "https://inventory-dev.example.test" },
+        env,
+        rawEnv: { WORKSPACE_CLIENT_SECRET: "resolved-client-secret" },
+        nodeEnv: "production",
+        ssoProviders: [
+          ssoProvider({
+            clientSecret: null,
+            clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
+            clientSecretConfigured: true,
+          }),
+        ],
+      }),
+    ).toMatchObject({
+      ok: true,
+      changed: ["auth_email_password_login_enabled"],
+      patch: { auth_email_password_login_enabled: false },
+    });
   });
 
   it("covers every editable service_setting column with a descriptor while keeping internal columns out of Settings Center", () => {
@@ -359,6 +433,7 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     userInfoUrl: null,
     clientId: "client-id",
     clientSecret: "db-client-secret",
+    clientSecretRef: null,
     clientSecretConfigured: true,
     scopes: ["openid", "email", "profile"],
     enabled: true,

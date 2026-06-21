@@ -1,5 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { isSupportedLoginLogoUrl, LOGIN_LOGO_URL_REQUIREMENT } from "@/lib/auth/login-logo";
+import { resolveSsoProviderClientSecret } from "@/lib/auth/settings";
 import { validateSsoProviderReadiness, type SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
 import {
   definitionsByKey,
@@ -61,6 +62,7 @@ export function validateSettingsPatch(options: {
     patch,
     currentRow: options.currentRow,
     env: options.env,
+    rawEnv: options.rawEnv,
     ssoProviders: options.ssoProviders ?? [],
   }));
   const warnings = collectSettingsWarnings({
@@ -85,6 +87,7 @@ export function validateSettingsPatch(options: {
 export function collectSettingsWarnings(options: {
   row: ServiceSettingsRow | null;
   env: RuntimeEnv;
+  rawEnv?: RawRuntimeEnv;
   nodeEnv: string;
   currentRequestOrigin?: string | null;
   ssoProviders?: SsoProviderRecord[];
@@ -119,7 +122,13 @@ export function collectSettingsWarnings(options: {
 
   const incompleteProviders = (options.ssoProviders ?? [])
     .filter((provider) => provider.enabled)
-    .map((provider) => validateSsoProviderReadiness(provider, authBaseUrl ?? null))
+    .map((provider) => validateSsoProviderReadiness(
+      {
+        ...provider,
+        clientSecretAvailable: Boolean(resolveSsoProviderClientSecret(provider, options.rawEnv)),
+      },
+      authBaseUrl ?? null,
+    ))
     .filter((status) => status.status !== "ready");
   if (incompleteProviders.length > 0) {
     warnings.push({
@@ -227,6 +236,7 @@ function validateResolvedPatch(options: {
   patch: ServiceSettingsPatch;
   currentRow: ServiceSettingsRow | null;
   env: RuntimeEnv;
+  rawEnv: RawRuntimeEnv;
   ssoProviders: SsoProviderRecord[];
 }): string[] {
   const merged = { ...(options.currentRow ?? {}), ...options.patch } as ServiceSettingsRow;
@@ -254,7 +264,13 @@ function validateResolvedPatch(options: {
   if (merged.auth_email_password_login_enabled === false) {
     const baseUrl = merged.auth_base_url ?? null;
     const hasReadySsoProvider = options.ssoProviders.some((provider) =>
-      validateSsoProviderReadiness(provider, baseUrl).status === "ready",
+      validateSsoProviderReadiness(
+        {
+          ...provider,
+          clientSecretAvailable: Boolean(resolveSsoProviderClientSecret(provider, options.rawEnv)),
+        },
+        baseUrl,
+      ).status === "ready",
     );
     if (!hasReadySsoProvider) {
       issues.push("auth_email_password_login_enabled cannot be disabled until at least one SSO provider is ready");

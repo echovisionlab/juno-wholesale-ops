@@ -5,7 +5,7 @@ import { genericOAuth } from "better-auth/plugins";
 import { Kysely, PostgresDialect } from "kysely";
 import { Pool } from "pg";
 
-import { resolveExternalProfileRole, type AppAuthSettings } from "./settings";
+import { isExternalAuthProviderReady, resolveExternalProfileRole, type AppAuthSettings } from "./settings";
 import { appAuthSchema } from "./schema";
 
 type AuthDatabase = {
@@ -61,7 +61,7 @@ export function buildAppAuthOptions(options: {
   settings: AppAuthSettings;
 }) {
   const plugins = [];
-  const readyProviders = options.settings.externalProviders.filter(isExternalProviderReady);
+  const readyProviders = options.settings.externalProviders.filter(isExternalAuthProviderReady);
 
   if (readyProviders.length > 0) {
     plugins.push(
@@ -110,19 +110,20 @@ export async function getCachedAppAuth(options: {
   settings: AppAuthSettings;
 }) {
   const key = JSON.stringify({
-      databaseUrl: options.databaseUrl,
-      settings: {
-        secretHash: hashSecret(options.settings.secret ?? ""),
-        baseUrl: options.settings.baseUrl,
-        trustedOrigins: options.settings.trustedOrigins,
-        emailPasswordLoginEnabled: options.settings.emailPasswordLoginEnabled,
-        externalProviders: options.settings.externalProviders.map((provider) => ({
-          providerId: provider.providerId,
-          discoveryUrl: provider.discoveryUrl,
-          authorizationUrl: provider.authorizationUrl,
-          tokenUrl: provider.tokenUrl,
-          userInfoUrl: provider.userInfoUrl,
-          clientId: provider.clientId,
+    databaseUrl: options.databaseUrl,
+    settings: {
+      secretHash: hashSecret(options.settings.secret ?? ""),
+      baseUrl: options.settings.baseUrl,
+      trustedOrigins: options.settings.trustedOrigins,
+      emailPasswordLoginEnabled: options.settings.emailPasswordLoginEnabled,
+      externalProviders: options.settings.externalProviders.map((provider) => ({
+        providerId: provider.providerId,
+        discoveryUrl: provider.discoveryUrl,
+        authorizationUrl: provider.authorizationUrl,
+        tokenUrl: provider.tokenUrl,
+        userInfoUrl: provider.userInfoUrl,
+        clientId: provider.clientId,
+        clientSecretRef: provider.clientSecretRef,
         clientSecretHash: hashSecret(provider.clientSecret),
         scopes: provider.scopes,
         adminRules: provider.adminRules,
@@ -139,27 +140,6 @@ export async function getCachedAppAuth(options: {
   const auth = betterAuth(buildAppAuthOptions({ database: database.db, settings: options.settings })) as AppAuthInstance;
   cachedAuth = { key, auth, database };
   return auth;
-}
-
-function isExternalProviderReady(provider: AppAuthSettings["externalProviders"][number]): boolean {
-  const endpointsReady = provider.protocol === "oauth2"
-    ? isUrl(provider.discoveryUrl) || (isUrl(provider.authorizationUrl) && isUrl(provider.tokenUrl) && isUrl(provider.userInfoUrl))
-    : isUrl(provider.discoveryUrl);
-  return Boolean(
-    provider?.providerId.trim()
-      && endpointsReady
-      && provider.clientId.trim()
-      && provider.clientSecret.trim(),
-  );
-}
-
-function isUrl(value: string): boolean {
-  try {
-    new URL(value);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function hashSecret(value: string): string {

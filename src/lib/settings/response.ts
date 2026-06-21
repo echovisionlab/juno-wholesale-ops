@@ -1,5 +1,6 @@
 import type { RuntimeEnv } from "@/lib/env";
 import { redactSsoProvider, type PublicSsoProvider, type SsoProviderRecord } from "@/lib/auth/sso-provider-repository";
+import { resolveSsoProviderClientSecret } from "@/lib/auth/settings";
 import { settingDefinitions, type SettingsGroup, type SettingsResponse, type IntegrationUnitStatus } from "./descriptors";
 import { resolveSettingDescriptor, type RawRuntimeEnv, type SettingResolutionContext } from "./masking";
 import { collectSettingsWarnings } from "./validation";
@@ -37,8 +38,10 @@ export function buildSettingsResponse(options: {
   const warnings = collectSettingsWarnings({
     row: options.settingsRow,
     env: options.env,
+    rawEnv: options.rawEnv,
     nodeEnv: options.nodeEnv,
     currentRequestOrigin: options.currentRequestOrigin ?? null,
+    ssoProviders,
   });
   const groups: SettingsGroup[] = groupOrder.map((groupId) => {
     const settings = descriptors.filter((descriptor) => descriptorGroup(descriptor.key) === groupId);
@@ -69,7 +72,7 @@ export function buildSettingsResponse(options: {
       },
     },
     units: {
-      authProvider: buildAuthProviderUnit(options.settingsRow, ssoProviders),
+      authProvider: buildAuthProviderUnit(options.settingsRow, ssoProviders, options.rawEnv),
       mail: buildMailUnit(mailSources),
       junoLive: buildJunoUnit(groups, junoLookupEnabled),
       notifications: {
@@ -214,9 +217,17 @@ function isJunoLookupEnabled(row: ServiceSettingsRow | null): boolean {
   return Boolean(enqueueOnIngest || autoEnqueueOnInterval || pollInterval);
 }
 
-function buildAuthProviderUnit(row: ServiceSettingsRow | null, providers: SsoProviderRecord[]): SettingsResponse["units"]["authProvider"] {
+function buildAuthProviderUnit(
+  row: ServiceSettingsRow | null,
+  providers: SsoProviderRecord[],
+  rawEnv: RawRuntimeEnv,
+): SettingsResponse["units"]["authProvider"] {
   const baseUrl = resolveAppBaseUrl(row);
-  const publicProviders = providers.map((provider) => redactSsoProvider(provider, baseUrl)).map(toSsoProviderUnit);
+  const publicProviders = providers.map((provider) =>
+    redactSsoProvider(provider, baseUrl, {
+      clientSecretAvailable: Boolean(resolveSsoProviderClientSecret(provider, rawEnv)),
+    }),
+  ).map(toSsoProviderUnit);
   const enabledProviderCount = publicProviders.filter((provider) => provider.enabled).length;
   const readyProviderCount = publicProviders.filter((provider) => provider.status === "ready").length;
   const status: IntegrationUnitStatus = enabledProviderCount === 0
@@ -264,6 +275,7 @@ function toSsoProviderUnit(provider: PublicSsoProvider): SettingsResponse["units
     tokenUrl: provider.tokenUrl,
     userInfoUrl: provider.userInfoUrl,
     clientId: provider.clientId,
+    clientSecretRef: provider.clientSecretRef,
     clientSecretConfigured: provider.clientSecretConfigured,
     scopes: provider.scopes,
     callbackUrl: provider.callbackUrl,

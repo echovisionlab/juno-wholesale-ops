@@ -143,7 +143,7 @@ export const emptySsoProviderDraft: SsoProviderDraft = {
   tokenUrl: "",
   userInfoUrl: "",
   clientId: "",
-  clientSecret: "",
+  clientSecretRef: "",
   scopes: "openid email profile",
   enabled: false,
   sortOrder: 0,
