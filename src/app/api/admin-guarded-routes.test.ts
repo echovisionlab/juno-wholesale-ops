@@ -31,6 +31,7 @@ import {
   listWatchRules,
   updateWatchRule,
 } from "@/lib/insights/repository";
+import { buildWatchRuleExportPayload, importWatchRules } from "@/lib/insights/watch-rule-transfer";
 import { getMovementSignals } from "@/lib/insights/movement-repository";
 import { getCatalogTrends, getInsightDigest } from "@/lib/insights/trend-repository";
 import { enqueueLiveLookupJobs, withJunoLiveRepository } from "@/lib/juno-live/repository";
@@ -94,6 +95,8 @@ import {
   PATCH as patchWatchRules,
   POST as postWatchRules,
 } from "./watch-rules/route";
+import { GET as exportWatchRules } from "./watch-rules/export/route";
+import { POST as importWatchRulesRoute } from "./watch-rules/import/route";
 import {
   DELETE as deleteMailSources,
   GET as getMailSources,
@@ -172,6 +175,11 @@ vi.mock("@/lib/insights/repository", () => ({
   updateWatchRule: vi.fn(),
 }));
 
+vi.mock("@/lib/insights/watch-rule-transfer", () => ({
+  buildWatchRuleExportPayload: vi.fn(),
+  importWatchRules: vi.fn(),
+}));
+
 vi.mock("@/lib/insights/movement-repository", () => ({
   getMovementSignals: vi.fn(),
 }));
@@ -240,6 +248,8 @@ const listWatchRulesMock = vi.mocked(listWatchRules);
 const createWatchRuleMock = vi.mocked(createWatchRule);
 const updateWatchRuleMock = vi.mocked(updateWatchRule);
 const deleteWatchRuleMock = vi.mocked(deleteWatchRule);
+const buildWatchRuleExportPayloadMock = vi.mocked(buildWatchRuleExportPayload);
+const importWatchRulesMock = vi.mocked(importWatchRules);
 const enqueueLiveLookupJobsMock = vi.mocked(enqueueLiveLookupJobs);
 const withJunoLiveRepositoryMock = vi.mocked(withJunoLiveRepository);
 const getJunoLiveWorkerProcessManagerMock = vi.mocked(getJunoLiveWorkerProcessManager);
@@ -287,6 +297,21 @@ describe("admin guarded API routes", () => {
     createDashboardSavedViewMock.mockResolvedValue(dashboardSavedView());
     updateDashboardSavedViewMock.mockResolvedValue(dashboardSavedView());
     deleteDashboardSavedViewMock.mockResolvedValue(true);
+    buildWatchRuleExportPayloadMock.mockReturnValue({
+      schemaVersion: 1,
+      exportedAt: "2026-06-20T00:00:00.000Z",
+      rules: [],
+    });
+    importWatchRulesMock.mockResolvedValue({
+      dryRun: true,
+      total: 0,
+      created: 0,
+      updated: 0,
+      skipped: 0,
+      invalid: 0,
+      duplicateInPayload: 0,
+      items: [],
+    });
     testMailboxSourceConnectionMock.mockResolvedValue({
       ok: true,
       status: "connection_ready",
@@ -352,6 +377,8 @@ describe("admin guarded API routes", () => {
     await expectStatus(postWatchRules(jsonRequest({ type: "artist", pattern: "Lara Voss" })), 403);
     await expectStatus(patchWatchRules(jsonRequest({ id: "rule-1", enabled: false })), 403);
     await expectStatus(deleteWatchRules(jsonRequest({ id: "rule-1" })), 403);
+    await expectStatus(exportWatchRules(request()), 403);
+    await expectStatus(importWatchRulesRoute(jsonRequest({ rules: [] })), 403);
     await expectStatus(getNotificationDeliveries(request()), 403);
     await expectStatus(getNotificationChannels(request()), 403);
     await expectStatus(postNotificationChannels(jsonRequest({ name: "In-app", type: "in_app" })), 403);
@@ -384,6 +411,8 @@ describe("admin guarded API routes", () => {
     expect(createWatchRuleMock).not.toHaveBeenCalled();
     expect(updateWatchRuleMock).not.toHaveBeenCalled();
     expect(deleteWatchRuleMock).not.toHaveBeenCalled();
+    expect(buildWatchRuleExportPayloadMock).not.toHaveBeenCalled();
+    expect(importWatchRulesMock).not.toHaveBeenCalled();
     expect(listNotificationDeliveriesMock).not.toHaveBeenCalled();
     expect(listNotificationChannelsMock).not.toHaveBeenCalled();
     expect(createNotificationChannelMock).not.toHaveBeenCalled();
@@ -895,6 +924,30 @@ describe("admin guarded API routes", () => {
     createWatchRuleMock.mockResolvedValue({ id: "rule-2", pattern: "Blue Note" } as never);
     updateWatchRuleMock.mockResolvedValueOnce({ id: "rule-2", enabled: false } as never).mockResolvedValueOnce(null);
     deleteWatchRuleMock.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    buildWatchRuleExportPayloadMock.mockReturnValue({
+      schemaVersion: 1,
+      exportedAt: "2026-06-20T00:00:00.000Z",
+      rules: [{ type: "artist", pattern: "Lara Voss", weight: 10, enabled: true }],
+    });
+    importWatchRulesMock.mockResolvedValueOnce({
+      dryRun: true,
+      total: 1,
+      created: 1,
+      updated: 0,
+      skipped: 0,
+      invalid: 0,
+      duplicateInPayload: 0,
+      items: [],
+    }).mockResolvedValueOnce({
+      dryRun: false,
+      total: 1,
+      created: 1,
+      updated: 0,
+      skipped: 0,
+      invalid: 0,
+      duplicateInPayload: 0,
+      items: [],
+    });
 
     await expect(expectJson(getWatchRules(request()))).resolves.toEqual({
       status: 200,
@@ -924,8 +977,57 @@ describe("admin guarded API routes", () => {
       status: 404,
       body: { error: "watch_rule_not_found" },
     });
+    await expect(expectJson(exportWatchRules(request()))).resolves.toEqual({
+      status: 200,
+      body: {
+        payload: {
+          schemaVersion: 1,
+          exportedAt: "2026-06-20T00:00:00.000Z",
+          rules: [{ type: "artist", pattern: "Lara Voss", weight: 10, enabled: true }],
+        },
+      },
+    });
+    expect(buildWatchRuleExportPayloadMock).toHaveBeenCalledWith([{ id: "rule-1", pattern: "Lara Voss" }]);
+    await expect(expectJson(importWatchRulesRoute(jsonRequest({ rules: [{ type: "artist", pattern: "Lara Voss" }] })))).resolves.toEqual({
+      status: 200,
+      body: {
+        result: {
+          dryRun: true,
+          total: 1,
+          created: 1,
+          updated: 0,
+          skipped: 0,
+          invalid: 0,
+          duplicateInPayload: 0,
+          items: [],
+        },
+      },
+    });
+    expect(importWatchRulesMock).toHaveBeenLastCalledWith(
+      "postgres://user:pass@localhost:5432/app",
+      { rules: [{ type: "artist", pattern: "Lara Voss" }] },
+    );
+    await expect(expectJson(importWatchRulesRoute(jsonRequest({ rules: [{ type: "label", pattern: "Blue Note" }], dryRun: false })))).resolves.toEqual({
+      status: 201,
+      body: {
+        result: {
+          dryRun: false,
+          total: 1,
+          created: 1,
+          updated: 0,
+          skipped: 0,
+          invalid: 0,
+          duplicateInPayload: 0,
+          items: [],
+        },
+      },
+    });
 
     await expect(expectJson(postWatchRules(invalidJsonRequest()))).resolves.toEqual({
+      status: 400,
+      body: { error: "Request body must be valid JSON" },
+    });
+    await expect(expectJson(importWatchRulesRoute(invalidJsonRequest()))).resolves.toEqual({
       status: 400,
       body: { error: "Request body must be valid JSON" },
     });
@@ -933,6 +1035,11 @@ describe("admin guarded API routes", () => {
     await expect(expectJson(postWatchRules(jsonRequest({ type: "artist", pattern: "Artist" })))).resolves.toEqual({
       status: 400,
       body: { error: "Invalid watch rule request" },
+    });
+    importWatchRulesMock.mockRejectedValueOnce("bad import");
+    await expect(expectJson(importWatchRulesRoute(jsonRequest({ rules: [] })))).resolves.toEqual({
+      status: 400,
+      body: { error: "Invalid watch rule import request" },
     });
     await expect(expectJson(deleteWatchRules(jsonRequest({ id: "" })))).resolves.toEqual({
       status: 400,
