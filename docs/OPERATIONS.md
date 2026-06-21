@@ -35,6 +35,10 @@ Notes:
 - External webhook delivery requires `pnpm notifications:dispatch -- --send`
   or `pnpm notifications:refresh -- --send`.
 - `DATABASE_URL` is required at process start.
+- `JUNO_WHOLESALE_OPS_AUTH_PROXY_INTERNAL_ORIGIN` should point to the private
+  web origin in reverse-proxy deployments, for example
+  `http://127.0.0.1:3006`, so auth self-checks do not depend on the public
+  Caddy route.
 - The public Site address is a saved setting in the Settings Center.
 - Auth is always enabled. Startup stores an internal random Better Auth secret
   in the database when one is missing. Production deployments must provide at
