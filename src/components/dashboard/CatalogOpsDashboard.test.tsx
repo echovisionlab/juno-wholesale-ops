@@ -6,7 +6,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { theme } from "@/theme";
 import { dashboardPanelLayoutStorageKey, optionalDashboardPanelDefinitions } from "@/lib/dashboard/panel-layout";
-import { CatalogOpsDashboard, type CatalogOpsDashboardProps } from "./CatalogOpsDashboard";
+import {
+  CatalogOpsDashboard,
+  dashboardOptionalPanelRenderRegistry,
+  type CatalogOpsDashboardProps,
+} from "./CatalogOpsDashboard";
 import { dashboardFixture } from "./dashboard.fixtures";
 
 let root: Root;
@@ -42,6 +46,12 @@ describe("CatalogOpsDashboard", () => {
     container.remove();
     document.body.replaceChildren();
     vi.restoreAllMocks();
+  });
+
+  it("keeps optional panel rendering aligned with stored panel definitions", () => {
+    expect(dashboardOptionalPanelRenderRegistry.map((panel) => panel.id)).toEqual(
+      optionalDashboardPanelDefinitions.map((definition) => definition.id),
+    );
   });
 
   it("renders unavailable setup, ingest, live stock, and worker states", () => {
@@ -450,21 +460,13 @@ describe("CatalogOpsDashboard", () => {
         exitCode: null,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: ["scripts/juno-live-worker.ts", "--loop"],
-        recentLogs: [
-          { stream: "stdout", line: "one", occurredAt: "2026-06-17T01:00:00.000Z" },
-          { stream: "stderr", line: "two", occurredAt: "2026-06-17T01:00:01.000Z" },
-          { stream: "stdout", line: "three", occurredAt: "2026-06-17T01:00:02.000Z" },
-          { stream: "stdout", line: "four", occurredAt: "2026-06-17T01:00:03.000Z" },
-          { stream: "stdout", line: "five", occurredAt: "2026-06-17T01:00:04.000Z" },
-        ],
       },
       onWorkerAction,
     });
 
     expect(pageText()).toContain("pid 123 since");
-    expect(pageText()).toContain("[stdout] five");
+    expect(pageText()).not.toContain("[stdout] five");
+    expect(pageText()).not.toContain("scripts/juno-live-worker.ts");
     clickButton("Stop");
     clickButton("Restart");
     expect(onWorkerAction).toHaveBeenCalledWith("stop");
@@ -481,9 +483,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: 0,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
       onWorkerAction,
     });
@@ -502,9 +501,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: 1,
         signal: null,
         lastError: "worker crashed",
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
     });
     expect(pageText()).toContain("worker crashed");
@@ -520,9 +516,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: null,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
     });
     expect(pageText()).toContain("pid N/A since N/A");
@@ -587,9 +580,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: null,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
       onWorkerAction,
     });
@@ -647,9 +637,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: null,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
       onWorkerAction,
     });
@@ -696,9 +683,6 @@ describe("CatalogOpsDashboard", () => {
         exitCode: null,
         signal: null,
         lastError: null,
-        command: "tsx",
-        args: [],
-        recentLogs: [],
       },
       onWorkerAction,
     });

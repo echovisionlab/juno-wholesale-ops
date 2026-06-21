@@ -1,5 +1,5 @@
 import { requireAdmin } from "@/lib/auth/admin";
-import { getJunoLiveWorkerProcessManager } from "@/lib/juno-live/worker-process";
+import { getJunoLiveWorkerProcessManager, toPublicWorkerProcessStatus } from "@/lib/juno-live/worker-process";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -14,7 +14,7 @@ export async function GET(request: Request) {
     return authorization.response;
   }
 
-  return Response.json({ worker: getJunoLiveWorkerProcessManager().getStatus() });
+  return Response.json({ worker: toPublicWorkerProcessStatus(getJunoLiveWorkerProcessManager().getStatus()) });
 }
 
 export async function POST(request: Request) {
@@ -27,15 +27,15 @@ export async function POST(request: Request) {
   const manager = getJunoLiveWorkerProcessManager();
 
   if (body.action === "start") {
-    return Response.json({ worker: manager.start() });
+    return Response.json({ worker: toPublicWorkerProcessStatus(manager.start()) });
   }
 
   if (body.action === "stop") {
-    return Response.json({ worker: await manager.stopAndWait() });
+    return Response.json({ worker: toPublicWorkerProcessStatus(await manager.stopAndWait()) });
   }
 
   if (body.action === "restart") {
-    return Response.json({ worker: await manager.restart() });
+    return Response.json({ worker: toPublicWorkerProcessStatus(await manager.restart()) });
   }
 
   return Response.json({ error: "action must be start, stop, or restart" }, { status: 400 });

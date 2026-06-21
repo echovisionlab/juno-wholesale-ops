@@ -1,4 +1,10 @@
-import type { SignalEventType, SignalSeverity, TodayInsight } from "@/lib/insights/repository";
+import {
+  signalEventTypes,
+  signalSeverities,
+  type SignalEventType,
+  type SignalSeverity,
+} from "@/lib/insights/signal-types";
+import type { TodayInsight } from "@/lib/insights/repository";
 import type { NotificationWebhookFormat } from "./provider-formatters";
 
 export type NotificationChannelType = "in_app" | "webhook" | "logging";
@@ -111,21 +117,5 @@ export type NotificationDispatchResult = {
 
 export const notificationChannelTypes = ["in_app", "webhook", "logging"] as const;
 
-const signalTypes = [
-  "new_arrival",
-  "watch_hit",
-  "low_catalog_stock",
-  "exclude_match",
-  "observed_restock",
-  "observed_stock_drop",
-  "observed_live_low_stock",
-  "observed_status_change",
-  "observed_price_change",
-  "fast_mover_candidate",
-  "trend_spike",
-] as const satisfies SignalEventType[];
-
-const signalSeverities = ["info", "watch", "warning", "critical"] as const satisfies SignalSeverity[];
-
-export const notificationSignalTypes = new Set<SignalEventType>(signalTypes);
+export const notificationSignalTypes = new Set<SignalEventType>(signalEventTypes);
 export const notificationSignalSeverities = new Set<SignalSeverity>(signalSeverities);

@@ -1,27 +1,11 @@
-import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
+import {
+  signalSeverityLabels,
+  signalTypeLabels,
+  type SignalEventType,
+  type SignalSeverity,
+} from "@/lib/insights/signal-types";
 import type { WatchRuleType } from "@/lib/insights/watch-matcher";
 import type { NotificationChannelType, NotificationDeliveryStatus } from "@/lib/notifications/types";
-
-const signalTypeLabels: Record<SignalEventType, string> = {
-  new_arrival: "New arrival",
-  watch_hit: "Watch hit",
-  low_catalog_stock: "Low observed stock",
-  exclude_match: "Exclude match",
-  observed_restock: "Observed restock",
-  observed_stock_drop: "Observed stock change",
-  observed_live_low_stock: "Low live stock",
-  observed_status_change: "Observed status change",
-  observed_price_change: "Observed price change",
-  fast_mover_candidate: "Fast mover candidate",
-  trend_spike: "Catalog trend spike",
-};
-
-const signalSeverityLabels: Record<SignalSeverity, string> = {
-  info: "Info",
-  watch: "Watch",
-  warning: "Warning",
-  critical: "Critical",
-};
 
 const notificationDeliveryStatusLabels: Record<NotificationDeliveryStatus, string> = {
   queued: "Queued",

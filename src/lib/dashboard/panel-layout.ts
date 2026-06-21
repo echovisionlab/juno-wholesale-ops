@@ -29,7 +29,7 @@ export type DashboardPanelLayout = {
 
 export const dashboardPanelLayoutStorageKey = "juno-wholesale-ops:dashboard-panel-layout:v1";
 
-const dashboardPanelDefinitions: DashboardPanelDefinition[] = [
+export const dashboardPanelDefinitions: DashboardPanelDefinition[] = [
   { id: "configuration", label: "Configuration", pinned: true },
   { id: "apiIssues", label: "API issues", pinned: true },
   { id: "signalFilters", label: "Signal filters", pinned: true },
@@ -82,6 +82,18 @@ export function isDashboardPanelVisible(layout: DashboardPanelLayout, panelId: D
     return true;
   }
   return !layout.hiddenPanelIds.includes(panelId);
+}
+
+export function isPinnedDashboardPanel(panelId: DashboardPanelId): boolean {
+  return pinnedPanelIds.has(panelId);
+}
+
+export function getDashboardPanelDefinition(panelId: DashboardPanelId): DashboardPanelDefinition {
+  const definition = dashboardPanelDefinitions.find((entry) => entry.id === panelId);
+  if (!definition) {
+    throw new Error(`Unknown dashboard panel: ${panelId}`);
+  }
+  return definition;
 }
 
 export function getVisibleOptionalDashboardPanelIds(layout: DashboardPanelLayout): DashboardPanelId[] {

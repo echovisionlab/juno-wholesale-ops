@@ -1,7 +1,14 @@
 import type { MailAuthType, MailCredentialType, MailProvider } from "@/lib/ingest/mail-source";
 import { mailProviderRegistry } from "@/lib/ingest/mail-provider-registry";
+import {
+  signalEventTypes,
+  signalSeverities,
+  signalSeverityLabels,
+  signalTypeLabels,
+  type SignalEventType,
+  type SignalSeverity,
+} from "@/lib/insights/signal-types";
 import type { AttachmentStorageBackend } from "@/lib/storage/attachment-storage";
-import type { SignalEventType, SignalSeverity } from "@/lib/insights/repository";
 import type { NotificationProviderKey } from "@/lib/notifications/types";
 import type { NotificationWebhookFormat } from "@/lib/notifications/provider-formatters";
 import type {
@@ -79,26 +86,15 @@ export const notificationProviderOptions: Array<{ value: NotificationProviderKey
   { value: "webhook_telegram", label: "Telegram-style webhook" },
 ];
 
-export const notificationSignalTypeOptions: Array<{ value: SignalEventType; label: string }> = [
-  { value: "new_arrival", label: "New arrival" },
-  { value: "watch_hit", label: "Watch hit" },
-  { value: "low_catalog_stock", label: "Low catalog stock" },
-  { value: "exclude_match", label: "Exclude match" },
-  { value: "observed_restock", label: "Observed restock" },
-  { value: "observed_stock_drop", label: "Observed stock drop" },
-  { value: "observed_live_low_stock", label: "Observed live low stock" },
-  { value: "observed_status_change", label: "Observed status change" },
-  { value: "observed_price_change", label: "Observed price change" },
-  { value: "fast_mover_candidate", label: "Fast mover candidate" },
-  { value: "trend_spike", label: "Trend spike" },
-];
+export const notificationSignalTypeOptions: Array<{ value: SignalEventType; label: string }> = signalEventTypes.map((value) => ({
+  value,
+  label: signalTypeLabels[value],
+}));
 
-export const notificationSeverityOptions: Array<{ value: SignalSeverity; label: string }> = [
-  { value: "info", label: "Info" },
-  { value: "watch", label: "Watch" },
-  { value: "warning", label: "Warning" },
-  { value: "critical", label: "Critical" },
-];
+export const notificationSeverityOptions: Array<{ value: SignalSeverity; label: string }> = signalSeverities.map((value) => ({
+  value,
+  label: signalSeverityLabels[value],
+}));
 
 export const emptyNotificationChannelDraft: NotificationChannelDraft = {
   name: "",

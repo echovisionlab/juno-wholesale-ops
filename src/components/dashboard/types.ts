@@ -6,7 +6,7 @@ import type { SignalEventType, SignalSeverity, TodayInsight } from "@/lib/insigh
 import type { CatalogTrendSummary, InsightDigest, TrendBucket } from "@/lib/insights/trend-repository";
 import type { WatchRule, WatchRuleType } from "@/lib/insights/watch-matcher";
 import type { LiveLookupSummary } from "@/lib/juno-live/repository";
-import type { WorkerProcessStatus } from "@/lib/juno-live/worker-process";
+import type { PublicWorkerProcessStatus } from "@/lib/juno-live/worker-process";
 import type {
   NotificationChannel,
   NotificationChannelType,
@@ -52,7 +52,7 @@ export type GmailIngestState = StoredGmailIngestState;
 export type LiveLookupDashboardSummary = LiveLookupSummary;
 
 export type LiveWorkerAction = "start" | "stop" | "restart";
-export type LiveWorkerStatus = WorkerProcessStatus;
+export type LiveWorkerStatus = PublicWorkerProcessStatus;
 
 export type MovementSignal = TodayInsight;
 

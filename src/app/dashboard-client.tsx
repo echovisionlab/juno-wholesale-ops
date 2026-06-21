@@ -46,43 +46,30 @@ export default function Home() {
 
   useEffect(() => {
     let cancelled = false;
-    void refreshDashboardState(
-      () => cancelled,
-      setIngestState,
-      setLiveSummary,
-      setWorkerStatus,
-      setSetupStatus,
-      setTodaySignals,
-      setMovementSignals,
-      setCatalogTrends,
-      setOperatorDigest,
-      setDashboardSavedViews,
-      setWatchRules,
-      setNotificationDeliveries,
-      setNotificationRules,
-      setNotificationChannels,
-      setApiIssues,
-      setActionIssues,
-    );
+    const refresh = () =>
+      refreshDashboardState({
+        isCancelled: () => cancelled,
+        setters: {
+          ingestState: setIngestState,
+          liveSummary: setLiveSummary,
+          workerStatus: setWorkerStatus,
+          setupStatus: setSetupStatus,
+          todaySignals: setTodaySignals,
+          movementSignals: setMovementSignals,
+          catalogTrends: setCatalogTrends,
+          operatorDigest: setOperatorDigest,
+          dashboardSavedViews: setDashboardSavedViews,
+          watchRules: setWatchRules,
+          notificationDeliveries: setNotificationDeliveries,
+          notificationRules: setNotificationRules,
+          notificationChannels: setNotificationChannels,
+          apiIssues: setApiIssues,
+          actionIssues: setActionIssues,
+        },
+      });
+    void refresh();
     const intervalId = window.setInterval(() => {
-      void refreshDashboardState(
-        () => cancelled,
-        setIngestState,
-        setLiveSummary,
-        setWorkerStatus,
-        setSetupStatus,
-        setTodaySignals,
-        setMovementSignals,
-        setCatalogTrends,
-        setOperatorDigest,
-        setDashboardSavedViews,
-        setWatchRules,
-        setNotificationDeliveries,
-        setNotificationRules,
-        setNotificationChannels,
-        setApiIssues,
-        setActionIssues,
-      );
+      void refresh();
     }, 30000);
     return () => {
       cancelled = true;
@@ -300,102 +287,101 @@ export default function Home() {
   );
 }
 
-const dashboardRefreshEndpoints = [
-  "/api/ingest/status",
-  "/api/live-lookups/status",
-  "/api/live-lookups/worker",
-  "/api/settings/status",
-  "/api/insights/today?limit=100",
-  "/api/insights/movement?limit=100",
-  "/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20",
-  "/api/insights/digest",
-  "/api/dashboard/saved-views",
-  "/api/watch-rules",
-  "/api/notifications/deliveries?limit=100",
-  "/api/notifications/rules",
-  "/api/notifications/channels",
-] as const;
+type DashboardResourcePayloads = {
+  ingestState: { state?: GmailIngestState };
+  liveSummary: { summary?: LiveLookupDashboardSummary };
+  workerStatus: { worker?: LiveWorkerStatus };
+  setupStatus: { setup?: AppSetupStatus };
+  todaySignals: { signals?: TodayInsight[] };
+  movementSignals: { signals?: MovementSignal[] };
+  catalogTrends: { trends?: CatalogTrendSummary };
+  operatorDigest: { digest?: InsightDigest };
+  dashboardSavedViews: { views?: DashboardSavedView[] };
+  watchRules: { rules?: WatchRule[] };
+  notificationDeliveries: { deliveries?: NotificationDelivery[] };
+  notificationRules: { rules?: NotificationRule[] };
+  notificationChannels: { channels?: NotificationChannel[] };
+};
+
+type DashboardResourceKey = keyof DashboardResourcePayloads;
+type DashboardResourceDescriptor = {
+  endpoint: string;
+  label: string;
+};
+type DashboardResourceResults = {
+  [Key in DashboardResourceKey]: ResourceState<DashboardResourcePayloads[Key]>;
+};
+type DashboardStateSetters = {
+  ingestState: (state: GmailIngestState | null) => void;
+  liveSummary: (summary: LiveLookupDashboardSummary | null) => void;
+  workerStatus: (status: LiveWorkerStatus | null) => void;
+  setupStatus: (status: AppSetupStatus | null) => void;
+  todaySignals: (signals: TodayInsight[] | null) => void;
+  movementSignals: (signals: MovementSignal[] | null) => void;
+  catalogTrends: (trends: CatalogTrendSummary | null) => void;
+  operatorDigest: (digest: InsightDigest | null) => void;
+  dashboardSavedViews: (views: DashboardSavedView[] | null) => void;
+  watchRules: (rules: WatchRule[] | null) => void;
+  notificationDeliveries: (deliveries: NotificationDelivery[] | null) => void;
+  notificationRules: (rules: NotificationRule[] | null) => void;
+  notificationChannels: (channels: NotificationChannel[] | null) => void;
+  apiIssues: (issues: DashboardResourceIssue[]) => void;
+  actionIssues: (updater: (issues: DashboardResourceIssue[]) => DashboardResourceIssue[]) => void;
+};
+
+const dashboardResourceDescriptors = {
+  ingestState: { endpoint: "/api/ingest/status", label: "Mail ingest status" },
+  liveSummary: { endpoint: "/api/live-lookups/status", label: "Live lookup summary" },
+  workerStatus: { endpoint: "/api/live-lookups/worker", label: "Live worker" },
+  setupStatus: { endpoint: "/api/settings/status", label: "Setup status" },
+  todaySignals: { endpoint: "/api/insights/today?limit=100", label: "Today signals" },
+  movementSignals: { endpoint: "/api/insights/movement?limit=100", label: "Movement signals" },
+  catalogTrends: { endpoint: "/api/insights/trends?windowDays=7&previousWindowDays=7&limit=20", label: "Catalog trends" },
+  operatorDigest: { endpoint: "/api/insights/digest", label: "Operator digest" },
+  dashboardSavedViews: { endpoint: "/api/dashboard/saved-views", label: "Dashboard saved views" },
+  watchRules: { endpoint: "/api/watch-rules", label: "Watch rules" },
+  notificationDeliveries: { endpoint: "/api/notifications/deliveries?limit=100", label: "Notification deliveries" },
+  notificationRules: { endpoint: "/api/notifications/rules", label: "Notification rules" },
+  notificationChannels: { endpoint: "/api/notifications/channels", label: "Notification channels" },
+} satisfies Record<DashboardResourceKey, DashboardResourceDescriptor>;
+
+const dashboardResourceKeys = Object.keys(dashboardResourceDescriptors) as DashboardResourceKey[];
 
 async function refreshDashboardState(
-  isCancelled: () => boolean,
-  setIngestState: (state: GmailIngestState | null) => void,
-  setLiveSummary: (summary: LiveLookupDashboardSummary | null) => void,
-  setWorkerStatus: (status: LiveWorkerStatus | null) => void,
-  setSetupStatus: (status: AppSetupStatus | null) => void,
-  setTodaySignals: (signals: TodayInsight[] | null) => void,
-  setMovementSignals: (signals: MovementSignal[] | null) => void,
-  setCatalogTrends: (trends: CatalogTrendSummary | null) => void,
-  setOperatorDigest: (digest: InsightDigest | null) => void,
-  setDashboardSavedViews: (views: DashboardSavedView[] | null) => void,
-  setWatchRules: (rules: WatchRule[] | null) => void,
-  setNotificationDeliveries: (deliveries: NotificationDelivery[] | null) => void,
-  setNotificationRules: (rules: NotificationRule[] | null) => void,
-  setNotificationChannels: (channels: NotificationChannel[] | null) => void,
-  setApiIssues: (issues: DashboardResourceIssue[]) => void,
-  setActionIssues: (updater: (issues: DashboardResourceIssue[]) => DashboardResourceIssue[]) => void,
+  options: { isCancelled: () => boolean; setters: DashboardStateSetters },
 ) {
-  const [
-    ingestPayload,
-    summaryPayload,
-    workerPayload,
-    setupPayload,
-    signalsPayload,
-    movementPayload,
-    trendsPayload,
-    digestPayload,
-    dashboardSavedViewsPayload,
-    watchRulesPayload,
-    notificationDeliveriesPayload,
-    notificationRulesPayload,
-    notificationChannelsPayload,
-  ] = await Promise.all([
-    fetchDashboardJson<{ state?: GmailIngestState }>(dashboardRefreshEndpoints[0], "Mail ingest status"),
-    fetchDashboardJson<{ summary?: LiveLookupDashboardSummary }>(dashboardRefreshEndpoints[1], "Live lookup summary"),
-    fetchDashboardJson<{ worker?: LiveWorkerStatus }>(dashboardRefreshEndpoints[2], "Live worker"),
-    fetchDashboardJson<{ setup?: AppSetupStatus }>(dashboardRefreshEndpoints[3], "Setup status"),
-    fetchDashboardJson<{ signals?: TodayInsight[] }>(dashboardRefreshEndpoints[4], "Today signals"),
-    fetchDashboardJson<{ signals?: MovementSignal[] }>(dashboardRefreshEndpoints[5], "Movement signals"),
-    fetchDashboardJson<{ trends?: CatalogTrendSummary }>(dashboardRefreshEndpoints[6], "Catalog trends"),
-    fetchDashboardJson<{ digest?: InsightDigest }>(dashboardRefreshEndpoints[7], "Operator digest"),
-    fetchDashboardJson<{ views?: DashboardSavedView[] }>(dashboardRefreshEndpoints[8], "Dashboard saved views"),
-    fetchDashboardJson<{ rules?: WatchRule[] }>(dashboardRefreshEndpoints[9], "Watch rules"),
-    fetchDashboardJson<{ deliveries?: NotificationDelivery[] }>(dashboardRefreshEndpoints[10], "Notification deliveries"),
-    fetchDashboardJson<{ rules?: NotificationRule[] }>(dashboardRefreshEndpoints[11], "Notification rules"),
-    fetchDashboardJson<{ channels?: NotificationChannel[] }>(dashboardRefreshEndpoints[12], "Notification channels"),
-  ]);
+  const resources = await fetchDashboardResources();
 
-  if (!isCancelled()) {
-    setIngestState(okData(ingestPayload)?.state ?? null);
-    setLiveSummary(okData(summaryPayload)?.summary ?? null);
-    setWorkerStatus(okData(workerPayload)?.worker ?? null);
-    setSetupStatus(okData(setupPayload)?.setup ?? null);
-    setTodaySignals(okData(signalsPayload)?.signals ?? null);
-    setMovementSignals(okData(movementPayload)?.signals ?? null);
-    setCatalogTrends(okData(trendsPayload)?.trends ?? null);
-    setOperatorDigest(okData(digestPayload)?.digest ?? null);
-    setDashboardSavedViews(okData(dashboardSavedViewsPayload)?.views ?? null);
-    setWatchRules(okData(watchRulesPayload)?.rules ?? null);
-    setNotificationDeliveries(okData(notificationDeliveriesPayload)?.deliveries ?? null);
-    setNotificationRules(okData(notificationRulesPayload)?.rules ?? null);
-    setNotificationChannels(okData(notificationChannelsPayload)?.channels ?? null);
-    const resourceStates: ResourceState<unknown>[] = [
-      ingestPayload,
-      summaryPayload,
-      workerPayload,
-      setupPayload,
-      signalsPayload,
-      movementPayload,
-      trendsPayload,
-      digestPayload,
-      dashboardSavedViewsPayload,
-      watchRulesPayload,
-      notificationDeliveriesPayload,
-      notificationRulesPayload,
-      notificationChannelsPayload,
-    ];
-    setApiIssues(resourceStates.filter(isResourceIssue));
-    clearActionIssuesForEndpoints(okEndpoints(resourceStates), setActionIssues);
+  if (!options.isCancelled()) {
+    const { setters } = options;
+    setters.ingestState(okData(resources.ingestState)?.state ?? null);
+    setters.liveSummary(okData(resources.liveSummary)?.summary ?? null);
+    setters.workerStatus(okData(resources.workerStatus)?.worker ?? null);
+    setters.setupStatus(okData(resources.setupStatus)?.setup ?? null);
+    setters.todaySignals(okData(resources.todaySignals)?.signals ?? null);
+    setters.movementSignals(okData(resources.movementSignals)?.signals ?? null);
+    setters.catalogTrends(okData(resources.catalogTrends)?.trends ?? null);
+    setters.operatorDigest(okData(resources.operatorDigest)?.digest ?? null);
+    setters.dashboardSavedViews(okData(resources.dashboardSavedViews)?.views ?? null);
+    setters.watchRules(okData(resources.watchRules)?.rules ?? null);
+    setters.notificationDeliveries(okData(resources.notificationDeliveries)?.deliveries ?? null);
+    setters.notificationRules(okData(resources.notificationRules)?.rules ?? null);
+    setters.notificationChannels(okData(resources.notificationChannels)?.channels ?? null);
+    const resourceStates = dashboardResourceStates(resources);
+    setters.apiIssues(resourceStates.filter(isResourceIssue));
+    clearActionIssuesForEndpoints(okEndpoints(resources), setters.actionIssues);
   }
+}
+
+async function fetchDashboardResources(): Promise<DashboardResourceResults> {
+  const entries = await Promise.all(
+    dashboardResourceKeys.map(async (key) => {
+      const descriptor = dashboardResourceDescriptors[key];
+      const state = await fetchDashboardJson<DashboardResourcePayloads[typeof key]>(descriptor.endpoint, descriptor.label);
+      return [key, state] as const;
+    }),
+  );
+  return Object.fromEntries(entries) as DashboardResourceResults;
 }
 
 export async function fetchDashboardJson<T>(url: string, label: string, init?: RequestInit): Promise<ResourceState<T>> {
@@ -456,10 +442,14 @@ function clearActionIssuesForEndpoints(
   setActionIssues((issues) => issues.filter((issue) => !endpointSet.has(issue.endpoint)));
 }
 
-function okEndpoints(states: ResourceState<unknown>[]): string[] {
-  return states.flatMap((state, index) => {
-    const endpoint = dashboardRefreshEndpoints[index];
-    return state.status === "ok" && endpoint ? [endpoint] : [];
+function dashboardResourceStates(results: DashboardResourceResults): ResourceState<unknown>[] {
+  return dashboardResourceKeys.map((key) => results[key]);
+}
+
+function okEndpoints(results: DashboardResourceResults): string[] {
+  return dashboardResourceKeys.flatMap((key) => {
+    const state = results[key];
+    return state.status === "ok" ? [dashboardResourceDescriptors[key].endpoint] : [];
   });
 }
 
