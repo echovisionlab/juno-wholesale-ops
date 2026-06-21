@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { requireAdmin } from "@/lib/auth/admin";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
-import Home from "./page";
+import ProtectedLayout from "./layout";
+import Page from "./page";
 
 vi.mock("next/headers", () => ({
   headers: vi.fn(),
@@ -19,7 +20,7 @@ vi.mock("@/lib/auth/admin", () => ({
   requireAdmin: vi.fn(),
 }));
 
-vi.mock("./dashboard-client", () => ({
+vi.mock("../dashboard-client", () => ({
   default: () => <div data-testid="dashboard-client">Dashboard client</div>,
 }));
 
@@ -27,16 +28,17 @@ const headersMock = vi.mocked(headers);
 const redirectMock = vi.mocked(redirect);
 const requireAdminMock = vi.mocked(requireAdmin);
 
-describe("dashboard page authorization", () => {
+describe("protected layout authorization", () => {
   beforeEach(() => {
     vi.resetAllMocks();
     headersMock.mockResolvedValue(new Headers({
+      "x-juno-wholesale-ops-request-url": "https://inventory.dsub.io/settings",
       "x-forwarded-host": "inventory.dsub.io",
       "x-forwarded-proto": "https",
     }) as never);
   });
 
-  it("renders the dashboard client after page-level admin authorization passes", async () => {
+  it("renders protected children after layout-level admin authorization passes", async () => {
     requireAdminMock.mockResolvedValue({
       authorized: true,
       user: {
@@ -48,33 +50,66 @@ describe("dashboard page authorization", () => {
       },
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div>Protected content</div> }));
 
-    expect(markup).toContain("Dashboard client");
+    expect(markup).toContain("Protected content");
     expect(requireAdminMock).toHaveBeenCalledWith(expect.any(Request));
   });
 
-  it("redirects unauthenticated page requests to login with the public redirect target", async () => {
+  it("redirects unauthenticated page requests to login with the proxy-provided public redirect target", async () => {
     requireAdminMock.mockResolvedValue({
       authorized: false,
       response: Response.json({ error: "authentication_required" }, { status: 401 }),
     });
 
-    await expect(Home()).rejects.toThrow(
+    await expect(ProtectedLayout({ children: <div /> })).rejects.toThrow(
+      "NEXT_REDIRECT:/login?redirect=https%3A%2F%2Finventory.dsub.io%2Fsettings",
+    );
+    expect(redirectMock).toHaveBeenCalledWith("/login?redirect=https%3A%2F%2Finventory.dsub.io%2Fsettings");
+  });
+
+  it("falls back to forwarded origin when the proxy request URL header is missing", async () => {
+    headersMock.mockResolvedValue(new Headers({
+      "x-forwarded-host": "inventory.dsub.io",
+      "x-forwarded-proto": "https",
+    }) as never);
+    requireAdminMock.mockResolvedValue({
+      authorized: false,
+      response: Response.json({ error: "authentication_required" }, { status: 401 }),
+    });
+
+    await expect(ProtectedLayout({ children: <div /> })).rejects.toThrow(
       "NEXT_REDIRECT:/login?redirect=https%3A%2F%2Finventory.dsub.io%2F",
     );
     expect(redirectMock).toHaveBeenCalledWith("/login?redirect=https%3A%2F%2Finventory.dsub.io%2F");
   });
 
-  it("renders admin-required failures at the page boundary", async () => {
+  it("falls back to forwarded origin when the proxy request URL header is invalid", async () => {
+    headersMock.mockResolvedValue(new Headers({
+      "x-juno-wholesale-ops-request-url": "not a url",
+      "x-forwarded-host": "inventory.dsub.io",
+      "x-forwarded-proto": "https",
+    }) as never);
+    requireAdminMock.mockResolvedValue({
+      authorized: false,
+      response: Response.json({ error: "authentication_required" }, { status: 401 }),
+    });
+
+    await expect(ProtectedLayout({ children: <div /> })).rejects.toThrow(
+      "NEXT_REDIRECT:/login?redirect=https%3A%2F%2Finventory.dsub.io%2F",
+    );
+    expect(redirectMock).toHaveBeenCalledWith("/login?redirect=https%3A%2F%2Finventory.dsub.io%2F");
+  });
+
+  it("renders admin-required failures at the layout boundary", async () => {
     requireAdminMock.mockResolvedValue({
       authorized: false,
       response: Response.json({ error: "admin_required" }, { status: 403 }),
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div /> }));
 
-    expect(markup).toContain("Dashboard unavailable");
+    expect(markup).toContain("Operator page unavailable");
     expect(markup).toContain("Admin access is required");
   });
 
@@ -84,7 +119,7 @@ describe("dashboard page authorization", () => {
       response: Response.json({ error: "auth_unavailable", missing: ["auth_base_url"] }, { status: 503 }),
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div /> }));
 
     expect(markup).toContain("Auth is enabled but unavailable. Missing: auth_base_url.");
   });
@@ -95,7 +130,7 @@ describe("dashboard page authorization", () => {
       response: Response.json({ error: "auth_unavailable" }, { status: 503 }),
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div /> }));
 
     expect(markup).toContain("required auth settings");
   });
@@ -106,7 +141,7 @@ describe("dashboard page authorization", () => {
       response: Response.json({ error: "maintenance" }, { status: 503 }),
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div /> }));
 
     expect(markup).toContain("maintenance");
   });
@@ -117,8 +152,14 @@ describe("dashboard page authorization", () => {
       response: new Response("nope", { status: 502 }),
     });
 
-    const markup = renderToStaticMarkup(await Home());
+    const markup = renderToStaticMarkup(await ProtectedLayout({ children: <div /> }));
 
-    expect(markup).toContain("Dashboard authorization failed with HTTP 502");
+    expect(markup).toContain("Protected page authorization failed with HTTP 502");
+  });
+
+  it("keeps the dashboard page as protected layout content", () => {
+    const markup = renderToStaticMarkup(<Page />);
+
+    expect(markup).toContain("Dashboard client");
   });
 });

@@ -8,6 +8,8 @@ const SESSION_COOKIE_NAMES = [
   "__Secure-better-auth.session_token",
 ];
 
+const PUBLIC_REQUEST_URL_HEADER = "x-juno-wholesale-ops-request-url";
+
 function shouldBypassAuth(pathname: string): boolean {
   return (
     pathname.startsWith("/api/") ||
@@ -40,7 +42,7 @@ export async function proxy(request: NextRequest): Promise<NextResponse> {
     return authRequiredResponse(request);
   }
 
-  return NextResponse.next();
+  return continueWithPublicRequestUrl(request);
 }
 
 function firstForwardedHeaderValue(value: string | null): string | null {
@@ -67,6 +69,16 @@ function buildPublicRequestUrl(request: NextRequest): string {
 
 function hasSessionCookie(request: NextRequest): boolean {
   return SESSION_COOKIE_NAMES.some((name) => Boolean(request.cookies.get(name)?.value));
+}
+
+function continueWithPublicRequestUrl(request: NextRequest): NextResponse {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set(PUBLIC_REQUEST_URL_HEADER, buildPublicRequestUrl(request));
+  return NextResponse.next({
+    request: {
+      headers: requestHeaders,
+    },
+  });
 }
 
 export const config = {
