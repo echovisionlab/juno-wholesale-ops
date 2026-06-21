@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.2](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.1...v0.6.2) (2026-06-21)
+
+
+### Bug Fixes
+
+* remove git sha from public version metadata ([74af1e3](https://github.com/echovisionlab/juno-wholesale-ops/commit/74af1e348fa3d0474de3ae9e37ee847c58a05b68))
+
 ## [0.6.1](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.0...v0.6.1) (2026-06-21)
 
 
