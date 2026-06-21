@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.6.1](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.0...v0.6.1) (2026-06-21)
+
+
+### Bug Fixes
+
+* gate protected pages in layout ([897484d](https://github.com/echovisionlab/juno-wholesale-ops/commit/897484da7a0f846c0035c119f5e63b120480ac9e))
+* pass auth proxy internal origin in compose ([#57](https://github.com/echovisionlab/juno-wholesale-ops/issues/57)) ([3380b83](https://github.com/echovisionlab/juno-wholesale-ops/commit/3380b83dfcb7810de00f410914862df7e3e0fe31))
+* remove auth proxy self fetch ([#59](https://github.com/echovisionlab/juno-wholesale-ops/issues/59)) ([6724bc6](https://github.com/echovisionlab/juno-wholesale-ops/commit/6724bc634e456c24de2e0d218625316f0ae5d9d4))
+
 ## [0.6.0](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.5.0...v0.6.0) (2026-06-20)
 
 
