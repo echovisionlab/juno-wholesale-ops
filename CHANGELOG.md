@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.3](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.2...v0.6.3) (2026-06-21)
+
+
+### Bug Fixes
+
+* remove decorative status badges from operations UI ([53ff917](https://github.com/echovisionlab/juno-wholesale-ops/commit/53ff917479b1b52163b06bd30dbf8996f1564a60))
+
 ## [0.6.2](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.1...v0.6.2) (2026-06-21)
 
 
