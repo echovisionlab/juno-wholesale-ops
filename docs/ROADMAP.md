@@ -42,14 +42,14 @@ Status: partially implemented.
 
 ### SSO multi-provider base
 
-Status: partially implemented.
+Status: implemented.
 
 - Settings Center supports multiple DB-managed OAuth/OIDC providers with
   callback URLs, button labels, logo URLs, enabled state, and provider-scoped
   admin mapping.
 - The login page can render multiple ready SSO providers.
-- Remaining hardening is secret storage: move SSO client secrets toward
-  `secret_ref` or encrypted-at-rest storage instead of raw write-only DB values.
+- SSO client secrets are referenced through `client_secret_ref`; raw SSO client
+  secret storage is not accepted.
 
 ### Notification operations UX
 
@@ -80,16 +80,14 @@ Status: remaining hardening.
 ### SSO secret storage hardening
 
 Issue: [#54](https://github.com/echovisionlab/juno-wholesale-ops/issues/54)
-Status: implemented for new and migrated SSO providers.
+Status: implemented.
 
-- Store new SSO provider secrets through `client_secret_ref` only.
-- Keep legacy raw `client_secret` values masked and runtime-compatible until
-  each provider is migrated.
-- Treat Postgres backups as secret-bearing while any legacy raw SSO secret rows
-  or other saved credentials remain.
+- Store SSO provider secrets through `client_secret_ref` only.
+- Reject raw SSO `clientSecret` input at the settings API boundary.
+- Drop legacy `auth_sso_provider.client_secret` storage through migration
+  `0023_drop_sso_raw_client_secret.sql`.
+- Treat Postgres backups as secret-bearing while other saved credentials remain.
 - Keep rotation and restore docs explicit without publishing secret values.
-- Remaining follow-up: add a migration/reporting aid for operators to identify
-  legacy SSO rows that still need `client_secret_ref` migration.
 
 ### Mail provider UX stabilization
 

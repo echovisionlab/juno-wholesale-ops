@@ -124,13 +124,13 @@ function resolveExternalProviders(providers: SsoProviderRecord[], rawEnv: Record
 }
 
 export function resolveSsoProviderClientSecret(
-  provider: Pick<SsoProviderRecord, "clientSecret" | "clientSecretRef">,
+  provider: Pick<SsoProviderRecord, "clientSecretRef">,
   rawEnv: Record<string, string | undefined> = process.env,
 ): string {
   if (provider.clientSecretRef) {
     return resolveSecretRef(provider.clientSecretRef, { env: rawEnv }).value ?? "";
   }
-  return provider.clientSecret ?? "";
+  return "";
 }
 
 export function isExternalAuthProviderReady(provider: ExternalAuthProviderSettings): boolean {

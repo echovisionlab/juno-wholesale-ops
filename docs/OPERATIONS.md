@@ -18,8 +18,7 @@ source records, not env fallbacks.
 Notes:
 
 - Warning: Postgres backups are secret-bearing backups. They may contain saved
-  auth settings, legacy SSO raw client secrets that have not moved to
-  `client_secret_ref`, mail source credentials, Juno passwords, and notification
+  auth settings, mail source credentials, Juno passwords, and notification
   secrets. Encrypt them, restrict restore access, and never put them in git,
   public issue text, screenshots, CI logs, or support bundles.
 - `gmail:ingest:write` runs active Gmail mailbox sources, writes new catalog
@@ -41,11 +40,11 @@ Notes:
   in the database when one is missing. Production deployments must provide at
   least one admin bootstrap path.
 - Secret settings are write-only and masked; never expect the UI or API to echo
-  mail source credentials, Juno passwords, legacy OIDC client secrets, webhook
+  mail source credentials, Juno passwords, SSO client secret references, webhook
   URLs, cookies, or auth headers.
-- New SSO provider saves store a `client_secret_ref` only. Supported forms are
-  `env:NAME` and `file:/absolute/path`; unsupported or unavailable refs make
-  that provider unavailable.
+- SSO provider saves store a `client_secret_ref` only. Supported forms are
+  `env:NAME` and `file:/absolute/path`; raw SSO client secret input is rejected,
+  and unsupported or unavailable refs make that provider unavailable.
 - Rotate SSO client secrets by changing the upstream identity provider secret,
   then updating the referenced runtime secret. Change Settings Center only when
   the reference name or file path changes.

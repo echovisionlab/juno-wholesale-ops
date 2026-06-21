@@ -30,7 +30,6 @@ export type SsoProviderRecord = {
   tokenUrl: string | null;
   userInfoUrl: string | null;
   clientId: string | null;
-  clientSecret: string | null;
   clientSecretRef: string | null;
   clientSecretConfigured: boolean;
   scopes: string[];
@@ -41,8 +40,7 @@ export type SsoProviderRecord = {
   updatedAt: string;
 };
 
-export type PublicSsoProvider = Omit<SsoProviderRecord, "clientSecret"> & {
-  clientSecret?: never;
+export type PublicSsoProvider = SsoProviderRecord & {
   status: "ready" | "missing" | "invalid" | "disabled";
   missing: string[];
   invalid: string[];
@@ -61,7 +59,6 @@ export type SsoProviderInput = {
   tokenUrl?: string | null;
   userInfoUrl?: string | null;
   clientId?: string | null;
-  clientSecret?: string | null;
   clientSecretRef?: string | null;
   scopes?: string[] | string | null;
   enabled?: boolean;
@@ -73,6 +70,10 @@ export type SsoProviderInput = {
 
 export type SsoProviderPatch = Partial<SsoProviderInput> & {
   id: string;
+};
+
+type SsoProviderValidationInput = (SsoProviderInput | SsoProviderPatch) & {
+  clientSecret?: unknown;
 };
 
 export async function listSsoProviders(databaseUrl: string): Promise<SsoProviderRecord[]> {
@@ -133,13 +134,15 @@ export function redactSsoProvider(
   baseUrl: string | null,
   options: { clientSecretAvailable?: boolean } = {},
 ): PublicSsoProvider {
-  const clientSecretAvailable = options.clientSecretAvailable ?? Boolean(provider.clientSecret);
+  const clientSecretAvailable = options.clientSecretAvailable ?? false;
   const validation = validateSsoProviderReadiness(
     { ...provider, clientSecretAvailable },
     baseUrl,
   );
-  const { clientSecret, ...publicProvider } = provider;
-  void clientSecret;
+  const { clientSecret: _ignoredClientSecret, ...publicProvider } = provider as SsoProviderRecord & {
+    clientSecret?: unknown;
+  };
+  void _ignoredClientSecret;
   return {
     ...publicProvider,
     clientSecretConfigured: provider.clientSecretConfigured,
@@ -150,7 +153,7 @@ export function redactSsoProvider(
   };
 }
 
-export function validateSsoProviderInput(input: SsoProviderInput | SsoProviderPatch, options: { requireSecret: boolean }): string[] {
+export function validateSsoProviderInput(input: SsoProviderValidationInput, options: { requireSecret: boolean }): string[] {
   const issues: string[] = [];
   if (options.requireSecret && !("providerId" in input && input.providerId?.trim())) {
     issues.push("providerId is required");
@@ -193,7 +196,7 @@ export function validateSsoProviderInput(input: SsoProviderInput | SsoProviderPa
   if ("userInfoUrl" in input && input.userInfoUrl && !isUrl(input.userInfoUrl)) {
     issues.push("userInfoUrl must be a valid URL");
   }
-  if ("clientSecret" in input && input.clientSecret !== undefined && normalizeOptionalString(input.clientSecret)) {
+  if ("clientSecret" in input && input.clientSecret !== undefined) {
     issues.push("clientSecret is not accepted; use clientSecretRef");
   }
   if ("clientSecretRef" in input && input.clientSecretRef !== undefined) {
@@ -271,7 +274,6 @@ async function listSsoProvidersClient(queryable: Pool | PoolClient): Promise<Sso
         auth_sso_provider.token_url,
         auth_sso_provider.user_info_url,
         auth_sso_provider.client_id,
-        auth_sso_provider.client_secret,
         auth_sso_provider.client_secret_ref,
         auth_sso_provider.scopes,
         auth_sso_provider.enabled,
@@ -323,13 +325,12 @@ async function createSsoProviderClient(client: PoolClient, input: SsoProviderInp
         token_url,
         user_info_url,
         client_id,
-        client_secret,
         client_secret_ref,
         scopes,
         enabled,
         sort_order
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id
     `,
     [
@@ -344,7 +345,6 @@ async function createSsoProviderClient(client: PoolClient, input: SsoProviderInp
       normalizeOptionalString(input.tokenUrl),
       normalizeOptionalString(input.userInfoUrl),
       normalizeOptionalString(input.clientId),
-      null,
       normalizedClientSecretRef,
       normalizeScopes(input.scopes),
       Boolean(input.enabled),
@@ -381,9 +381,6 @@ async function updateSsoProviderClient(client: PoolClient, patch: SsoProviderPat
   const normalizedClientSecretRef = patch.clientSecretRef === undefined ? undefined : normalizeOptionalString(patch.clientSecretRef);
   if (patch.clientSecretRef !== undefined) {
     addField(fields, "client_secret_ref", normalizedClientSecretRef);
-    if (normalizedClientSecretRef) {
-      addField(fields, "client_secret", null);
-    }
   }
   if (patch.scopes !== undefined) {
     addField(fields, "scopes", normalizeScopes(patch.scopes));
@@ -469,7 +466,6 @@ type ProviderRow = {
   token_url: string | null;
   user_info_url: string | null;
   client_id: string | null;
-  client_secret: string | null;
   client_secret_ref: string | null;
   scopes: string;
   enabled: boolean;
@@ -498,9 +494,8 @@ function mapProviderRow(row: ProviderRow & { rules: RuleRow[] | null }): SsoProv
     tokenUrl: row.token_url,
     userInfoUrl: row.user_info_url,
     clientId: row.client_id,
-    clientSecret: row.client_secret,
     clientSecretRef: row.client_secret_ref,
-    clientSecretConfigured: Boolean(row.client_secret_ref || row.client_secret),
+    clientSecretConfigured: Boolean(row.client_secret_ref),
     scopes: normalizeScopes(row.scopes).split(" "),
     enabled: row.enabled,
     sortOrder: row.sort_order,

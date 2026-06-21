@@ -19,6 +19,7 @@ describe("settings response and validation", () => {
       env,
       rawEnv: {
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        WORKSPACE_CLIENT_SECRET: "resolved-client-secret",
       },
       settingsRow: {
         ...emptySettingsRow(),
@@ -57,6 +58,7 @@ describe("settings response and validation", () => {
       env,
       rawEnv: {
         DATABASE_URL: "postgres://user:pass@localhost:5432/app",
+        WORKSPACE_CLIENT_SECRET: "resolved-client-secret",
       },
       settingsRow: {
         ...emptySettingsRow(),
@@ -78,7 +80,7 @@ describe("settings response and validation", () => {
       displayName: "Workspace",
       buttonLabel: "Sign in with Workspace",
       providerId: "workspace",
-      clientSecretRef: null,
+      clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
       clientSecretConfigured: true,
       discoveryUrl: "https://login.example.test/.well-known/openid-configuration",
       callbackUrl: "https://inventory-dev.example.test/api/auth/oauth2/callback/workspace",
@@ -89,7 +91,9 @@ describe("settings response and validation", () => {
   it("marks unresolved SSO client secret references as unavailable", () => {
     const response = buildSettingsResponse({
       env: runtimeEnv(),
-      rawEnv: {},
+      rawEnv: {
+        WORKSPACE_CLIENT_SECRET: "resolved-client-secret",
+      },
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://inventory-dev.example.test",
@@ -99,7 +103,6 @@ describe("settings response and validation", () => {
       adminUserCount: 1,
       ssoProviders: [
         ssoProvider({
-          clientSecret: null,
           clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
           clientSecretConfigured: true,
         }),
@@ -121,7 +124,9 @@ describe("settings response and validation", () => {
   it("marks OAuth2 providers ready when endpoint URLs are configured without discovery", () => {
     const response = buildSettingsResponse({
       env: runtimeEnv(),
-      rawEnv: {},
+      rawEnv: {
+        WORKSPACE_CLIENT_SECRET: "resolved-client-secret",
+      },
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://inventory-dev.example.test",
@@ -157,7 +162,9 @@ describe("settings response and validation", () => {
   it("marks malformed external provider URLs invalid instead of ready", () => {
     const response = buildSettingsResponse({
       env: runtimeEnv(),
-      rawEnv: {},
+      rawEnv: {
+        WORKSPACE_CLIENT_SECRET: "resolved-client-secret",
+      },
       settingsRow: {
         ...emptySettingsRow(),
         auth_base_url: "https://inventory-dev.example.test",
@@ -368,7 +375,6 @@ describe("settings response and validation", () => {
         nodeEnv: "production",
         ssoProviders: [
           ssoProvider({
-            clientSecret: null,
             clientSecretRef: "env:MISSING_WORKSPACE_CLIENT_SECRET",
             clientSecretConfigured: true,
           }),
@@ -388,7 +394,6 @@ describe("settings response and validation", () => {
         nodeEnv: "production",
         ssoProviders: [
           ssoProvider({
-            clientSecret: null,
             clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
             clientSecretConfigured: true,
           }),
@@ -431,8 +436,7 @@ function ssoProvider(overrides: Partial<SsoProviderRecord> = {}): SsoProviderRec
     tokenUrl: null,
     userInfoUrl: null,
     clientId: "client-id",
-    clientSecret: "db-client-secret",
-    clientSecretRef: null,
+    clientSecretRef: "env:WORKSPACE_CLIENT_SECRET",
     clientSecretConfigured: true,
     scopes: ["openid", "email", "profile"],
     enabled: true,
