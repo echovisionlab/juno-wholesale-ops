@@ -84,4 +84,4 @@ export type NotificationRuleDraft = {
   cooldownMinutes: number;
 };
 
-export type SettingsTab = "overview" | SettingsGroupId;
+export type SettingsTab = "overview" | "operations" | SettingsGroupId;

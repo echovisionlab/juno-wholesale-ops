@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { MantineProvider } from "@mantine/core";
-import { Notifications } from "@mantine/notifications";
+import { Notifications, notifications } from "@mantine/notifications";
 import { act } from "react";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
@@ -23,6 +23,8 @@ import {
 
 let root: Root;
 let container: HTMLDivElement;
+const originalCreateObjectURL = URL.createObjectURL;
+const originalRevokeObjectURL = URL.revokeObjectURL;
 
 describe("SettingsCenter", () => {
   beforeEach(() => {
@@ -48,9 +50,16 @@ describe("SettingsCenter", () => {
   });
 
   afterEach(() => {
-    act(() => root.unmount());
+    act(() => {
+      notifications.clean();
+      notifications.cleanQueue();
+      root.unmount();
+    });
     container.remove();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: originalCreateObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: originalRevokeObjectURL });
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
   });
 
   it("renders Settings Center sections without exposing raw secrets", async () => {
@@ -239,6 +248,69 @@ describe("SettingsCenter", () => {
       body: JSON.stringify({ juno: { juno_login_email: "buyer@example.test" } }),
     });
     expect(pageText()).toContain("Settings saved");
+  });
+
+  it("transfers watch rules from the Operations tab with a current preview", async () => {
+    const exportedPayload = {
+      schemaVersion: 1,
+      exportedAt: "2026-06-20T00:00:00.000Z",
+      rules: [{ type: "label", pattern: "Blue Note", weight: 12, enabled: true }],
+    };
+    const firstPreview = watchRuleImportResult("Blue Note", true);
+    const secondPreview = watchRuleImportResult("Impulse", true);
+    const appliedResult = watchRuleImportResult("Impulse", false);
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(jsonResponse({ payload: exportedPayload }))
+      .mockResolvedValueOnce(jsonResponse({ result: firstPreview }))
+      .mockResolvedValueOnce(jsonResponse({ result: secondPreview }))
+      .mockResolvedValueOnce(jsonResponse({ result: appliedResult }));
+    vi.stubGlobal("fetch", fetchMock);
+    const createObjectURL = vi.fn(() => "blob:watch-rules");
+    const revokeObjectURL = vi.fn();
+    Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectURL });
+    Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectURL });
+    const anchorClick = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    await renderSettingsPage(settingsFixture());
+    clickButton("Operations");
+    expect(pageText()).toContain("Watch Rule Transfer");
+
+    await clickButtonAndWait("Export JSON");
+    expect(fetchMock.mock.calls[0]?.[0]).toBe("/api/watch-rules/export");
+    expect(createObjectURL).toHaveBeenCalled();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:watch-rules");
+    expect(anchorClick).toHaveBeenCalled();
+
+    await selectFile("Watch rule import file", new File([
+      JSON.stringify({ rules: [{ type: "label", pattern: "Blue Note", weight: 12, enabled: true }] }),
+    ], "watch-rules-blue-note.json", { type: "application/json" }));
+    expect((findButton("Apply import") as HTMLButtonElement).disabled).toBe(true);
+
+    await clickButtonAndWait("Preview import");
+    expect(fetchMock.mock.calls[1]?.[0]).toBe("/api/watch-rules/import");
+    expect(JSON.parse(String(fetchMock.mock.calls[1]?.[1]?.body))).toEqual({
+      rules: [{ type: "label", pattern: "Blue Note", weight: 12, enabled: true }],
+      dryRun: true,
+    });
+    expect((findButton("Apply import") as HTMLButtonElement).disabled).toBe(false);
+
+    await selectFile("Watch rule import file", new File([
+      JSON.stringify({ rules: [{ type: "label", pattern: "Impulse", weight: 10, enabled: true }] }),
+    ], "watch-rules-impulse.json", { type: "application/json" }));
+    expect((findButton("Apply import") as HTMLButtonElement).disabled).toBe(true);
+
+    await clickButtonAndWait("Preview import");
+    await clickButtonAndWait("Apply import");
+    expect(fetchMock.mock.calls[2]?.[0]).toBe("/api/watch-rules/import");
+    expect(JSON.parse(String(fetchMock.mock.calls[2]?.[1]?.body))).toEqual({
+      rules: [{ type: "label", pattern: "Impulse", weight: 10, enabled: true }],
+      dryRun: true,
+    });
+    expect(fetchMock.mock.calls[3]?.[0]).toBe("/api/watch-rules/import");
+    expect(JSON.parse(String(fetchMock.mock.calls[3]?.[1]?.body))).toEqual({
+      rules: [{ type: "label", pattern: "Impulse", weight: 10, enabled: true }],
+      dryRun: false,
+    });
   });
 
   it("manages SSO providers through a list and modal actions", async () => {
@@ -531,6 +603,29 @@ async function renderSettingsPage(
   await act(async () => undefined);
 }
 
+function watchRuleImportResult(pattern: string, dryRun: boolean) {
+  return {
+    dryRun,
+    total: 1,
+    created: 1,
+    updated: 0,
+    skipped: 0,
+    invalid: 0,
+    duplicateInPayload: 0,
+    items: [
+      {
+        index: 0,
+        action: "create",
+        status: "valid",
+        rule: { type: "label", pattern, weight: 10, enabled: true },
+        normalizedKey: `label:${pattern.toLowerCase()}`,
+        existingRuleId: null,
+        reason: null,
+      },
+    ],
+  };
+}
+
 function jsonResponse(value: unknown): Response {
   return new Response(JSON.stringify(value), {
     status: 200,
@@ -636,6 +731,15 @@ function changeInput(label: string, value: string): void {
     Object.getOwnPropertyDescriptor(prototype, "value")?.set?.call(input, value);
     input.dispatchEvent(new Event("input", { bubbles: true }));
     input.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+
+async function selectFile(label: string, file: File): Promise<void> {
+  const input = findInput(label) as HTMLInputElement;
+  await act(async () => {
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    input.dispatchEvent(new Event("change", { bubbles: true }));
+    await Promise.resolve();
   });
 }
 

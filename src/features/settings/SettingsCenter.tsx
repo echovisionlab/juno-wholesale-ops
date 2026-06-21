@@ -9,6 +9,7 @@ import { AuthAccessCards, AuthProviderCard } from "./auth-section";
 import { JunoLiveSessionCard } from "./juno-live-section";
 import { MailSourcesCard } from "./mail-sources-section";
 import { NotificationsSettingsCard } from "./notifications-section";
+import { WatchRuleTransferCard } from "./watch-rule-transfer-section";
 import {
   useJunoLiveController,
   useMailSourcesController,
@@ -99,6 +100,7 @@ export function SettingsCenter({
                   <Tabs.Tab value="mail">Mail Sources</Tabs.Tab>
                   <Tabs.Tab value="juno">Juno Live</Tabs.Tab>
                   <Tabs.Tab value="notifications">Notifications</Tabs.Tab>
+                  <Tabs.Tab value="operations">Operations</Tabs.Tab>
                 </Tabs.List>
 
                 <Tabs.Panel value="overview" pt="md">
@@ -202,6 +204,10 @@ export function SettingsCenter({
                     ) : null}
                   </Tabs.Panel>
                 ))}
+
+                <Tabs.Panel value="operations" pt="md">
+                  <WatchRuleTransferCard setError={setError} />
+                </Tabs.Panel>
               </Tabs>
             </>
           )}
