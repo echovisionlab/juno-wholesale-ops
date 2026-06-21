@@ -6,6 +6,7 @@ import {
 } from "@/test/postgres";
 import {
   createDashboardSavedView,
+  DashboardSavedViewNameConflictError,
   deleteDashboardSavedView,
   listDashboardSavedViews,
   updateDashboardSavedView,
@@ -104,5 +105,19 @@ describe("dashboard saved views repository", () => {
       "Dashboard saved view id is required",
     );
     await expect(deleteDashboardSavedView(databaseUrl, "")).rejects.toThrow("Dashboard saved view id is required");
+  });
+
+  it("reports duplicate saved view names as an operator-safe conflict", async () => {
+    const databaseUrl = database.container.getConnectionUri();
+
+    await createDashboardSavedView(databaseUrl, { name: "Watch hits" });
+    await expect(createDashboardSavedView(databaseUrl, { name: "Watch hits" })).rejects.toBeInstanceOf(
+      DashboardSavedViewNameConflictError,
+    );
+
+    const other = await createDashboardSavedView(databaseUrl, { name: "Warnings" });
+    await expect(updateDashboardSavedView(databaseUrl, { id: other.id, name: "Watch hits" })).rejects.toBeInstanceOf(
+      DashboardSavedViewNameConflictError,
+    );
   });
 });

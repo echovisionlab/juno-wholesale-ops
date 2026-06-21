@@ -26,6 +26,13 @@ export type DashboardSavedViewPatch = {
   sortOrder?: number | null;
 };
 
+export class DashboardSavedViewNameConflictError extends Error {
+  constructor() {
+    super("Dashboard saved view name already exists");
+    this.name = "DashboardSavedViewNameConflictError";
+  }
+}
+
 type DashboardSavedViewRow = {
   id: string;
   name: string;
@@ -58,15 +65,19 @@ export async function createDashboardSavedView(
   const validated = validateDashboardSavedViewInput(input);
   const pool = new Pool({ connectionString: databaseUrl, max: 2 });
   try {
-    const result = await pool.query<DashboardSavedViewRow>(
-      `
-        INSERT INTO dashboard_saved_view (name, filters, sort_order)
-        VALUES ($1, $2::jsonb, $3)
-        RETURNING id::text, name, filters, sort_order, created_at, updated_at
-      `,
-      [validated.name, JSON.stringify(validated.filters), validated.sortOrder],
-    );
-    return mapDashboardSavedView(result.rows[0]);
+    try {
+      const result = await pool.query<DashboardSavedViewRow>(
+        `
+          INSERT INTO dashboard_saved_view (name, filters, sort_order)
+          VALUES ($1, $2::jsonb, $3)
+          RETURNING id::text, name, filters, sort_order, created_at, updated_at
+        `,
+        [validated.name, JSON.stringify(validated.filters), validated.sortOrder],
+      );
+      return mapDashboardSavedView(result.rows[0]);
+    } catch (error) {
+      throw normalizeDashboardSavedViewWriteError(error);
+    }
   } finally {
     await pool.end();
   }
@@ -94,19 +105,23 @@ export async function updateDashboardSavedView(
     const nextName = validated.name ?? current.rows[0].name;
     const nextFilters = validated.filters ?? normalizeDashboardSignalFilters(current.rows[0].filters);
     const nextSortOrder = validated.sortOrder ?? current.rows[0].sort_order;
-    const updated = await pool.query<DashboardSavedViewRow>(
-      `
-        UPDATE dashboard_saved_view
-        SET name = $2,
-            filters = $3::jsonb,
-            sort_order = $4,
-            updated_at = now()
-        WHERE id = $1
-        RETURNING id::text, name, filters, sort_order, created_at, updated_at
-      `,
-      [validated.id, nextName, JSON.stringify(nextFilters), nextSortOrder],
-    );
-    return mapDashboardSavedView(updated.rows[0]);
+    try {
+      const updated = await pool.query<DashboardSavedViewRow>(
+        `
+          UPDATE dashboard_saved_view
+          SET name = $2,
+              filters = $3::jsonb,
+              sort_order = $4,
+              updated_at = now()
+          WHERE id = $1
+          RETURNING id::text, name, filters, sort_order, created_at, updated_at
+        `,
+        [validated.id, nextName, JSON.stringify(nextFilters), nextSortOrder],
+      );
+      return mapDashboardSavedView(updated.rows[0]);
+    } catch (error) {
+      throw normalizeDashboardSavedViewWriteError(error);
+    }
   } finally {
     await pool.end();
   }
@@ -202,4 +217,22 @@ function mapDashboardSavedView(row: DashboardSavedViewRow): DashboardSavedView {
 
 function formatDatabaseDate(value: Date | string): string {
   return value instanceof Date ? value.toISOString() : value;
+}
+
+function normalizeDashboardSavedViewWriteError(error: unknown): Error {
+  if (isPostgresUniqueViolation(error, "dashboard_saved_view_name_key")) {
+    return new DashboardSavedViewNameConflictError();
+  }
+  return error instanceof Error ? error : new Error("Invalid dashboard saved view request");
+}
+
+function isPostgresUniqueViolation(error: unknown, constraint: string): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === "23505" &&
+    "constraint" in error &&
+    (error as { constraint?: unknown }).constraint === constraint
+  );
 }

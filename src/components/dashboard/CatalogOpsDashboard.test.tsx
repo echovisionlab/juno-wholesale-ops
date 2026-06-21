@@ -15,6 +15,7 @@ let container: HTMLDivElement;
 describe("CatalogOpsDashboard", () => {
   beforeEach(() => {
     setReactActEnvironment();
+    installTestLocalStorage();
     window.matchMedia = vi.fn().mockImplementation((query: string) => ({
       matches: false,
       media: query,
@@ -25,7 +26,7 @@ describe("CatalogOpsDashboard", () => {
       removeListener: vi.fn(),
       dispatchEvent: vi.fn(),
     }));
-    window.localStorage?.clear();
+    window.localStorage.clear();
     globalThis.ResizeObserver = class ResizeObserver {
       observe() {}
       unobserve() {}
@@ -719,13 +720,16 @@ describe("CatalogOpsDashboard", () => {
 
     expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
     expect(pageText()).toContain("Low catalog stock: Lara Voss - Signal Path");
+    expect(pageText()).toContain("[Operator digest] 2026-06-17");
     selectComboboxOption("Signal type", "Watch hit");
     expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
     expect(pageText()).not.toContain("Low catalog stock: Lara Voss - Signal Path");
+    expect(pageText()).not.toContain("[Operator digest] 2026-06-17");
     clickButton("Reset");
     selectComboboxOption("Severity", "Warning");
     expect(pageText()).not.toContain("Watch hit: Lara Voss - Signal Path");
     expect(pageText()).toContain("Low catalog stock: Lara Voss - Signal Path");
+    expect(pageText()).toContain("No read-only alerts match filters");
     clickButton("Reset");
     clickByAriaLabel("Watch hits");
     expect(pageText()).toContain("Watch hit: Lara Voss - Signal Path");
@@ -826,6 +830,49 @@ describe("CatalogOpsDashboard", () => {
     expect(pageText()).toContain("Signal Filters");
   });
 });
+
+class TestStorage implements Storage {
+  #store = new Map<string, string>();
+
+  get length() {
+    return this.#store.size;
+  }
+
+  clear() {
+    this.#store.clear();
+  }
+
+  getItem(key: string) {
+    return this.#store.get(key) ?? null;
+  }
+
+  key(index: number) {
+    return [...this.#store.keys()][index] ?? null;
+  }
+
+  removeItem(key: string) {
+    this.#store.delete(key);
+  }
+
+  setItem(key: string, value: string) {
+    this.#store.set(key, value);
+  }
+}
+
+function installTestLocalStorage() {
+  Object.defineProperty(globalThis, "Storage", {
+    configurable: true,
+    value: TestStorage,
+  });
+  Object.defineProperty(window, "Storage", {
+    configurable: true,
+    value: TestStorage,
+  });
+  Object.defineProperty(window, "localStorage", {
+    configurable: true,
+    value: new TestStorage(),
+  });
+}
 
 function renderDashboard(props: CatalogOpsDashboardProps): void {
   act(() => {

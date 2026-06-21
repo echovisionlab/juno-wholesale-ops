@@ -18,15 +18,29 @@ Storybook remains on port `6008`.
 ### Dashboard filtering and saved views
 
 Issue: [#5](https://github.com/echovisionlab/juno-wholesale-ops/issues/5)
-Status: partially implemented.
+Status: implemented.
 
 - Dashboard filters cover signal type, severity, watch-hit inclusion, and date
-  range.
+  range across signal and notification delivery panels.
 - Saved views are stored in the local/self-hosted database.
+- Saved-view API requests reject non-object bodies and return an explicit
+  conflict response for duplicate view names.
 - Dashboard controls stay inside the read-only operator surface and avoid raw
   catalog row dumps.
-- Remaining stabilization: browser-level regression coverage, Storybook states,
-  and operational edge-case review before closing the issue.
+- Storybook states and browser-level Storybook smoke cover filtering,
+  saved-view, and panel visibility regressions.
+
+### Storybook coverage
+
+Issue: [#43](https://github.com/echovisionlab/juno-wholesale-ops/issues/43)
+Status: implemented.
+
+- Settings Center stories cover Auth SSO list/dialog/error states, Mail Source
+  list/add/edit/test/planned-provider states, Juno Live states, and
+  Notification channel/rule states.
+- Dashboard stories cover filtering, saved-view, pending action, and filtered
+  empty states.
+- Storybook stays on port `6008`.
 
 ### Mail source provider model
 
@@ -110,14 +124,6 @@ Issue: [#3](https://github.com/echovisionlab/juno-wholesale-ops/issues/3)
 - Cover raw attachment storage and browser profile caveats.
 - Explain how `secret_ref` values and external secret managers must be restored
   before app startup.
-
-### Storybook coverage
-
-Issue: [#43](https://github.com/echovisionlab/juno-wholesale-ops/issues/43)
-
-- Add stories for Settings Center sections, dialogs, login method states, and
-  dashboard setup states.
-- Keep Storybook on port `6008`.
 
 ## v0.7.0 Feature Candidates
 
