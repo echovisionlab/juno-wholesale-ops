@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.6.5](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.4...v0.6.5) (2026-06-22)
+
+
+### Bug Fixes
+
+* remove raw sso client secret storage ([66740a4](https://github.com/echovisionlab/juno-wholesale-ops/commit/66740a4fa4dc9eebe11f972b8acd63f876111a78))
+
+
+### Documentation
+
+* add codex workflow guardrails ([c47878e](https://github.com/echovisionlab/juno-wholesale-ops/commit/c47878ed99eb810321e20c89728bb8c20c9206c0))
+* codify manager-led review workflow ([0920659](https://github.com/echovisionlab/juno-wholesale-ops/commit/0920659e61e7d5a3028f73c863f1597a547bf50a))
+* require delegation for non-trivial follow-ups ([dce0abf](https://github.com/echovisionlab/juno-wholesale-ops/commit/dce0abf57718208413cb537e224a446d06a2c7e4))
+
 ## [0.6.4](https://github.com/echovisionlab/juno-wholesale-ops/compare/v0.6.3...v0.6.4) (2026-06-21)
 
 
