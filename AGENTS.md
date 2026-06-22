@@ -68,13 +68,23 @@ work, but keep ownership clear.
 - Treat the main Codex thread as the engineering manager and integrator for
   substantial work. The main agent decomposes scope, assigns ownership,
   integrates results, validates end to end, and reports state to the user.
+- Treat follow-up work the same way. A follow-up label does not bypass
+  ownership assignment, issue/roadmap tracking, validation, or review gates.
 - Use expert agents for implementation, risk-specific audits, and review gates
   when work is non-trivial. Give each expert a concrete scope, expected output,
   and explicit instruction not to revert unrelated changes.
-- After an expert or worker completes a substantial task, route the result
-  through a separate expert review gate before merging or marking the task
-  done. If a separate reviewer is unavailable, record the reason in the PR or
-  final report and do not describe the task as review-gated.
+- For non-trivial code changes, including tests, migrations, scripts, and UI
+  code, the main agent does not implement the change directly. Delegate
+  implementation to scoped worker agents, then integrate, validate, and iterate
+  on reviewer findings until the review gate passes. The main agent may make
+  only mechanical integration edits, documentation updates, or
+  conflict-resolution edits, and should record those edits in the PR or final
+  report.
+- After each delegated non-trivial task completes, route the result through a
+  separate expert review gate before merging, marking the task done, or closing
+  related issue/roadmap items. If a separate reviewer is unavailable, record the
+  reason in the PR or final report and do not describe the task as
+  review-gated.
 - Review gates check readability, responsibility boundaries, unnecessary
   complexity, operational safety, UI usefulness, and test coverage.
 - Track meaningful gaps, blockers, follow-up plans, and discovered issues in
