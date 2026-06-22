@@ -45,6 +45,48 @@ work, but keep ownership clear.
 - Integrate agent findings before merge. If a finding is intentionally not
   fixed, record the reason in the PR or final report.
 
+## Code Quality Defaults
+
+- Write readable code first. Prefer clear names, direct control flow, and
+  obvious ownership over clever compression.
+- Keep responsibility boundaries explicit. UI components render and coordinate
+  interactions, controllers own client-side mutation flow, repositories own
+  persistence, domain modules own policy and calculations, and scripts own
+  operational orchestration.
+- Apply clean-code judgment while respecting the existing architecture. Do not
+  introduce an interface, adapter, service, or abstraction unless it clarifies a
+  stable API boundary, reduces real duplication, or isolates an external
+  dependency.
+- Reuse established components and helpers before adding local one-off
+  definitions. If a local definition is necessary, keep its scope narrow and its
+  responsibility easy to name.
+- Prefer small, reviewable changes that keep behavior, tests, docs, and
+  operational UX moving together.
+
+## Manager-Orchestrated Delivery
+
+- Treat the main Codex thread as the engineering manager and integrator for
+  substantial work. The main agent decomposes scope, assigns ownership,
+  integrates results, validates end to end, and reports state to the user.
+- Use expert agents for implementation, risk-specific audits, and review gates
+  when work is non-trivial. Give each expert a concrete scope, expected output,
+  and explicit instruction not to revert unrelated changes.
+- After an expert or worker completes a substantial task, route the result
+  through a separate expert review gate before merging or marking the task
+  done. If a separate reviewer is unavailable, record the reason in the PR or
+  final report and do not describe the task as review-gated.
+- Review gates check readability, responsibility boundaries, unnecessary
+  complexity, operational safety, UI usefulness, and test coverage.
+- Track meaningful gaps, blockers, follow-up plans, and discovered issues in
+  GitHub issues/milestones and `docs/ROADMAP.md`. Keep status labels honest:
+  planned, partial, stabilization, blocked, or done.
+- Close issues only after the implementation, tests, docs, main verification,
+  and any required deployment checks are complete. Reference issues without
+  closing keywords when the work is preparatory or partial.
+- For each milestone-sized stream, keep the loop explicit: plan, assign,
+  implement, review gate, validate, update issue/PR, merge, verify `main`, and
+  verify deployment where applicable.
+
 ## Review And Merge Readiness
 
 - Code review should lead with bugs, security risks, operational regressions,
